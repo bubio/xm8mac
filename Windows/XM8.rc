@@ -1,0 +1,53 @@
+//
+// eXcellent Multi-platform emulator type 8 - 'XM8'
+// based on ePC-8801MA
+//
+// Author (ePC-8801MA) : Takeda.Toshiya
+// Author (XM8) : Tanaka.Yasushi
+//
+// [ resource ]
+//
+
+#ifdef _WIN32
+
+#include <windows.h>
+
+//
+// Icon
+//
+100					ICON DISCARDABLE		"xm8.ico"
+101					ICON DISCARDABLE		"xm8big.ico"
+
+//
+// Version
+//
+VS_VERSION_INFO		VERSIONINFO
+FILEVERSION			1,7,0,0
+PRODUCTVERSION		1,7,0,0
+FILEFLAGSMASK		VS_FFI_FILEFLAGSMASK
+FILEFLAGS			0x00000000L
+FILEOS				VOS_NT_WINDOWS32
+FILETYPE			VFT_APP
+FILESUBTYPE			VFT2_UNKNOWN
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "041104b0"
+		BEGIN
+			VALUE "CompanyName",			"\0"
+			VALUE "FileDescription",		"PC-8801MA EMULATOR XM8\0"
+			VALUE "FileVersion",			"1.7.0.0\0"
+			VALUE "InternalName",			"XM8.exe"
+			VALUE "LegalCopyright", 		"Copyright (C) 2015-2018 ÇoÇhÅD"
+			VALUE "OriginalFilename",		"XM8.exe"
+			VALUE "ProductName",			"XM8"
+			VALUE "ProductVersion",			"1.7.0.0\0"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x0411, 1200
+	END
+END
+
+#endif // _WIN32

@@ -1,0 +1,317 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ソース ファイル">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="ヘッダー ファイル">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="リソース ファイル">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="ソース ファイル\UI">
+      <UniqueIdentifier>{2eececb1-dec3-4383-87c9-850cf8b2f41a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\UI">
+      <UniqueIdentifier>{5b5772a5-442c-48ad-88d4-138eee264971}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\ePC-8801MA">
+      <UniqueIdentifier>{317f56a7-07e4-4dd3-a144-85d789171e5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\ePC-8801MA\vm">
+      <UniqueIdentifier>{83947edb-3085-4666-b533-7bdf1b59d965}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\ePC-8801MA">
+      <UniqueIdentifier>{541063ec-6f91-4844-b985-566b3fa71d20}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\ePC-8801MA\vm">
+      <UniqueIdentifier>{b9ecaf1d-e51e-41cd-9cec-71634568921c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\ePC-8801MA\vm\fmgen">
+      <UniqueIdentifier>{68c616c9-85ba-4867-9f5b-8281c0e2f2ba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\ePC-8801MA\vm\fmgen">
+      <UniqueIdentifier>{f7a5e7a3-10e8-4b65-aae3-6680988aa8cf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\ePC-8801MA\vm\pc8801">
+      <UniqueIdentifier>{765831c6-c1d1-4a67-a95b-c5f6693af639}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\ePC-8801MA\vm\pc8801">
+      <UniqueIdentifier>{41fba1fe-06f0-4d9a-bd64-cd93d55b2b90}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\UI\main.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\z80.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\i8255.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\fifo.cpp">
+      <Filter>ソース ファイル\ePC-8801MA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\i8251.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\disk.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\common.cpp">
+      <Filter>ソース ファイル\ePC-8801MA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\upd765a.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\event.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\config.cpp">
+      <Filter>ソース ファイル\ePC-8801MA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\upd1990a.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\pcm1bit.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\fmgen\opna.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\fmgen\psg.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\fmgen\fmgen.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\fmgen\fmtimer.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\i8253.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\pc8801\pc88.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm\pc8801</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\pc8801\pc8801.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm\pc8801</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\emu.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\fileio.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\emu_sdl.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\video.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\app.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\audio.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\input.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\file.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\platform.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\setting.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\menu.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\menuitem.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\font.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\diskmgr.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\menulist.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\converter.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\tapemgr.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\softkey.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\fmsound.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ePC-8801MA\vm\disksub.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\ePC-8801MA\vm\z80.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\emu.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\i8255.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\fifo.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\i8251.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\upd765a.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\event.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\config.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\upd1990a.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\pcm1bit.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\opna.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\common.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\fmgen.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\types.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\fmtimer.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\psg.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\fmgeninl.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\file.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\fileio.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\i8253.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\device.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\pc8801\pc8801.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\pc8801</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\emu_sdl.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\video.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\app.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\classes.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\audio.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\input.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\vm.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\platform.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\setting.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\headers.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\menu.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\menuitem.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\menulist.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\font.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\os.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmgen\misc.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\diskmgr.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\softkey.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\disk.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\debugger.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\pc8801\pc88.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm\pc8801</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\menuid.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\converter.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\tapemgr.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\fmsound.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ePC-8801MA\vm\disksub.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="XM8.rc">
+      <Filter>リソース ファイル</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>
