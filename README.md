@@ -40,7 +40,7 @@ http://retropc.net/pi/xm8/index.html
 
 ## ROMファイル
 ---
-使用できるROMファイルについては、[README-XM8.txt](../Documents/README-XM8.txt)の[ROMファイル]を参照してください。
+使用できるROMファイルについては、[README-XM8.txt](Documents/README-XM8.txt)の[ROMファイル]を参照してください。
 
 ### 配置場所
 ROMファイルの配置場所は、設定ファイルと同じ以下になります（一度、アプリケーションを起動するとのフォルダが作成されます）。
@@ -55,7 +55,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 
 ## 使用方法
 ---
-[README-XM8.txt](../Documents/README-XM8.txt)の[使い方]を参照してください。
+[README-XM8.txt](Documents/README-XM8.txt)の[使い方]を参照してください。
 
 
 
@@ -94,7 +94,7 @@ XM8.appを'アプリケーション'フォルダに移動するなどして実�
 
 
 
-他のプラットフォーム用のビルドについては、[README-BUILD.txt](../Documents/README-BUILD.txt)を参照してください。
+他のプラットフォーム用のビルドについては、[README-BUILD.txt](Documents/README-BUILD.txt)を参照してください。
 
 
 
