@@ -19,8 +19,10 @@ http://retropc.net/pi/xm8/index.html
 
 ## 動作環境
 
-- x86 CPUを搭載したMac
-- macOSのバージョンは古くても動作すると思いますが、どこまで動作するか未確認です。
+| CPU           | 最小OSバージョン    |
+| ------------- | ------------------- |
+| x86_64        | Mac OS X v10.7 Lion |
+| Apple Silicon | macOS 11 Big Sur    |
 
 
 
@@ -30,11 +32,13 @@ http://retropc.net/pi/xm8/index.html
 
 ### 配置場所
 
-ROMファイルの配置場所は、設定ファイルと同じ以下になります。
+ROMファイルの配置場所は、設定ファイルと同じ以下になります（一度、アプリケーションを起動するとのフォルダが作成されます）。
+
 
 ```shell
 ~/Library/Application Support/retro_pc_pi/xm8
 ```
+
 
 
 
@@ -69,9 +73,12 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 ```shell
 cd macOS
 make
+make package_app
 ```
 
 これで、macOSフォルダに実行バンドルファイルが作成されているはずです。
+
+XM8.appを'アプリケーション'フォルダに移動するなどして実行してください。
 
 
 
