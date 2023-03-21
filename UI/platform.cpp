@@ -32,6 +32,14 @@
 #include <sys/stat.h>
 #endif // __linux__
 
+#if defined(__APPLE__)
+#include <locale.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#endif // __APPLE__
+
+
 //
 // defines
 //
@@ -63,11 +71,11 @@ Platform::Platform(App *a)
 	ImmDisableIME((DWORD)-1);
 #endif // _WIN32
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	dir_handle = NULL;
 	dir_name[0] = '\0';
 	dir_up = false;
-#endif // __linux__
+#endif // __linux__ || __APPLE__
 }
 
 //
@@ -144,7 +152,7 @@ bool Platform::Init(SDL_Window *window)
 	}
 #endif // _WIN32 && UNICODE
 
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
 	char *opaque;
 
 	// set locale to UTF-8
@@ -155,7 +163,7 @@ bool Platform::Init(SDL_Window *window)
 			opaque = setlocale(LC_CTYPE, LOCALE_UTF8);
 		}
 	}
-#endif // __linux__ && !__ANDROID__
+#endif // __APPLE__ || (__linux__ && !__ANDROID__)
 
 	return true;
 }
@@ -186,12 +194,12 @@ void Platform::Deinit()
 	}
 #endif // _WIN32
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	if (dir_handle != NULL) {
 		closedir((DIR*)dir_handle);
 		dir_handle = NULL;
 	}
-#endif // __linux__
+#endif // __linux__ || __APPLE__
 }
 
 //
@@ -282,7 +290,7 @@ const char* Platform::FindFirst(const char *dir, Uint32 *info)
 	return NULL;
 #endif // _WIN32 && UNICODE
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	DIR *dir_ret;
 
 	// Find ..
@@ -306,7 +314,7 @@ const char* Platform::FindFirst(const char *dir, Uint32 *info)
 
 	// find next
 	return FindNext(info);
-#endif // __liunx__
+#endif // __liunx__ || __APPLE__
 }
 
 //
@@ -384,7 +392,7 @@ const char* Platform::FindNext(Uint32 *info)
 	return NULL;
 #endif // _WIN32 && UNICODE
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	struct dirent *entry;
 	Converter *converter;
 
@@ -407,7 +415,12 @@ const char* Platform::FindNext(Uint32 *info)
 	}
 
 	// name
+	#ifdef __APPLE__
+	converter->Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
+	converter->UtfToSjis(dir_name_utf8, dir_name);
+	#else
 	converter->UtfToSjis(entry->d_name, dir_name);
+	#endif
 
 	// directory ?
 	if (entry->d_type == DT_DIR) {
@@ -420,10 +433,10 @@ const char* Platform::FindNext(Uint32 *info)
 	*info = (Uint32)entry->d_type;
 
 	return dir_name;
-#endif // __liunx__
+#endif // __liunx__ || __APPLE__
 }
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 //
 // FindUp()
 // find ..
@@ -464,7 +477,7 @@ bool Platform::FindUp(const char *dir)
 	closedir(dir_ret);
 	return false;
 }
-#endif // __liunx__
+#endif // __liunx__ || __APPLE__
 
 //
 // IsDir()
@@ -487,14 +500,14 @@ bool Platform::IsDir(Uint32 info)
 	}
 #endif // _WIN32
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	if (info == DT_DIR) {
 		return true;
 	}
 	else {
 		return false;
 	}
-#endif // __linux__
+#endif // __linux__ || __APPLE__
 }
 
 //
@@ -557,7 +570,7 @@ bool Platform::MakePath(char *dir, const char *name)
 	return true;
 #endif // _WIN32 && UNICODE
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	Converter *converter;
 	struct stat filestat;
 
@@ -588,7 +601,7 @@ bool Platform::MakePath(char *dir, const char *name)
 	strcpy(dir, dir_name);
 
 	return true;
-#endif // __linux__
+#endif // __linux__ || __APPLE__
 }
 
 //
@@ -637,7 +650,7 @@ bool Platform::GetFileDateTime(const char *name, cur_time_t *cur_time)
 	return false;
 #endif // _WIN32
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	struct stat filestat;
 	time_t timep;
 	struct tm local_time;
@@ -660,7 +673,7 @@ bool Platform::GetFileDateTime(const char *name, cur_time_t *cur_time)
 	}
 
 	return false;
-#endif // __linux__
+#endif // __linux__ || __APPLE__
 }
 
 //
@@ -696,7 +709,7 @@ void Platform::MsgBox(SDL_Window *window, const char *string)
 	}
 #endif // _WIN32
 
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
 	SDL_MessageBoxData data;
 	SDL_MessageBoxButtonData button;
 	int retid;
@@ -718,7 +731,7 @@ void Platform::MsgBox(SDL_Window *window, const char *string)
 
 	// show modal message box
 	SDL_ShowMessageBox(&data, &retid);
-#endif // __linux__ && !__ANDROID__
+#endif // __APPLE__ || (__linux__ && !__ANDROID__)
 }
 
 //

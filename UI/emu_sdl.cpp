@@ -25,6 +25,11 @@
 #define EXTERNAL_PATH_ROM			"XM8/"
 								// replace from EXTERNAL_PATH_ANDROID
 
+#define SETTING_ORG					"retro_pc_pi"
+								// organization name
+#define SETTING_APP					"xm8"
+
+
 //
 // EMU_SDL()
 // constructor
@@ -46,6 +51,8 @@ EMU_SDL::EMU_SDL(Video *v)
 	if (replace != NULL) {
 		strcpy(replace, EXTERNAL_PATH_ROM);
 	}
+#elif __APPLE__
+	strcpy(base_path, SDL_GetPrefPath(SETTING_ORG, SETTING_APP));
 #else
 	strcpy(base_path, SDL_GetBasePath());
 #endif // __ANDROID__
