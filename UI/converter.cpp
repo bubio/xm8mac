@@ -88,6 +88,40 @@ void Converter::Deinit()
 	}
 }
 
+
+#ifdef __APPLE__
+//
+// Utf8macToUtf8()
+// convert UTF-8 Mac to UTF-8
+//
+int Converter::Utf8macToUtf8(const char *src, char *dst, size_t len)
+{
+    iconv_t conv; // conversion descriptor
+    char buf[_MAX_PATH];
+    char *src_buf = buf;
+    char *dst_buf = dst;
+    size_t src_len = strlen(src);
+    size_t dst_len = len - 1;
+    int ret = 0;
+    strncpy(buf, src, sizeof(buf));
+    if ((conv = iconv_open("UTF-8", "UTF-8-MAC")) == (iconv_t) - 1) {
+        pr_err("error: %s: %s\n", __FUNCTION__, "iconv open");
+        return -errno;
+    }
+    if (iconv(conv, &src_buf, &src_len, &dst_buf, &dst_len) == (size_t) - 1) {
+        pr_err("error: %s: %s\n", __FUNCTION__, "iconv");
+        ret = -errno;
+    }
+    *dst_buf = '\0';
+    if (iconv_close(conv) == -1) {
+        pr_err("error: %s: %s\n", __FUNCTION__, "iconv_close");
+        ret = -errno;
+    }
+
+    return ret;
+}
+#endif
+
 //
 // SjisToUtf()
 // convert shift-jis to UTF-8

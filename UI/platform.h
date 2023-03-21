@@ -66,16 +66,22 @@ private:
 	int find_drive;
 										// find drive count
 #endif // _WIN32
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	bool FindUp(const char *dir);
 										// find ..
 	void *dir_handle;
 										// DIR *
 	char dir_name[_MAX_PATH * 3];
 										// file name (shift-jis)
+
+	#ifdef __APPLE__
+	char dir_name_utf8[_MAX_PATH * 3];
+										// file name (utf8-mac)
+	#endif
+
 	bool dir_up;
 										// FindUp() result
-#endif // __linux__
+#endif // __linux__ || __APPLE__
 };
 
 #endif // PLATFORM_H

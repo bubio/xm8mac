@@ -29,6 +29,10 @@ public:
 										// deinitialize
 
 	// convert
+	#ifdef __APPLE__
+	int Utf8macToUtf8(const char *src, char *dst, size_t len);
+										// convert UTF-8 Mac to UTF-8
+	#endif
 	void SjisToUtf(const char *sjis, char *utf);
 										// convert shift-jis to UTF-8
 	void UtfToSjis(const char *utf, char *sjis);

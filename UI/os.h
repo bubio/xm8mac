@@ -47,6 +47,19 @@
 #include <time.h>
 #endif // __ANDROID__
 
+//
+// macOS
+//
+#if defined(__APPLE__)
+#include <SDL2/SDL.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <iconv.h>
+#include <errno.h>
+#define pr_err(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+#endif // __APPLE__
+
 #endif // OS_H
 
 #endif // SDL
