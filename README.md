@@ -5,8 +5,7 @@
 
 ## XM8 for macOSとは
 ---
-XM8は、ＰＩ．さんが開発したWindows/Linux/Androidのマルチプラットフォームに対応したPC-8801MA
-(PC-8801mkIISR上位互換)のエミュレータをmacOS用の改変したものです。
+XM8は、ＰＩ．さんが開発したマルチプラットフォーム（Windows/Linux/Android）に対応したPC-8801MA(PC-8801mkIISR上位互換)のエミュレータをmacOS用の改変したものです。
 
 <p align="center">
 <img width="752" src="https://user-images.githubusercontent.com/78299054/226607145-c6381e6e-acb8-4fba-88dc-0a8462298f6e.png">
@@ -43,7 +42,7 @@ http://retropc.net/pi/xm8/index.html
 使用できるROMファイルについては、[README-XM8.txt](Documents/README-XM8.txt)の[ROMファイル]を参照してください。
 
 ### 配置場所
-ROMファイルの配置場所は、設定ファイルと同じ以下になります（一度、アプリケーションを起動するとのフォルダが作成されます）。
+ROMファイルの配置場所は、設定ファイルと同じ以下になります（一度、アプリケーションを起動するとフォルダが作成されます）。
 
 
 ```shell
