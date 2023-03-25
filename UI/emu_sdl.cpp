@@ -51,7 +51,7 @@ EMU_SDL::EMU_SDL(Video *v)
 	if (replace != NULL) {
 		strcpy(replace, EXTERNAL_PATH_ROM);
 	}
-#elif __APPLE__
+#elif defined(__linux__) || defined(__APPLE__)
 	strcpy(base_path, SDL_GetPrefPath(SETTING_ORG, SETTING_APP));
 #else
 	strcpy(base_path, SDL_GetBasePath());
