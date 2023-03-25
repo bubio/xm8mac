@@ -28,7 +28,7 @@ SDL_LDFLAGS := $(shell sdl2-config --libs)
 # compile options
 #
 
-CXXFLAGS = -DSDL -D_PC8801MA -c -O2 -Wall \
+CXXFLAGS = -stdlib=libc++ -DSDL -D_PC8801MA -c -O2 -Wall \
 			-mmacosx-version-min=10.7 \
 			-Wno-macro-redefined \
 			-Wno-non-c-typedef-for-linkage \
@@ -120,7 +120,7 @@ clean:
 
 FRAMEWORK_PATH=$(HOME)/Library/Frameworks
 APP_NAME=XM8
-VERSION=1.7.0
+VERSION=1.7.1
 APP_ICON=AppIcon.png
 
 package_app:
