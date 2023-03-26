@@ -28,7 +28,7 @@ SDL_LDFLAGS := $(shell sdl2-config --libs)
 # compile options
 #
 
-CXXFLAGS = -DSDL -D_PC8801MA -c -O2 -Wall
+CXXFLAGS = -DSDL -D_PC8801MA -c -O2 -Wall -Wno-narrowing
 
 #
 # include directories
@@ -110,4 +110,3 @@ $(TARGET): $(OBJS)
 clean:
 	rm $(OBJS)
 	rm $(TARGET)
-

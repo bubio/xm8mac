@@ -28,7 +28,7 @@ SDL_LDFLAGS := $(shell sdl2-config --libs)
 # compile options
 #
 
-CXXFLAGS = -DSDL -D_PC8801MA -c -O2 -Wall \
+CXXFLAGS = -stdlib=libc++ -DSDL -D_PC8801MA -c -O2 -Wall \
 			-mmacosx-version-min=10.7 \
 			-Wno-macro-redefined \
 			-Wno-non-c-typedef-for-linkage \
@@ -116,20 +116,3 @@ $(TARGET): $(OBJS)
 clean:
 	rm $(OBJS)
 	rm $(TARGET)
-
-
-FRAMEWORK_PATH=$(HOME)/Library/Frameworks
-APP_NAME=XM8
-VERSION=1.7.0
-APP_ICON=AppIcon.png
-
-package_app:
-	rm -rf "./$(APP_NAME).app/"
-	bash iconcreate.sh $(APP_ICON)
-	mkdir -p "./$(APP_NAME).app"/Contents/{Frameworks,MacOS,Resources}
-	# cp -R "$(FRAMEWORK_PATH)/SDL2.framework" "./$(APP_NAME).app/Contents/Resources/"
-	cp Info.plist "./$(APP_NAME).app/Contents/"
-	sed -e "s/APP_NAME/$(APP_NAME)/g" -i "" "./$(APP_NAME).app/Contents/Info.plist"
-	sed -e "s/VERSION/$(VERSION)/g" -i "" "./$(APP_NAME).app/Contents/Info.plist"
-	mv ./xm8 "./$(APP_NAME).app/Contents/MacOS/$(APP_NAME)"
-	mv ./AppIcon.icns "./$(APP_NAME).app/Contents/Resources/"

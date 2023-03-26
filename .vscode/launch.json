@@ -12,6 +12,18 @@
             "environment": [],
             "externalConsole": true,
             "MIMode": "lldb"
+        },
+        {
+            "name": "(gdb) Launch Linux",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Linux/xm8",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb"
         }
     ]
 }

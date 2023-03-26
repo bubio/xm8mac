@@ -4,8 +4,17 @@ ePC-8801MA/vm/*.o
 ePC-8801MA/vm/fmgen/*.o
 ePC-8801MA/vm/pc8801/*.o
 UI/*.o
+
 macOS/*.wav
 macOS/*.rom
 macOS/xm8
 macOS/Brewfile.lock.json
 macOS/XM8.app/*
+
+Linux/*.deb
+
+Windows/.vs
+Windows/Debug
+Windows/Release
+Windows/SDL
+Windows/x64
