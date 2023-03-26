@@ -1,0 +1,10 @@
+Package: APP_NAME
+Version: VERSION
+Description: PC-8801MA Emulator
+ eXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA
+Maintainer: bubio
+Architecture: amd64
+Depends: libsdl2-2.0-0
+Priority: optional
+Section: devel
+Installed-Size: INSTALLED_SIZE
