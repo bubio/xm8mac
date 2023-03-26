@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/zsh
 
 APP_ICONSET=AppIcon.iconset
 mkdir $APP_ICONSET
