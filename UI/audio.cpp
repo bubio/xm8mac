@@ -159,7 +159,9 @@ bool Audio::Open(const OpenParam *param)
 	if (name == NULL) {
 		return false;
 	}
-	device_id = SDL_OpenAudioDevice(name, 0, &device_want, &device_spec, 0);
+
+	// Output audio device synchronizes with system settings.
+	device_id = SDL_OpenAudioDevice(NULL, 0, &device_want, &device_spec, 0);
 
 	// result
 	if (device_id == 0) {
