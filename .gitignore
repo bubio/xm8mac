@@ -12,3 +12,9 @@ macOS/Brewfile.lock.json
 macOS/XM8.app/*
 
 Linux/*.deb
+
+Windows/.vs
+Windows/Debug
+Windows/Release
+Windows/SDL
+Windows/x64
