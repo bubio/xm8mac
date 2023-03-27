@@ -1,5 +1,5 @@
-
 # XM8 for macOS
+
 ---
 [![Downloads](https://img.shields.io/github/downloads/bubio/xm8mac/total.svg)](https://github.com/bubio/xm8mac/releases/latest)
 
@@ -23,13 +23,21 @@ http://retropc.net/pi/xm8/index.html
 
 
 
-## 動作環境
+## インストール方法
 ---
 
-| CPU           | 最小OSバージョン    |
-| ------------- | ------------------- |
-| x86_64        | Mac OS X v10.7 Lion |
-| Apple Silicon | macOS 11 Big Sur    |
+[リリース](https://github.com/bubio/xm8mac/releases)からお手持ち環境にあった実行ファイルをダウンロードしてください。
+
+`XM8.app`を`アプリケーション`フォルダに移動するなどして実行してください。
+
+
+
+### 動作環境
+
+| CPU           | 最小OSバージョン    | 実行ファイル                                                 |
+| ------------- | ------------------- | ------------------------------------------------------------ |
+| x86_64        | Mac OS X v10.7 Lion | [x86_84版]([XM8_macOS_x86_64.zip](https://github.com/bubio/xm8mac/releases/download/1.7.0/XM8_macOS_x86_64.zip)) |
+| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.0/XM8_macOS_AppleSilicon.zip) |
 
 動作させるにはlibsdlが必要になります。
 
@@ -88,10 +96,6 @@ cd macOS
 
 これで、macOSフォルダに実行バンドルファイルが作成されているはずです。
 
-XM8.appを'アプリケーション'フォルダに移動するなどして実行してください。
-
-
-
 他のプラットフォーム用のビルドについては、[README-BUILD.txt](Documents/README-BUILD.txt)を参照してください。
 
 
@@ -99,3 +103,18 @@ XM8.appを'アプリケーション'フォルダに移動するなどして実�
 ## 謝辞
 ---
 ソースコードの改変を快諾してくださったＰＩ．氏にお礼申し上げます。
+
+
+
+## おまけ
+
+---
+
+Linuxフォルダにdebパッケージを作成するスクリプトが入っています。
+
+これを使う場合、BIOS ROMファイルの置き場所は以下になります。
+
+```shell
+~/.local/share/retro_pc_pi/xm8/
+```
+
