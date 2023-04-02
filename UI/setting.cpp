@@ -56,6 +56,8 @@
 										// version 1.50
 #define SETTING_VERSION_170		20180120
 										// version 1.70
+#define SETTING_VERSION_171		20230401
+										// version 1.71
 
 // video
 #define DEFAULT_WINDOW_WIDTH	640
@@ -223,6 +225,7 @@ bool Setting::Init()
 	config.sound_latency = DEFAULT_AUDIO_BUFFER;
 	config.sound_device_type = SETTING_SOUND_OPN;
 	config.fmgen_dll_path[0] = '\0';
+	config.audio_output_device = 0;
 
 	// load
 	Load();
@@ -345,6 +348,11 @@ bool Setting::LoadSetting(FILEIO *fio)
 		}
 #endif // __ANDROID__
 
+		// version 1.71
+		if (version >= SETTING_VERSION_171) {
+			config.audio_output_device = fio->FgetInt32();
+		}
+
 		return true;
 	}
 
@@ -378,7 +386,7 @@ void Setting::SaveSetting(FILEIO *fio)
 	int loop;
 
 	// version
-	fio->FputUint32(SETTING_VERSION_170);
+	fio->FputUint32(SETTING_VERSION_171);
 
 	// system
 	fio->FputInt32(config.boot_mode);
@@ -431,6 +439,9 @@ void Setting::SaveSetting(FILEIO *fio)
 	for (loop=0; loop<SDL_arraysize(joystick_to_key); loop++) {
 		fio->FputUint32(joystick_to_key[loop]);
 	}
+
+	// version 1.71
+	fio->FputInt32(config.audio_output_device);
 }
 
 //
@@ -792,9 +803,17 @@ void Setting::SetForceRGB565(bool enable)
 //
 int Setting::GetAudioDevice()
 {
-	// always use default device
-	return 0;
+	return config.audio_output_device;
 }
+
+// SetAudioDevice()
+// set audio device index
+//
+void Setting::SetAudioDevice(int id)
+{
+	config.audio_output_device = id;
+}
+
 
 //
 // GetAudioFreq()

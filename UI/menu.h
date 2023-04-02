@@ -53,6 +53,8 @@ public:
 										// enter video menu
 	void EnterAudio();
 										// enter audio menu
+	void EnterAudioOut();
+										// enter audio out menu
 	void EnterInput(int id);
 										// enter input menu
 	void EnterReset();
@@ -109,6 +111,8 @@ public:
 										// command (joymap)
 	void CmdVmKey(int id);
 										// command (vmkey)
+	void CmdAudioOut(bool down, int id);
+										// command (audio out)
 	void CmdFile(int id);
 										// command (file)
 	void JoyTest();
@@ -145,6 +149,8 @@ private:
 										// platform
 	Setting *setting;
 										// setting
+	Audio *audio;									
+										// audio
 	Video *video;
 										// video
 	Input *input;

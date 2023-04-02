@@ -18,3 +18,5 @@ Windows/Debug
 Windows/Release
 Windows/SDL
 Windows/x64
+
+build/

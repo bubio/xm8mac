@@ -40,29 +40,31 @@
 										// video menu
 #define MENU_AUDIO				9
 										// audio menu
-#define MENU_INPUT				10
+#define MENU_AUDIO_OUT			10
+										// audio output menu
+#define MENU_INPUT				11
 										// input menu
-#define MENU_RESET				11
+#define MENU_RESET				12
 										// reset menu
-#define MENU_QUIT				12
+#define MENU_QUIT				13
 										// quit menu
-#define MENU_SOFTKEY1			13
+#define MENU_SOFTKEY1			14
 										// softkey menu 1
-#define MENU_SOFTKEY2			14
+#define MENU_SOFTKEY2			15
 										// softkey menu 2
-#define MENU_SOFTKEY3			15
+#define MENU_SOFTKEY3			16
 										// softkey menu 3
-#define MENU_SOFTKEY4			16
+#define MENU_SOFTKEY4			17
 										// softkey menu 4
-#define MENU_DIP				17
+#define MENU_DIP				18
 										// dipswitch menu
-#define MENU_JOYMAP				18
+#define MENU_JOYMAP				19
 										// joystick to keyboard map menu
-#define MENU_VMKEY				19
+#define MENU_VMKEY				20
 										// vmkey menu
-#define MENU_FILE				20
+#define MENU_FILE				21
 										// file menu
-#define MENU_JOYTEST			21
+#define MENU_JOYTEST			22
 										// joystick test menu
 
 //
@@ -86,15 +88,17 @@
 										// video options
 #define MENU_MAIN_AUDIO			107
 										// audio options
-#define MENU_MAIN_INPUT			108
+#define MENU_MAIN_AUDIO_OUT		108
+										// audio output device
+#define MENU_MAIN_INPUT			109
 										// input options
-#define MENU_MAIN_SCREEN		109
+#define MENU_MAIN_SCREEN		110
 										// full/window screen
-#define MENU_MAIN_SPEED			110
+#define MENU_MAIN_SPEED			111
 										// full/normal speed
-#define MENU_MAIN_RESET			111
+#define MENU_MAIN_RESET			112
 										// reset
-#define MENU_MAIN_QUIT			112
+#define MENU_MAIN_QUIT			113
 										// quit
 #define MENU_MAIN_MAX			199
 										// maximum
@@ -292,22 +296,26 @@
 //
 #define MENU_AUDIO_MIN			900
 										// minimum
-#define MENU_AUDIO_44100		901
+#define MENU_AUDIO_OUT			901
+										// Audio Output
+#define MENU_AUDIO_44100		902
 										// 44100Hz
-#define MENU_AUDIO_48000		902
+#define MENU_AUDIO_48000		903
 										// 48000Hz
-#define MENU_AUDIO_55467		903
+#define MENU_AUDIO_55467		904
 										// 55467Hz
-#define MENU_AUDIO_88200		904
+#define MENU_AUDIO_88200		905
 										// 88200Hz
-#define MENU_AUDIO_96000		905
+#define MENU_AUDIO_96000		906
 										// 96000Hz
-#define MENU_AUDIO_BUFFER		906
+#define MENU_AUDIO_BUFFER		907
 										// buffer
-#define MENU_AUDIO_OPN			907
+#define MENU_AUDIO_OPN			908
 										// YM2203 (SR/FR/TR/MR/FH/MH/FE/FE2/VA/DO)
-#define MENU_AUDIO_OPNA			908
+#define MENU_AUDIO_OPNA			909
 										// YM2608 (FA/MA/MA2/MC/VA2/VA3/DO+)
+#define MENU_AUDIO_DEVICE		996
+										// audio device										
 #define MENU_AUDIO_FREQ			997
 										// frequency radio
 #define MENU_AUDIO_SBII			998
@@ -722,6 +730,9 @@
 										// BUTTON 15
 #define MENU_JOYTEST_MAX		1799
 										// maximum
+
+#define MENU_AUDIO_DEVICE_MIN	1800
+#define MENU_AUDIO_DEVICE_MAX	1899
 
 //
 // file menu
