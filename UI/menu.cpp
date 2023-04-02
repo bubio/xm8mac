@@ -16,6 +16,7 @@
 #include "app.h"
 #include "setting.h"
 #include "platform.h"
+#include "audio.h"
 #include "video.h"
 #include "font.h"
 #include "input.h"
@@ -41,6 +42,7 @@ Menu::Menu(App *a)
 	// object
 	platform = NULL;
 	setting = NULL;
+	audio = NULL;
 	video = NULL;
 	input = NULL;
 	list = NULL;
@@ -82,6 +84,7 @@ bool Menu::Init()
 	// object
 	platform = app->GetPlatform();
 	setting = app->GetSetting();
+	audio = app->GetAudio();
 	video = app->GetVideo();
 	input = app->GetInput();
 	converter = app->GetConverter();
@@ -230,6 +233,7 @@ void Menu::EnterMain(int id)
 	list->AddButton("System Options", MENU_MAIN_SYSTEM);
 	list->AddButton("Video Options", MENU_MAIN_VIDEO);
 	list->AddButton("Audio Options", MENU_MAIN_AUDIO);
+	list->AddButton("Audio Output Device", MENU_MAIN_AUDIO_OUT);
 	list->AddButton("Input Options", MENU_MAIN_INPUT);
 
 #ifndef __ANDROID__
@@ -846,6 +850,34 @@ void Menu::EnterAudio()
 	else {
 		list->SetRadio(MENU_AUDIO_OPN, MENU_AUDIO_SBII);
 	}
+
+	// set focus
+	list->SetFocus(id);
+}
+
+//
+// EnterAudioOut()
+// enter audio out menu
+//
+void Menu::EnterAudioOut()
+{
+	int id = 0;
+
+	list->SetTitle("<< Audio Output >>", MENU_AUDIO_OUT);
+
+	list->AddRadioButton("SYSTEM DEFAULT", MENU_AUDIO_DEVICE_MIN, MENU_AUDIO_DEVICE);
+	int device_num = audio->GetDeviceNum();
+	for (int i = 0; i < device_num; i++) {
+		const char* raw_string = audio->GetDeviceName(i);
+		char* sjis_string = (char *)SDL_malloc(strlen(raw_string) * 3);
+
+		converter->UtfToSjis(raw_string, sjis_string);
+		list->AddRadioButton(sjis_string, MENU_AUDIO_DEVICE_MIN + i + 1, MENU_AUDIO_DEVICE);
+	}
+
+	int audio_device = setting->GetAudioDevice();
+	id = MENU_AUDIO_DEVICE_MIN + audio_device;
+	list->SetRadio(id, MENU_AUDIO_DEVICE);
 
 	// set focus
 	list->SetFocus(id);
@@ -1486,6 +1518,12 @@ void Menu::Command(bool down, int id)
 		return;
 	}
 
+	// audio device menu
+	if ((id >= MENU_AUDIO_DEVICE_MIN) && (id <= MENU_AUDIO_DEVICE_MAX)) {
+		CmdAudioOut(down, id);
+		return;
+	}
+
 	// file menu
 	if (id >= MENU_FILE_MIN) {
 		if (down == false) {
@@ -1544,6 +1582,11 @@ void Menu::CmdBack()
 	// audio menu
 	case MENU_AUDIO:
 		EnterMain(MENU_MAIN_AUDIO);
+		break;
+
+	// audio output menu
+	case MENU_AUDIO_OUT:
+		EnterAudio();
 		break;
 
 	// input menu
@@ -1681,6 +1724,11 @@ void Menu::CmdMain(int id)
 	// audio options
 	case MENU_MAIN_AUDIO:
 		EnterAudio();
+		break;
+
+	// audio output device
+	case MENU_MAIN_AUDIO_OUT:
+		EnterAudioOut();
 		break;
 
 	// input options
@@ -2273,6 +2321,11 @@ void Menu::CmdAudio(bool down, int id)
 	leave = false;
 
 	switch (id) {
+	// Audio Output
+	case MENU_AUDIO_OUT:
+		EnterAudioOut();
+		break;
+		
 	// 44100Hz
 	case MENU_AUDIO_44100:
 		if (down == false) {
@@ -2847,6 +2900,35 @@ void Menu::CmdVmKey(int id)
 
 	EnterJoymap(joymap_id);
 }
+
+//
+// CmdAudioOut()
+// command (audio out)
+//
+void Menu::CmdAudioOut(bool down, int id)
+{
+	// get current audio device
+	int current_audio_device = setting->GetAudioDevice();
+
+	// leave flag
+	bool leave = false;
+
+	if (down == false) {
+		list->SetRadio(id, MENU_AUDIO_DEVICE);
+		setting->SetAudioDevice(id - MENU_AUDIO_DEVICE_MIN);
+	}
+
+	// rebuild audio component if freq or buffer has been changed
+	if (setting->GetAudioDevice() != current_audio_device) {
+		app->ChangeAudio();
+	}
+
+	// leave menu
+	if (leave == true) {
+		app->LeaveMenu();
+	}
+}
+
 
 //
 // CmdFile()

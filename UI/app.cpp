@@ -41,7 +41,7 @@
 //
 #define APP_NAME				"XM8 (based on ePC-8801MA)";
 										// application name
-#define APP_VER					0x0170
+#define APP_VER					0x0171
 										// version (BCD)
 #define APP_WIDTH				SCREEN_WIDTH
 										// window width
@@ -510,6 +510,16 @@ Setting* App::GetSetting()
 {
 	SDL_assert(setting != NULL);
 	return setting;
+}
+
+//
+// GetAudio()
+// get Audio instance
+//
+Audio* App::GetAudio()
+{
+	SDL_assert(audio != NULL);
+	return audio;
 }
 
 //

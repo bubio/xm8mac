@@ -154,14 +154,18 @@ bool Audio::Open(const OpenParam *param)
 	device_want.callback = CommonCallback;
 	device_want.userdata = (void*)this;
 
-	// open device
-	name = GetDeviceName(param->device);
-	if (name == NULL) {
-		return false;
-	}
+	if (param->device > 0) {
+		// open device
+		name = GetDeviceName(param->device - 1);
+		if (name == NULL) {
+			return false;
+		}
 
-	// Output audio device synchronizes with system settings.
-	device_id = SDL_OpenAudioDevice(NULL, 0, &device_want, &device_spec, 0);
+		device_id = SDL_OpenAudioDevice(name, 0, &device_want, &device_spec, 0);
+	} else {
+		// Output audio device synchronizes with system settings.
+		device_id = SDL_OpenAudioDevice(NULL, 0, &device_want, &device_spec, 0);
+	}
 
 	// result
 	if (device_id == 0) {

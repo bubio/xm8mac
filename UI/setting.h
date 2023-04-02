@@ -153,6 +153,8 @@ public:
 	// audio
 	int GetAudioDevice();
 										// get audio device
+	void SetAudioDevice(int id);
+										// set audio device
 	int GetAudioFreq();
 										// get audio frequency
 	void SetAudioFreq(int freq);

@@ -35,6 +35,8 @@ public:
 										// get Setting instance
 	Platform* GetPlatform();
 										// get platform instance
+	Audio* GetAudio();
+										// get Audio instance
 	Video* GetVideo();
 										// get Video instance
 	Font* GetFont();
