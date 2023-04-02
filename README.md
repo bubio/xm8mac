@@ -36,8 +36,8 @@ http://retropc.net/pi/xm8/index.html
 
 | CPU           | 最小OSバージョン    | 実行ファイル                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | Mac OS X v10.7 Lion | [x86_84版](https://github.com/bubio/xm8mac/releases/download/1.7.0/XM8_macOS_x86_64.zip) |
-| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.0/XM8_macOS_AppleSilicon.zip) |
+| x86_64        | Mac OS X v10.7 Lion | [x86_84版](https://github.com/bubio/xm8mac/releases/download/1.7.1/XM8_macOS_x86_64.zip) |
+| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.1/XM8_macOS_AppleSilicon.zip) |
 
 動作させるにはlibsdlが必要になります。
 
