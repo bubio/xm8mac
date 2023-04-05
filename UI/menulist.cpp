@@ -1114,11 +1114,18 @@ void MenuList::OnMouseButtonUp(SDL_Event *e)
 		return;
 	}
 
-	// right button ?
+	// right button or x1 button ?
 	if (((e->button.button == SDL_BUTTON_RIGHT) && (e->button.state == SDL_RELEASED)) ||
 		((e->button.button == SDL_BUTTON_X1) && (e->button.state == SDL_RELEASED))) {
 		// right button -> back
 		menu->Command(false, MENU_BACK);
+		return;
+	}
+
+	// middle buttton ?
+	if ((e->button.button == SDL_BUTTON_MIDDLE) && (e->button.state == SDL_RELEASED)) {
+		// middle button -> leave menu
+		app->LeaveMenu();
 		return;
 	}
 

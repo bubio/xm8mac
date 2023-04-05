@@ -99,6 +99,9 @@
 										// audio buffer (ms)
 #endif // __ANDROID__
 
+#define DEFAULT_AUDIO_OUTPUT_SYSTEM_DEFAULT	0
+										// audio output device
+
 // input
 #define DEFAULT_SOFTKEY_ALPHA	0x60
 										// alpha blending level for softkey
@@ -113,6 +116,9 @@
 #define DEFAULT_KEYBOARD_ENABLE	(true)
 										// keyboard enable
 #endif // __ANDROID__
+
+#define DEFAULT_SHOW_SOFTKEY_MOUSE_MOVE	(false)
+										// show softkey when mouse move
 
 //
 // Setting()
@@ -151,6 +157,9 @@ Setting::Setting()
 	joystick_key = true;
 	mouse_time = DEFAULT_MOUSE_TIME;
 	keyboard_enable = DEFAULT_KEYBOARD_ENABLE;
+	
+	audio_output_device = DEFAULT_AUDIO_OUTPUT_SYSTEM_DEFAULT;
+	mouse_move_softkey_enable = DEFAULT_SHOW_SOFTKEY_MOUSE_MOVE;
 
 	// setting (power)
 	watch_battery = true;
@@ -225,7 +234,6 @@ bool Setting::Init()
 	config.sound_latency = DEFAULT_AUDIO_BUFFER;
 	config.sound_device_type = SETTING_SOUND_OPN;
 	config.fmgen_dll_path[0] = '\0';
-	config.audio_output_device = 0;
 
 	// load
 	Load();
@@ -350,7 +358,9 @@ bool Setting::LoadSetting(FILEIO *fio)
 
 		// version 1.71
 		if (version >= SETTING_VERSION_171) {
-			config.audio_output_device = fio->FgetInt32();
+			
+			audio_output_device = fio->FgetInt32();
+			mouse_move_softkey_enable = fio->FgetBool();
 		}
 
 		return true;
@@ -441,7 +451,8 @@ void Setting::SaveSetting(FILEIO *fio)
 	}
 
 	// version 1.71
-	fio->FputInt32(config.audio_output_device);
+	fio->FputInt32(audio_output_device);
+	fio->FputBool(mouse_move_softkey_enable);
 }
 
 //
@@ -803,7 +814,7 @@ void Setting::SetForceRGB565(bool enable)
 //
 int Setting::GetAudioDevice()
 {
-	return config.audio_output_device;
+	return audio_output_device;
 }
 
 // SetAudioDevice()
@@ -811,7 +822,7 @@ int Setting::GetAudioDevice()
 //
 void Setting::SetAudioDevice(int id)
 {
-	config.audio_output_device = id;
+	audio_output_device = id;
 }
 
 
@@ -1190,6 +1201,25 @@ void Setting::SetWatchBattery(bool enable)
 {
 	watch_battery = enable;
 }
+
+//
+// IsShowSoftKeyMouseMove()
+// get show softkey mouse move
+//
+bool Setting::IsShowSoftKeyMouseMove()
+{
+	return mouse_move_softkey_enable;
+}
+
+//
+// SetShowSoftKeyMouseMove()
+// set show softkey mouse move
+//
+void Setting::SetShowSoftKeyMouseMove(bool enable)
+{
+	mouse_move_softkey_enable = enable;
+}
+
 
 //
 // GetStateNum()
