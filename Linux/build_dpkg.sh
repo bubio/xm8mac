@@ -1,4 +1,8 @@
-#! /bin/zsh
+#! /bin/bash
+
+#
+# sudo apt install build-essential libsdl2-dev
+#
 
 make clean
 make
