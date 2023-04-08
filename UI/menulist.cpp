@@ -1115,10 +1115,21 @@ void MenuList::OnMouseButtonUp(SDL_Event *e)
 	}
 
 	// right button ?
-	if (((e->button.button == SDL_BUTTON_RIGHT) && (e->button.state == SDL_RELEASED)) ||
-		((e->button.button == SDL_BUTTON_X1) && (e->button.state == SDL_RELEASED))) {
+	if ((e->button.button == SDL_BUTTON_RIGHT) && (e->button.state == SDL_RELEASED)) {
 		// right button -> back
 		menu->Command(false, MENU_BACK);
+		return;
+	}
+
+	// x1 button ?
+	if ((e->button.button == SDL_BUTTON_X1) && (e->button.state == SDL_RELEASED)) {
+		if (menu_file == true) {
+			// file menu -> directory up
+			menu->Command(false, MENU_FILE_MIN);
+		} else {
+			// other -> menu back
+			menu->Command(false, MENU_BACK);
+		}
 		return;
 	}
 
