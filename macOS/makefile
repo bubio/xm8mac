@@ -28,7 +28,7 @@ SDL_LDFLAGS := $(shell sdl2-config --libs)
 # compile options
 #
 
-CXXFLAGS = -stdlib=libc++ -DSDL -D_PC8801MA -c -O2 -Wall \
+CXXFLAGS = -g -stdlib=libc++ -DSDL -D_PC8801MA -c -O2 -Wall \
 			-mmacosx-version-min=10.7 \
 			-Wno-macro-redefined \
 			-Wno-non-c-typedef-for-linkage \
@@ -107,7 +107,8 @@ all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CXX) -o $(TARGET) $(OBJS) $(SDL_LDFLAGS) -lc++ -liconv -mmacosx-version-min=10.7
-	$(STRIP) $(TARGET)
+
+# $(STRIP) $(TARGET)
 
 #
 # make clean:

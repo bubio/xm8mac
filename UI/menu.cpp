@@ -897,6 +897,7 @@ void Menu::EnterInput(int id)
 	list->AddButton("Softkey type 4", MENU_INPUT_SOFTKEY4);
 	list->AddSlider("Softkey transparency", MENU_INPUT_SOFTALPHA, 0, 0xff, 1);
 	list->AddSlider("Softkey timeout", MENU_INPUT_SOFTTIME, 400, 20000, 200);
+	list->AddCheckButton("Show Softkey Mouse Move", MENU_INPUT_SOFTKEY_MM);
 #ifdef __ANDROID__
 	list->AddCheckButton("Keyboard enable", MENU_INPUT_KEYENABLE);
 #endif // __ANDROID__
@@ -912,6 +913,7 @@ void Menu::EnterInput(int id)
 	// softkey
 	list->SetSlider(MENU_INPUT_SOFTALPHA, setting->GetSoftKeyAlpha());
 	list->SetSlider(MENU_INPUT_SOFTTIME, setting->GetSoftKeyTime());
+	list->SetCheck(MENU_INPUT_SOFTKEY_MM, setting->IsShowSoftKeyMouseMove());
 
 #ifdef __ANDROID__
 	// keyboard
@@ -2443,6 +2445,21 @@ void Menu::CmdInput(bool down, int id)
 	// softkey timeout
 	case MENU_INPUT_SOFTTIME:
 		setting->SetSoftKeyTime((Uint32)list->GetSlider(MENU_INPUT_SOFTTIME));
+		break;
+
+	// show softkey when mouse move
+	case MENU_INPUT_SOFTKEY_MM:
+		if (down == false) {
+			enable = list->GetCheck(MENU_INPUT_SOFTKEY_MM);
+			if (enable == true) {
+				list->SetCheck(MENU_INPUT_SOFTKEY_MM, false);
+				setting->SetShowSoftKeyMouseMove(false);
+			}
+			else {
+				list->SetCheck(MENU_INPUT_SOFTKEY_MM, true);
+				setting->SetShowSoftKeyMouseMove(true);
+			}
+		}
 		break;
 
 #ifdef __ANDROID__
