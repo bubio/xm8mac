@@ -110,7 +110,6 @@ $(TARGET): $(OBJS)
 
 # $(STRIP) $(TARGET)
 
-
 #
 # make clean:
 # clean object and executable file

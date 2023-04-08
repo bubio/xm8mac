@@ -229,6 +229,11 @@ public:
 										// get watch battery
 	void SetWatchBattery(bool enable);
 										// set watch battery
+	
+	bool IsShowSoftKeyMouseMove();
+										// get show softkey when mouse move
+	void SetShowSoftKeyMouseMove(bool);
+										// set show softkey when mouse move
 
 private:
 	void Load();
@@ -277,6 +282,10 @@ private:
 										// watch battery (version 1.30)
 	uint32 joystick_to_key[15];
 										// joystick to keyboard map (version 1.50)
+	int audio_output_device;
+										// audio output device (version 1.71)
+	bool mouse_move_softkey_enable;
+										// show softkey mouse move enable (version 1.71)
 };
 
 #endif // SETTING_H
