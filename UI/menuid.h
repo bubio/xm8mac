@@ -296,23 +296,21 @@
 //
 #define MENU_AUDIO_MIN			900
 										// minimum
-#define MENU_AUDIO_OUT			901
-										// Audio Output
-#define MENU_AUDIO_44100		902
+#define MENU_AUDIO_44100		901
 										// 44100Hz
-#define MENU_AUDIO_48000		903
+#define MENU_AUDIO_48000		902
 										// 48000Hz
-#define MENU_AUDIO_55467		904
+#define MENU_AUDIO_55467		903
 										// 55467Hz
-#define MENU_AUDIO_88200		905
+#define MENU_AUDIO_88200		904
 										// 88200Hz
-#define MENU_AUDIO_96000		906
+#define MENU_AUDIO_96000		905
 										// 96000Hz
-#define MENU_AUDIO_BUFFER		907
+#define MENU_AUDIO_BUFFER		906
 										// buffer
-#define MENU_AUDIO_OPN			908
+#define MENU_AUDIO_OPN			907
 										// YM2203 (SR/FR/TR/MR/FH/MH/FE/FE2/VA/DO)
-#define MENU_AUDIO_OPNA			909
+#define MENU_AUDIO_OPNA			908
 										// YM2608 (FA/MA/MA2/MC/VA2/VA3/DO+)
 #define MENU_AUDIO_DEVICE		996
 										// audio device										
