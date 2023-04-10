@@ -1,7 +1,8 @@
 #!/bin/zsh
 
-make clean
-make
+rm -rf build
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
 
 FRAMEWORK_PATH=$HOME/Library/Frameworks
 APP_NAME=XM8
@@ -15,5 +16,5 @@ mkdir -p "./$APP_NAME.app"/Contents/{Frameworks,MacOS,Resources}
 cp Info.plist "./$APP_NAME.app/Contents/"
 sed -e "s/APP_NAME/$APP_NAME/g" -i "" "./$APP_NAME.app/Contents/Info.plist"
 sed -e "s/VERSION/$VERSION/g" -i "" "./$APP_NAME.app/Contents/Info.plist"
-mv ./xm8 "./$APP_NAME.app/Contents/MacOS/$APP_NAME"
+mv ./build/xm8 "./$APP_NAME.app/Contents/MacOS/$APP_NAME"
 mv ./AppIcon.icns "./$APP_NAME.app/Contents/Resources/"
