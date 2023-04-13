@@ -1,0 +1,4 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/macOS",
+    "cmake.buildDirectory": "${workspaceFolder}/macOS/build"
+}

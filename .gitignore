@@ -1,9 +1,6 @@
 .DS_Store
 
-macOS/*.wav
-macOS/*.rom
 macOS/Brewfile.lock.json
-macOS/XM8.app/*
 
 Linux/*.deb
 

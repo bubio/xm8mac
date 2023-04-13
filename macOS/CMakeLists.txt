@@ -12,16 +12,30 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
   message(FATAL_ERROR "DO NOT BUILD in-tree.")
 endif()
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
+
+foreach(_policy CMP0111 CMP0126 CMP0135)
+  if(POLICY ${_policy})
+    cmake_policy(SET ${_policy} NEW)
+    set(CMAKE_POLICY_DEFAULT_${_policy} NEW)
+  endif()
+endforeach()
+
+if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
+  message(FATAL_ERROR "DO NOT BUILD in-tree.")
+endif()
+
+# Get version from environment variable
+set(PROJECT_VERSION 1.7.1)
+
+# Packaging options
+# RELEASE_OPTION(CPACK "Configure CPack")
 
 # Project Name
-project(xm8 VERSION 1.7.1)
+project(XM8 VERSION ${PROJECT_VERSION})
 
 # Tool chain
 set(CMAKE_CXX_COMPILER "clang++")
-
-# Set macOS version
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.7" CACHE STRING "Minimum OS X deployment version")
 
 # Find SDL2 library and add to linker flags
 find_package(SDL2 REQUIRED)
@@ -91,10 +105,60 @@ set(SRCS
   ../ePC-8801MA/vm/pc8801/pc8801.cpp
 )
 
-# Set executable
-add_executable(${PROJECT_NAME} ${SRCS})
+set(BIN_TARGET "xm8")
+add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} AppIcon.icns)
+
+if(CMAKE_STRIP)
+  add_custom_command(
+    TARGET ${BIN_TARGET} POST_BUILD
+    DEPENDS ${BIN_TARGET}
+    COMMAND $<$<CONFIG:Release>:${CMAKE_STRIP}>
+            $<$<CONFIG:MinSizeRel>:${CMAKE_STRIP}>
+    ARGS $<TARGET_FILE:${BIN_TARGET}>)
+endif()
+
+set_source_files_properties("AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+set_target_properties(${BIN_TARGET} PROPERTIES
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.bubio.xm8"
+    MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2015 PI."
+    MACOSX_BUNDLE_BUNDLE_NAME "XM8"
+    MACOSX_BUNDLE_DISPLAY_NAME "XM8"
+    MACOSX_BUNDLE_INFO_STRING ${PROJECT_VERSION}
+    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+    MACOSX_BUNDLE_LONG_VERSION_STRING "Version ${PROJECT_VERSION}"
+    MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.0")
+option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
+set(CPACK On)
+
+
+install (TARGETS ${BIN_TARGET} DESTINATION ./)
+
+if(MACOSX_STANDALONE_APP_BUNDLE)
+    install(CODE "
+      include(BundleUtilities)
+      fixup_bundle(${CMAKE_BINARY_DIR}/${MACOSX_BUNDLE_BUNDLE_NAME}.app \"\" \"\")
+      "
+      COMPONENT Runtime)
+endif()
+
 
 # Set link options
-target_link_libraries(${PROJECT_NAME} PRIVATE
+target_link_libraries(${BIN_TARGET} PRIVATE
                       ${SDL2_LIBRARIES}
                       iconv)
+
+# Packaging                      
+if(CPACK)
+  set(CPACK_PACKAGE_FILE_NAME "XM8")
+  set(CPACK_DMG_DISABLE_APPLICATIONS_SYMLINK "ON")
+  set(CPACK_STRIP_FILES TRUE)
+  set(CPACK_GENERATOR "DragNDrop")
+  set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+  set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+  set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+  include(CPack)
+endif()                      
