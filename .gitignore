@@ -1,17 +1,10 @@
 .DS_Store
-ePC-8801MA/*.o
-ePC-8801MA/vm/*.o
-ePC-8801MA/vm/fmgen/*.o
-ePC-8801MA/vm/pc8801/*.o
-UI/*.o
 
-macOS/*.wav
-macOS/*.rom
-macOS/xm8
 macOS/Brewfile.lock.json
-macOS/XM8.app/*
 
 Linux/*.deb
+Linux/xm8_linux_x86_64.appimage
+linuxdeploy-x86_64.AppImage
 
 Windows/.vs
 Windows/Debug

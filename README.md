@@ -36,7 +36,7 @@ http://retropc.net/pi/xm8/index.html
 
 | CPU           | 最小OSバージョン    | 実行ファイル                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | Mac OS X v10.7 Lion | [x86_84版](https://github.com/bubio/xm8mac/releases/download/1.7.1/XM8_macOS_x86_64.zip) |
+| x86_64        | OS X v10.9 Mavericks | [x86_64版](https://github.com/bubio/xm8mac/releases/download/1.7.1/XM8_macOS_x86_64.zip) |
 | Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.1/XM8_macOS_AppleSilicon.zip) |
 
 動作させるにはlibsdlが必要になります。
@@ -69,7 +69,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 ## ビルド方法
 ---
 
-#### ビルド環境
+### ビルド環境
 
 ビルドするには以下のインストールが必要です。
 
@@ -77,24 +77,26 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 
   使うのはコマンドラインツールだけですが、Xcodeをインストールしてしまうのが手っ取り早いと思います。
 
-- SDL2
+- Homebrew
+  
+  [Homebrew](https://brew.sh/index_ja)のインストールが必要です。
+  SDL2などビルドに必要なツールの取得に使用します。
+  
+  古いOSでバージョンが古い場合、Homebrew自体が動作しないと思いますので、[MacPorts](https://www.macports.org)経由でインストールするのが良いと思います。
+  その場合、cmake、libsdl2をインストールしてください。
 
-  SDL2のインストールが必要です。
 
-  [Homebrew](https://brew.sh/index_ja)が楽だと思います。
-
-
-
-#### ビルド手順
+### ビルド手順
 
 プロジェクトのルートをターミナルで開き、以下のコマンドを実行します。
 
 ```shell
 cd macOS
-./build_app.sh
+./dist_app.sh
 ```
 
 これで、macOSフォルダに実行バンドルファイルが作成されているはずです。
+
 
 他のプラットフォーム用のビルドについては、[README-BUILD.txt](Documents/README-BUILD.txt)を参照してください。
 

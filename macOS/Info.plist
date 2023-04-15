@@ -9,19 +9,19 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>APP_NAME</string>
+	<string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.bubio.APP_NAME</string>
+	<string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
 	<key>CFBundleName</key>
-	<string>APP_NAME</string>
+	<string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
 	<key>CFBundleDisplayName</key>
-	<string>APP_NAME</string>
+	<string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
 	<key>CFBundleIconFile</key>
-	<string>AppIcon.icns</string>
+	<string>${MACOSX_BUNDLE_ICON_FILE}</string>
 	<key>CFBundleShortVersionString</key>
-	<string>VERSION</string>
+	<string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
 	<key>CFBundleVersion</key>
-	<string>VERSION</string>
+	<string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>NSHighResolutionCapable</key>
@@ -29,7 +29,7 @@
 	<key>CSResourcesFileMapped</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright (C) 2015 PI.</string>
+	<string>${MACOSX_BUNDLE_COPYRIGHT}</string>
 	<key>SDL_FILESYSTEM_BASE_DIR_TYPE</key>
 	<string>parent</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>

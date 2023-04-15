@@ -1,3 +1,5 @@
 {
-    "cmake.sourceDirectory": "${workspaceFolder}/Android/XM8/app"
+    "cmake.sourceDirectory": "${workspaceFolder}/",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.configureOnOpen": false,
 }
