@@ -112,7 +112,7 @@ if(CMAKE_STRIP)
 endif()
 
 if(APPLE)
-  set_source_files_properties("AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/macOS/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
   set_target_properties(${BIN_TARGET} PROPERTIES
       MACOSX_BUNDLE_GUI_IDENTIFIER "com.bubio.xm8"
       MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2015 PI."
@@ -123,7 +123,7 @@ if(APPLE)
       MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
       MACOSX_BUNDLE_LONG_VERSION_STRING "Version ${PROJECT_VERSION}"
       MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
-      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macOS/Info.plist"
   )
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.0")
   option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
