@@ -22,7 +22,7 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 endif()
 
 # Get version from environment variable
-set(PROJECT_VERSION 1.7.1)
+set(PROJECT_VERSION 1.7.2)
 
 # Project Name
 project(XM8 VERSION ${PROJECT_VERSION})
