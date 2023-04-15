@@ -17,8 +17,8 @@ cd ../
 # Remove previous artifact.
 rm -rf build
 
-cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j $(getconf _NPROCESSORS_ONLN) --target package
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=OFF -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build -j 2 --target package
 
 if [ -f build/xm8*.rpm ]; then
     mv build/xm8*.rpm build/xm8.rpm

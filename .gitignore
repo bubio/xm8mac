@@ -3,6 +3,8 @@
 macOS/Brewfile.lock.json
 
 Linux/*.deb
+Linux/xm8_linux_x86_64.appimage
+linuxdeploy-x86_64.AppImage
 
 Windows/.vs
 Windows/Debug
