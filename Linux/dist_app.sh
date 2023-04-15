@@ -25,7 +25,7 @@ if [ -f build/xm8*.rpm ]; then
     
     read -p "Do you want to install the package? (y/N): " yn
     case "$yn" in [yY]*) ;; *) echo "abort." ; exit ;; esac    
-    sudo dnf install build/xm8.rpm
+    sudo dnf install ./build/xm8.rpm
 fi
 
 if [ -f build/xm8*.deb ]; then
@@ -33,7 +33,7 @@ if [ -f build/xm8*.deb ]; then
 
     read -p "Do you want to install the package? (y/N): " yn
     case "$yn" in [yY]*) ;; *) echo "abort." ; exit ;; esac    
-    sudo apt install build/xm8.deb
+    sudo apt install ./build/xm8.deb
 fi
 
 popd
