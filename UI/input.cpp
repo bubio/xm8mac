@@ -893,6 +893,11 @@ void Input::OnMouseMotion(SDL_Event *e)
 		return;
 	}
 
+	// show softkey when mouse move
+	if (setting->IsShowSoftKeyMouseMove() == false) {
+		return;
+	}
+
 	// convert point
 	x = e->motion.x;
 	y = e->motion.y;
@@ -928,6 +933,12 @@ void Input::OnMouseButtonDown(SDL_Event *e)
 		return;
 	}
 
+	// middle button or x1 button ?
+	if ((e->button.button == SDL_BUTTON_MIDDLE) || (e->button.button == SDL_BUTTON_X1)) {
+		// disappear softkey
+		return;
+	}
+
 	// convert point
 	x = e->button.x;
 	y = e->button.y;
@@ -960,6 +971,13 @@ void Input::OnMouseButtonUp(SDL_Event *e)
 
 	// true mouse only
 	if (e->motion.which == SDL_TOUCH_MOUSEID) {
+		return;
+	}
+
+	// middle buttton ?
+	if (((e->button.button == SDL_BUTTON_MIDDLE) && (e->button.state == SDL_RELEASED)) ||
+		((e->button.button == SDL_BUTTON_X1) && (e->button.state == SDL_RELEASED))) {
+		ResetList();
 		return;
 	}
 

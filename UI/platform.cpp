@@ -408,6 +408,18 @@ const char* Platform::FindNext(Uint32 *info)
 			return NULL;
 		}
 
+		// check file extension
+		if (entry->d_type == DT_REG) {
+			// normal file
+			if (check_file_extension(entry->d_name, _T(".d88")) == false &&
+				check_file_extension(entry->d_name, _T(".cmt")) == false &&
+				check_file_extension(entry->d_name, _T(".t88")) == false &&
+				check_file_extension(entry->d_name, _T(".n80")) == false) {
+					// unsupported file
+				continue;
+			}
+		}		
+
 		// check .
 		if (entry->d_name[0] != '.') {
 			break;

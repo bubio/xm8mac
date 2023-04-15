@@ -1041,14 +1041,13 @@ void MenuList::OnMouseButtonDown(SDL_Event *e)
 		return;
 	}
 
-	// right button ?
-	if ((e->button.button == SDL_BUTTON_RIGHT) && (e->button.state == SDL_PRESSED)) {
-		// right button
+	// left button?
+	if (e->button.button != SDL_BUTTON_LEFT) {
 		return;
 	}
 
 	// left button ?
-	if ((e->button.button == SDL_BUTTON_LEFT) && (e->button.state == SDL_PRESSED)) {
+	if (e->button.state == SDL_PRESSED) {
 		// left button -> save for ProcessMenu()
 		mouse_down = true;
 	}
@@ -1122,6 +1121,22 @@ void MenuList::OnMouseButtonUp(SDL_Event *e)
 		return;
 	}
 
+	// x1 button ?
+	if ((e->button.button == SDL_BUTTON_X1) && (e->button.state == SDL_RELEASED)) {
+		if (menu_file == true) {
+			// file menu -> directory up
+			menu->Command(false, MENU_FILE_MIN);
+		} else {
+			// other -> menu back
+			menu->Command(false, MENU_BACK);
+		}
+		return;
+	}
+
+	if (e->button.button != SDL_BUTTON_LEFT) {
+		return;
+	}
+ 
 	// convert point
 	x = e->button.x;
 	y = e->button.y;
