@@ -75,6 +75,17 @@ Input::Input(App *a)
 	// default key table
 	memcpy(key_table, key_base, sizeof(key_table));
 
+	// FIXME experimetal
+	// こんな感じで、テーブルを入れ替えればできる。
+	// これを設定で変更できるようにすればいいんだよ。
+	// 本当は
+	// key_table[SDL_SCANCODE_RIGHT] = SDL_SCANCODE_KP_6
+	// としたいのだが、SDL_SCANCODE_KP_6が他の値になってしまう。なんでだ？？
+	key_table[SDL_SCANCODE_RIGHT] = 102;
+	key_table[SDL_SCANCODE_LEFT] = 100;
+	key_table[SDL_SCANCODE_DOWN] = 98;
+	key_table[SDL_SCANCODE_UP] = 104;
+
 	// key make tick (from softkey only)
 	memset(key_soft_make_tick, 0, sizeof(key_soft_make_tick));
 	memset(key_soft_break_flag, 0, sizeof(key_soft_break_flag));
