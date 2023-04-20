@@ -2126,6 +2126,8 @@ bool App::Load(int slot)
 
 			// input
 			input->ChangeList(false, false);
+			input->ChangeCursorToNumPad(setting->IsCursorToNumPad());
+			input->ChangeNumToNumPad(setting->IsNumToNumPad());
 
 			// resync rtc
 			upd1990a->resync();

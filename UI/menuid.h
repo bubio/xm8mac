@@ -355,7 +355,11 @@
 #define MENU_INPUT_JOYTEST		1014
 										// joystick test
 #define MENU_INPUT_SOFTKEY_MM	1015
-										// show softkey when mouse move enable
+										// show softkey when mouse move enable										
+#define MENU_INPUT_CURSOR_NUM	1016
+										// cursor to num pad
+#define MENU_INPUT_NUM_PAD		1017
+										// num to num pad
 #define MENU_INPUT_MAX			1099
 										// maximum
 
