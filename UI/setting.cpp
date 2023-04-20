@@ -58,6 +58,8 @@
 										// version 1.70
 #define SETTING_VERSION_171		20230401
 										// version 1.71
+#define SETTING_VERSION_173		20230501
+										// version 1.73
 
 // video
 #define DEFAULT_WINDOW_WIDTH	640
@@ -119,6 +121,10 @@
 
 #define DEFAULT_SHOW_SOFTKEY_MOUSE_MOVE	(false)
 										// show softkey when mouse move
+#define DEFAULT_CURSOR_NUMPAD			(false)
+										// cursor to num pad
+#define DEFAULT_NUM_TO_NUMPAD			(false)
+										// num to num pad
 
 //
 // Setting()
@@ -363,6 +369,13 @@ bool Setting::LoadSetting(FILEIO *fio)
 			mouse_move_softkey_enable = fio->FgetBool();
 		}
 
+		// version 1.73
+		if (version >= SETTING_VERSION_173) {
+			
+			cursor_to_numpad_enable = fio->FgetBool();
+			num_to_numpad_enable = fio->FgetBool();
+		}
+
 		return true;
 	}
 
@@ -453,6 +466,10 @@ void Setting::SaveSetting(FILEIO *fio)
 	// version 1.71
 	fio->FputInt32(audio_output_device);
 	fio->FputBool(mouse_move_softkey_enable);
+
+	// version 1.73
+	fio->FputBool(cursor_to_numpad_enable);
+	fio->FputBool(num_to_numpad_enable);
 }
 
 //
@@ -1220,6 +1237,41 @@ void Setting::SetShowSoftKeyMouseMove(bool enable)
 	mouse_move_softkey_enable = enable;
 }
 
+//
+// IsCursorToNumPad()
+// get cursor to num pad
+//
+bool Setting::IsCursorToNumPad()
+{
+	return cursor_to_numpad_enable;
+}
+
+//
+// SetCursorToNumPad()
+// set cursor to num pad
+//
+void Setting::SetCursorToNumPad(bool enable)
+{
+	cursor_to_numpad_enable = enable;
+}
+
+//
+// IsNumToNumPad()
+// get num to num pad
+//
+bool Setting::IsNumToNumPad()
+{
+	return num_to_numpad_enable;
+}
+
+//
+// SetNumToNumPad()
+// set num to num pad
+//
+void Setting::SetNumToNumPad(bool enable)
+{
+	num_to_numpad_enable = enable;
+}
 
 //
 // GetStateNum()

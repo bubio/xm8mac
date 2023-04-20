@@ -910,6 +910,9 @@ void Menu::EnterInput(int id)
 	list->AddSlider("Mouse timeout", MENU_INPUT_MOUSETIME, 400, 20000, 200);
 #endif // !__ANDROID__
 
+	list->AddCheckButton("Coursor Key to Num Pad", MENU_INPUT_CURSOR_NUM);
+	list->AddCheckButton("Num Key to Num Pad", MENU_INPUT_NUM_PAD);
+
 	// softkey
 	list->SetSlider(MENU_INPUT_SOFTALPHA, setting->GetSoftKeyAlpha());
 	list->SetSlider(MENU_INPUT_SOFTTIME, setting->GetSoftKeyTime());
@@ -930,6 +933,10 @@ void Menu::EnterInput(int id)
 	// mouse
 	list->SetSlider(MENU_INPUT_MOUSETIME, setting->GetMouseTime());
 #endif // !__ANDROID__
+
+	// alt num pad
+	list->SetCheck(MENU_INPUT_CURSOR_NUM, setting->IsCursorToNumPad());
+	list->SetCheck(MENU_INPUT_NUM_PAD, setting->IsNumToNumPad());
 
 	// focus
 	list->SetFocus(id);
@@ -2548,6 +2555,28 @@ void Menu::CmdInput(bool down, int id)
 		setting->SetMouseTime((Uint32)list->GetSlider(MENU_INPUT_MOUSETIME));
 		break;
 #endif // !__ANDROID__
+
+	// cursor to num pad
+	case MENU_INPUT_CURSOR_NUM:
+		if (down == false) {
+			enable = list->GetCheck(MENU_INPUT_CURSOR_NUM);
+			enable = !enable;
+			list->SetCheck(MENU_INPUT_CURSOR_NUM, enable);
+			setting->SetCursorToNumPad(enable);
+			input->ChangeCursorToNumPad(enable);
+		}
+		break;
+
+	// num to num pad
+	case MENU_INPUT_NUM_PAD:
+		if (down == false) {
+			enable = list->GetCheck(MENU_INPUT_NUM_PAD);
+			enable = !enable;
+			list->SetCheck(MENU_INPUT_NUM_PAD, enable);
+			setting->SetNumToNumPad(enable);
+			input->ChangeNumToNumPad(enable);
+		}
+		break;
 
 	default:
 		break;
