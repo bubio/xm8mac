@@ -16,21 +16,23 @@ XM8は、ＰＩ．さんが開発したマルチプラットフォーム（Windo
 公式では配布されていないmacOS版の開発を主に行なっていきます。
 
 
+<br />
 
 公式はこちらです。
 
 http://retropc.net/pi/xm8/index.html
 
 
+<br />
 
 ## インストール方法
 ---
 
-[リリース](https://github.com/bubio/xm8mac/releases)からお手持ち環境にあった実行ファイルをダウンロードしてください。
+[リリース](https://github.com/bubio/xm8mac/releases)からお手持ちの環境にあった実行ファイルをダウンロードしてください。
 
 `XM8.app`を`アプリケーション`フォルダに移動するなどして実行してください。
 
-
+<br />
 
 ### 動作環境
 
@@ -39,9 +41,13 @@ http://retropc.net/pi/xm8/index.html
 | x86_64        | OS X v10.9 Mavericks | [x86_64版](https://github.com/bubio/xm8mac/releases/download/1.7.2/XM8_macOS_x86_64.zip) |
 | Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.2/XM8_macOS_AppleSilicon.zip) |
 
+<br />
+
 ## ROMファイル
 ---
 使用できるROMファイルについては、[README-XM8.txt](Documents/README-XM8.txt)の[ROMファイル]を参照してください。
+
+<br />
 
 ### 配置場所
 ROMファイルの配置場所は、設定ファイルと同じ以下になります（一度、アプリケーションを起動するとフォルダが作成されます）。
@@ -53,12 +59,14 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 
 
 
+<br />
 
 ## 使用方法
 ---
 [README-XM8.txt](Documents/README-XM8.txt)の[使い方]を参照してください。
 
 
+<br />
 
 ## ビルド方法
 ---
@@ -79,6 +87,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
   古いOSでバージョンが古い場合、Homebrew自体が動作しないと思いますので、[MacPorts](https://www.macports.org)経由でインストールするのが良いと思います。
   その場合、cmake、libsdl2をインストールしてください。
 
+<br />
 
 ### ビルド手順
 
@@ -91,16 +100,22 @@ cd macOS
 
 これで、macOSフォルダに実行ファイル(.app)が作成されているはずです。
 
+<br />
+
 
 他のプラットフォーム用のビルドについては、[README-BUILD.txt](Documents/README-BUILD.txt)を参照してください。
 
 
+
+<br />
 
 ## 謝辞
 ---
 ソースコードの改変を快諾してくださったＰＩ．氏にお礼申し上げます。
 
 
+
+<br />
 
 ## おまけ
 
@@ -110,16 +125,23 @@ Linuxフォルダにdeb, rpm, appimageパッケージを作成するスクリプ
 
 ### deb or rpm
 ```shell
-cd Linux
+cd Platforms/Linux
 ./dist_app.sh
 ```
+これでbuildフォルダにdebファイル、またはrpmファイルが作成されます。
+
+<br />
 
 ### appimage
 ```shell
-./Linux/appimage.sh
+cd Platforms/Linux
+./appimage.sh
 ```
+これでPlatforms/Linuxフォルダに、appimageファイルが作成されます。
 
-これを使う場合、BIOS ROMファイルの置き場所は以下になります。
+<br />
+
+これらを使う場合、BIOS ROMファイルの置き場所は以下になります。
 
 ```shell
 ~/.local/share/retro_pc_pi/xm8/

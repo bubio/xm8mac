@@ -12,7 +12,7 @@
 # sudo dnf install cmake SDL2-devel
 
 pushd .
-cd ../
+cd ../../
 
 # Remove previous artifact.
 rm -rf build
