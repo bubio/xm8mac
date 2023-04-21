@@ -17,7 +17,7 @@ cd ../../
 # Remove previous artifact.
 rm -rf build
 
-cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=OFF -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
 cmake --build build -j 2 --target package
 
 if [ -f build/xm8*.rpm ]; then

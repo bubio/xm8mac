@@ -6,6 +6,13 @@ pushd .
 
 cd ../..
 
+# Remove previous artifact.
+rm -rf build
+
+# Build Exe
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build -j 2
+
 BUILD_DIR="${1-build}"
 cmake --install "$BUILD_DIR" --prefix "${BUILD_DIR}/AppDir/usr"
 
