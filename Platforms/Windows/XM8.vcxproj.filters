@@ -45,267 +45,267 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\UI\main.cpp">
+    <ClCompile Include="..\..\Source\UI\main.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\z80.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\z80.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\i8255.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\i8255.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\fifo.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\fifo.cpp">
       <Filter>ソース ファイル\ePC-8801MA</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\i8251.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\i8251.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\disk.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\disk.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\common.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\common.cpp">
       <Filter>ソース ファイル\ePC-8801MA</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\upd765a.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\upd765a.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\event.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\event.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\config.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\config.cpp">
       <Filter>ソース ファイル\ePC-8801MA</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\upd1990a.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\upd1990a.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\pcm1bit.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\pcm1bit.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\fmgen\opna.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\opna.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\fmgen\psg.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\psg.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\fmgen\fmgen.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\fmgen.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\fmgen\fmtimer.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\fmtimer.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\i8253.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\i8253.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\pc8801\pc88.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\pc8801\pc88.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm\pc8801</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\pc8801\pc8801.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\pc8801\pc8801.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm\pc8801</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\emu.cpp">
+    <ClCompile Include="..\..\Source\UI\emu.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\fileio.cpp">
+    <ClCompile Include="..\..\Source\UI\fileio.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\emu_sdl.cpp">
+    <ClCompile Include="..\..\Source\UI\emu_sdl.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\video.cpp">
+    <ClCompile Include="..\..\Source\UI\video.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\app.cpp">
+    <ClCompile Include="..\..\Source\UI\app.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\audio.cpp">
+    <ClCompile Include="..\..\Source\UI\audio.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\input.cpp">
+    <ClCompile Include="..\..\Source\UI\input.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\file.cpp">
+    <ClCompile Include="..\..\Source\UI\file.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\platform.cpp">
+    <ClCompile Include="..\..\Source\UI\platform.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\setting.cpp">
+    <ClCompile Include="..\..\Source\UI\setting.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\menu.cpp">
+    <ClCompile Include="..\..\Source\UI\menu.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\menuitem.cpp">
+    <ClCompile Include="..\..\Source\UI\menuitem.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\font.cpp">
+    <ClCompile Include="..\..\Source\UI\font.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\diskmgr.cpp">
+    <ClCompile Include="..\..\Source\UI\diskmgr.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\menulist.cpp">
+    <ClCompile Include="..\..\Source\UI\menulist.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\converter.cpp">
+    <ClCompile Include="..\..\Source\UI\converter.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\tapemgr.cpp">
+    <ClCompile Include="..\..\Source\UI\tapemgr.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\UI\softkey.cpp">
+    <ClCompile Include="..\..\Source\UI\softkey.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\fmsound.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmsound.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\ePC-8801MA\vm\disksub.cpp">
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\disksub.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\ePC-8801MA\vm\z80.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\z80.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\emu.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\emu.h">
       <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\i8255.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\i8255.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\fifo.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\fifo.h">
       <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\i8251.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\i8251.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\upd765a.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\upd765a.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\event.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\event.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\config.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\config.h">
       <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\upd1990a.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\upd1990a.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\pcm1bit.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\pcm1bit.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\opna.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\opna.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\common.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\common.h">
       <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\fmgen.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\fmgen.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\types.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\types.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\fmtimer.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\fmtimer.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\psg.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\psg.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\fmgeninl.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\fmgeninl.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\file.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\file.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\fileio.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\fileio.h">
       <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\i8253.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\i8253.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\device.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\device.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\pc8801\pc8801.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\pc8801\pc8801.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\pc8801</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\emu_sdl.h">
+    <ClInclude Include="..\..\Source\UI\emu_sdl.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\video.h">
+    <ClInclude Include="..\..\Source\UI\video.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\app.h">
+    <ClInclude Include="..\..\Source\UI\app.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\classes.h">
+    <ClInclude Include="..\..\Source\UI\classes.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\audio.h">
+    <ClInclude Include="..\..\Source\UI\audio.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\input.h">
+    <ClInclude Include="..\..\Source\UI\input.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\vm.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\vm.h">
       <Filter>ヘッダー ファイル\ePC-8801MA</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\platform.h">
+    <ClInclude Include="..\..\Source\UI\platform.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\setting.h">
+    <ClInclude Include="..\..\Source\UI\setting.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\headers.h">
+    <ClInclude Include="..\..\Source\UI\headers.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\menu.h">
+    <ClInclude Include="..\..\Source\UI\menu.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\menuitem.h">
+    <ClInclude Include="..\..\Source\UI\menuitem.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\menulist.h">
+    <ClInclude Include="..\..\Source\UI\menulist.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\font.h">
+    <ClInclude Include="..\..\Source\UI\font.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\os.h">
+    <ClInclude Include="..\..\Source\UI\os.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmgen\misc.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\misc.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\fmgen</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\diskmgr.h">
+    <ClInclude Include="..\..\Source\UI\diskmgr.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\softkey.h">
+    <ClInclude Include="..\..\Source\UI\softkey.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\disk.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\disk.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\debugger.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\debugger.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\pc8801\pc88.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\pc8801\pc88.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\pc8801</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\menuid.h">
+    <ClInclude Include="..\..\Source\UI\menuid.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\converter.h">
+    <ClInclude Include="..\..\Source\UI\converter.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\UI\tapemgr.h">
+    <ClInclude Include="..\..\Source\UI\tapemgr.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\fmsound.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmsound.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
-    <ClInclude Include="..\ePC-8801MA\vm\disksub.h">
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\disksub.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
   </ItemGroup>

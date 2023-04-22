@@ -2,6 +2,17 @@
 set -euo pipefail
 set -x
 
+pushd .
+
+cd ../..
+
+# Remove previous artifact.
+rm -rf build
+
+# Build Exe
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build -j 2
+
 BUILD_DIR="${1-build}"
 cmake --install "$BUILD_DIR" --prefix "${BUILD_DIR}/AppDir/usr"
 
@@ -13,6 +24,8 @@ if ! which "$APPIMAGE_BUILDER"; then
 	fi
 	APPIMAGE_BUILDER=./linuxdeploy-x86_64.AppImage
 fi
-"$APPIMAGE_BUILDER" --appimage-extract-and-run --appdir="$BUILD_DIR"/AppDir --custom-apprun=Linux/AppRun -d Linux/xm8.desktop -o appimage
+"$APPIMAGE_BUILDER" --appimage-extract-and-run --appdir="$BUILD_DIR"/AppDir --custom-apprun=Platforms/Linux/AppRun -d Platforms/Linux/xm8.desktop -o appimage
 
-mv XM8*.AppImage Linux/xm8_linux_x86_64.appimage
+mv XM8*.AppImage Platforms/Linux/xm8_linux_x86_64.appimage
+
+popd
