@@ -1221,6 +1221,42 @@ void Input::OnInputMove(SoftKey *key, int finger)
 }
 
 //
+// ChangeCursorToNumPad
+//
+void Input::ChangeCursorToNumPad(bool enable)
+{
+	if (enable == true)
+	{
+		key_table[SDL_SCANCODE_RIGHT] = 102;
+		key_table[SDL_SCANCODE_LEFT] = 100;
+		key_table[SDL_SCANCODE_DOWN] = 98;
+		key_table[SDL_SCANCODE_UP] = 104;
+	} else {
+		key_table[SDL_SCANCODE_RIGHT] = key_base[SDL_SCANCODE_RIGHT];
+		key_table[SDL_SCANCODE_LEFT] = key_base[SDL_SCANCODE_LEFT];
+		key_table[SDL_SCANCODE_DOWN] = key_base[SDL_SCANCODE_DOWN];
+		key_table[SDL_SCANCODE_UP] = key_base[SDL_SCANCODE_UP];
+	}
+}
+
+//
+// ChangeNumToNumPad
+//
+void Input::ChangeNumToNumPad(bool enable)
+{
+	for (size_t i = 0; i < 10; i++)
+	{
+		if (enable == true)
+		{
+			key_table[SDL_SCANCODE_1 + i] = 97 + i;
+		} else {
+			key_table[SDL_SCANCODE_1 + i] = key_base[SDL_SCANCODE_1 + i];
+		}
+	}	
+}
+
+
+//
 // key mapping table (base)
 //
 const Uint32 Input::key_base[0x120] = {

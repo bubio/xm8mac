@@ -234,6 +234,14 @@ public:
 										// get show softkey when mouse move
 	void SetShowSoftKeyMouseMove(bool);
 										// set show softkey when mouse move
+	bool IsCursorToNumPad();
+										// get cursor to num pad
+	void SetCursorToNumPad(bool);
+										// set cursor to num pad
+	bool IsNumToNumPad();
+										// get num to num pad
+	void SetNumToNumPad(bool);
+										// set num to num pad
 
 private:
 	void Load();
@@ -286,6 +294,10 @@ private:
 										// audio output device (version 1.71)
 	bool mouse_move_softkey_enable;
 										// show softkey mouse move enable (version 1.71)
+	bool cursor_to_numpad_enable;
+										// cursor to num pad enable (version 1.73)
+	bool num_to_numpad_enable;
+										// num to num pad enable (version 1.73)
 };
 
 #endif // SETTING_H

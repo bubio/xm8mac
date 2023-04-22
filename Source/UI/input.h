@@ -89,6 +89,10 @@ public:
 										// finger motion
 	void OnInputMove(SoftKey *key, int finger);
 										// intput move from OnInputCommon()
+	void ChangeCursorToNumPad(bool enable);
+										// change cursor to num pad
+	void ChangeNumToNumPad(bool enable);
+										// change num to num pad
 
 private:
 	void OnInputCommon(int x, int y, bool button, int finger);
