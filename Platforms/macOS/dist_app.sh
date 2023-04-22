@@ -4,7 +4,7 @@
 brew bundle install
 
 pushd .
-cd ..
+cd ../..
 
 # Remove previous artifact.
 rm -rf build

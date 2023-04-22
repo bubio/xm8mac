@@ -49,58 +49,58 @@ endif()
 
 # Include directories
 include_directories(
-    UI
-    ePC-8801MA
-    ePC-8801MA/vm
-    ePC-8801MA/vm/pc8801
-    ePC-8801MA/vm/fmgen
+  Source/UI
+  Source/ePC-8801MA
+  Source/ePC-8801MA/vm
+  Source/ePC-8801MA/vm/pc8801
+  Source/ePC-8801MA/vm/fmgen
 )
 
 # Set source files
 set(SRCS
-  UI/app.cpp
-  UI/audio.cpp
-  UI/converter.cpp
-  UI/diskmgr.cpp
-  UI/emu.cpp
-  UI/emu_sdl.cpp
-  UI/file.cpp
-  UI/fileio.cpp
-  UI/font.cpp
-  UI/input.cpp
-  UI/main.cpp
-  UI/menu.cpp
-  UI/menuitem.cpp
-  UI/menulist.cpp
-  UI/platform.cpp
-  UI/setting.cpp
-  UI/softkey.cpp
-  UI/tapemgr.cpp
-  UI/video.cpp
-  ePC-8801MA/common.cpp
-  ePC-8801MA/config.cpp
-  ePC-8801MA/fifo.cpp
-  ePC-8801MA/vm/disk.cpp
-  ePC-8801MA/vm/event.cpp
-  ePC-8801MA/vm/i8251.cpp
-  ePC-8801MA/vm/i8253.cpp
-  ePC-8801MA/vm/i8255.cpp
-  ePC-8801MA/vm/disksub.cpp
-  ePC-8801MA/vm/pcm1bit.cpp
-  ePC-8801MA/vm/upd765a.cpp
-  ePC-8801MA/vm/upd1990a.cpp
-  ePC-8801MA/vm/fmsound.cpp
-  ePC-8801MA/vm/z80.cpp
-  ePC-8801MA/vm/fmgen/opna.cpp
-  ePC-8801MA/vm/fmgen/psg.cpp
-  ePC-8801MA/vm/fmgen/fmgen.cpp
-  ePC-8801MA/vm/fmgen/fmtimer.cpp
-  ePC-8801MA/vm/pc8801/pc88.cpp
-  ePC-8801MA/vm/pc8801/pc8801.cpp
+  Source/UI/app.cpp
+  Source/UI/audio.cpp
+  Source/UI/converter.cpp
+  Source/UI/diskmgr.cpp
+  Source/UI/emu.cpp
+  Source/UI/emu_sdl.cpp
+  Source/UI/file.cpp
+  Source/UI/fileio.cpp
+  Source/UI/font.cpp
+  Source/UI/input.cpp
+  Source/UI/main.cpp
+  Source/UI/menu.cpp
+  Source/UI/menuitem.cpp
+  Source/UI/menulist.cpp
+  Source/UI/platform.cpp
+  Source/UI/setting.cpp
+  Source/UI/softkey.cpp
+  Source/UI/tapemgr.cpp
+  Source/UI/video.cpp
+  Source/ePC-8801MA/common.cpp
+  Source/ePC-8801MA/config.cpp
+  Source/ePC-8801MA/fifo.cpp
+  Source/ePC-8801MA/vm/disk.cpp
+  Source/ePC-8801MA/vm/event.cpp
+  Source/ePC-8801MA/vm/i8251.cpp
+  Source/ePC-8801MA/vm/i8253.cpp
+  Source/ePC-8801MA/vm/i8255.cpp
+  Source/ePC-8801MA/vm/disksub.cpp
+  Source/ePC-8801MA/vm/pcm1bit.cpp
+  Source/ePC-8801MA/vm/upd765a.cpp
+  Source/ePC-8801MA/vm/upd1990a.cpp
+  Source/ePC-8801MA/vm/fmsound.cpp
+  Source/ePC-8801MA/vm/z80.cpp
+  Source/ePC-8801MA/vm/fmgen/opna.cpp
+  Source/ePC-8801MA/vm/fmgen/psg.cpp
+  Source/ePC-8801MA/vm/fmgen/fmgen.cpp
+  Source/ePC-8801MA/vm/fmgen/fmtimer.cpp
+  Source/ePC-8801MA/vm/pc8801/pc88.cpp
+  Source/ePC-8801MA/vm/pc8801/pc8801.cpp
 )
 
 set(BIN_TARGET "xm8")
-add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} macOS/AppIcon.icns)
+add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Platforms/macOS/AppIcon.icns)
 
 if(CMAKE_STRIP)
   add_custom_command(
@@ -112,7 +112,7 @@ if(CMAKE_STRIP)
 endif()
 
 if(APPLE)
-  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/macOS/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Platforms/macOS/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
   set_target_properties(${BIN_TARGET} PROPERTIES
       MACOSX_BUNDLE_GUI_IDENTIFIER "com.bubio.xm8"
       MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2015 PI."
@@ -123,7 +123,7 @@ if(APPLE)
       MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
       MACOSX_BUNDLE_LONG_VERSION_STRING "Version ${PROJECT_VERSION}"
       MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
-      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macOS/Info.plist"
+      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Platforms/macOS/Info.plist"
   )
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.0")
   option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
@@ -162,7 +162,7 @@ if(CPACK)
     # Common *nix files
     set(CPACK_STRIP_FILES TRUE)
     install(TARGETS ${BIN_TARGET} DESTINATION bin)
-    set(desktop_file "${PROJECT_SOURCE_DIR}/Linux/${project_name}.desktop")
+    set(desktop_file "${PROJECT_SOURCE_DIR}/Platforms/Linux/${project_name}.desktop")
 
     find_program(DFI desktop-file-install)
     if(DFI)
@@ -173,15 +173,14 @@ if(CPACK)
     install(FILES "${desktop_file}"
       DESTINATION "share/applications"
     )
-    install(FILES "${PROJECT_SOURCE_DIR}/Linux/icon.png"
+    install(FILES "${PROJECT_SOURCE_DIR}/Platforms/Linux/icon.png"
       DESTINATION "share/icons/hicolor/512x512/apps"
       RENAME "${project_name}.png"
     )
 
     # -G DEB
     set(CPACK_PACKAGE_CONTACT "bubio")
-    set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "PC-8801MA Emulator
-    eXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA")
+    set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "PC-8801MA Emulator\neXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA")
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
