@@ -20,15 +20,14 @@
 //
 // defines
 //
-#define EXTERNAL_PATH_ANDROID		"Android/data/"
-								// SDL_AndroidGetExtrernalStoragePath()
-#define EXTERNAL_PATH_ROM			"XM8/"
-								// replace from EXTERNAL_PATH_ANDROID
+#define EXTERNAL_PATH_ANDROID "Android/data/"
+// SDL_AndroidGetExtrernalStoragePath()
+#define EXTERNAL_PATH_ROM "XM8/"
+// replace from EXTERNAL_PATH_ANDROID
 
-#define SETTING_ORG					"retro_pc_pi"
-								// organization name
-#define SETTING_APP					"xm8"
-
+#define SETTING_ORG "retro_pc_pi"
+// organization name
+#define SETTING_APP "xm8"
 
 //
 // EMU_SDL()
@@ -38,7 +37,7 @@ EMU_SDL::EMU_SDL(Video *v)
 {
 #ifdef __ANDROID__
 	char *replace;
-#endif	// __ANDROID__
+#endif // __ANDROID__
 
 	// save video driver
 	SDL_assert(v != NULL);
@@ -48,13 +47,12 @@ EMU_SDL::EMU_SDL(Video *v)
 #ifdef __ANDROID__
 	strcpy(base_path, SDL_AndroidGetExternalStoragePath());
 	replace = strstr(base_path, EXTERNAL_PATH_ANDROID);
-	if (replace != NULL) {
+	if (replace != NULL)
+	{
 		strcpy(replace, EXTERNAL_PATH_ROM);
 	}
-#elif defined(__linux__) || defined(__APPLE__)
-	strcpy(base_path, SDL_GetPrefPath(SETTING_ORG, SETTING_APP));
 #else
-	strcpy(base_path, SDL_GetBasePath());
+	strcpy(base_path, SDL_GetPrefPath(SETTING_ORG, SETTING_APP));
 #endif // __ANDROID__
 }
 
@@ -70,7 +68,7 @@ EMU_SDL::~EMU_SDL()
 // get_app_path()
 // retreive exection path for 2608_*.WAV
 //
-_TCHAR* EMU_SDL::get_app_path()
+_TCHAR *EMU_SDL::get_app_path()
 {
 	SDL_assert(base_path != NULL);
 	return base_path;
@@ -80,13 +78,14 @@ _TCHAR* EMU_SDL::get_app_path()
 // get_bios_path()
 // create full path with specified BIOS file name
 //
-_TCHAR* EMU_SDL::get_bios_path(_TCHAR *file_name)
+_TCHAR *EMU_SDL::get_bios_path(_TCHAR *file_name)
 {
 	SDL_assert(file_name != NULL);
 	SDL_assert(base_path != NULL);
 
 	// overflow check
-	if ((strlen(base_path) + strlen(file_name)) >= sizeof(bios_path)) {
+	if ((strlen(base_path) + strlen(file_name)) >= sizeof(bios_path))
+	{
 		SDL_assert(false);
 		return file_name;
 	}
@@ -152,14 +151,14 @@ void EMU_SDL::mute_sound(void)
 // get_screen_buf()
 // get frame buffer pointer according to y position
 //
-scrntype* EMU_SDL::get_screen_buf(int y)
+scrntype *EMU_SDL::get_screen_buf(int y)
 {
-	return (scrntype*)video->GetFrameBuf((uint32)y);
+	return (scrntype *)video->GetFrameBuf((uint32)y);
 }
 
 //
 // current_thread_sleep()
-// 
+//
 void EMU_SDL::current_thread_sleep(uint32 ms)
 {
 	SDL_Delay((Uint32)ms);

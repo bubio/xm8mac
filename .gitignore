@@ -8,7 +8,10 @@ linuxdeploy-x86_64.AppImage
 Platforms/Windows/.vs
 Platforms/Windows/Debug
 Platforms/Windows/Release
-Platforms/Windows/SDL
+Platforms/Windows/SDL/include
+Platforms/Windows/SDL/lib
 Platforms/Windows/x64
+Platforms/Windows/x86
+Platforms/Windows/XM8.vcxproj.user
 
 build/
