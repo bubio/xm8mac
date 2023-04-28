@@ -33,6 +33,7 @@
 #include "tapemgr.h"
 #ifdef __ANDROID__
 #include "xm8jni.h"
+#include <android/log.h>
 #endif // __ANDROID__
 #include "app.h"
 
