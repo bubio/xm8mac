@@ -13,8 +13,7 @@ XM8は、ＰＩ．さんが開発したマルチプラットフォーム（Windo
 
 このリポジトリは ＰＩ．さんから許可をいただき作成しています。
 
-公式では配布されていないmacOS版の開発を主に行なっていきます。
-
+公式では配布されていないmacOS版の開発を主に行なっていきますが、Windows/Linux/Android版もできる会gり配布します。
 
 <br />
 
@@ -121,7 +120,40 @@ cd macOS
 
 ---
 
-Linuxフォルダにdeb, rpm, appimageパッケージを作成するスクリプトが入っています。
+### Windows版
+
+----
+
+Platforms/WindowsフォルダにVisual Studio 2022用のソリューションが入っています。
+
+<br />
+
+SDL2のWindows (Visual C++ 32bit/64bit)向けライブラリ、ソースファイルをダウンロードします。
+https://www.libsdl.org
+
+<br />
+
+これをSource\Windows\SDLへ展開します。以下のようになります。
+
+Platforms\Windows\SDL\include（インクルードファイル）
+Platforms\Windows\SDL\lib\x86（32bit向けライブラリ）
+Platforms\Windows\SDL\lib\x64（64bit向けライブラリ）
+
+<br />
+
+BIOS ROMファイルの置き場所は以下になります。
+
+```shell
+~/.local/share/retro_pc_pi/xm8/
+```
+
+
+
+### Linux版
+
+----
+
+Platforms/Linuxフォルダにdeb, rpm, appimageパッケージを作成するスクリプトが入っています。
 
 ### deb or rpm
 ```shell
@@ -141,9 +173,42 @@ cd Platforms/Linux
 
 <br />
 
-これらを使う場合、BIOS ROMファイルの置き場所は以下になります。
+BIOS ROMファイルの置き場所は以下になります。
 
 ```shell
 ~/.local/share/retro_pc_pi/xm8/
 ```
 
+
+
+### Android版
+
+----
+
+Platforms/AndroidフォルダにAndroid Studio用のプロジェクトが入っています。
+
+<br />
+
+SDL2のソースファイルをダウンロードします。
+https://www.libsdl.org
+
+<br />
+
+Platforms/Android/app/jni/SDL
+
+にSDL2のsrcフォルダ、includeフォルダをコピーします。以下のようになります。
+
+Platforms/Android/app/jni/SDL\include（インクルードファイル）
+Platforms/Android/app/jni/SDL\src（ソースファイル）
+
+<br />
+
+BIOS ROMファイルの置き場所は以下になります。
+
+```shell
+Android/data/retro_pc_pi/files/
+```
+
+Android 11以上の場合、端末内のファイルに自由にアクセスすることができません。
+
+ゲームのディスクイメージも同じ場所に入れることを推奨します。
