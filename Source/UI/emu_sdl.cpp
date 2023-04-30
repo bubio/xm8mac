@@ -45,12 +45,14 @@ EMU_SDL::EMU_SDL(Video *v)
 
 	// save base path
 #ifdef __ANDROID__
+	// The location of the ROM file should be the same location as the configuration file.
 	strcpy(base_path, SDL_AndroidGetExternalStoragePath());
-	replace = strstr(base_path, EXTERNAL_PATH_ANDROID);
-	if (replace != NULL)
-	{
-		strcpy(replace, EXTERNAL_PATH_ROM);
-	}
+	strcat(base_path, "/");
+	// replace = strstr(base_path, EXTERNAL_PATH_ANDROID);
+	// if (replace != NULL)
+	// {
+	// 	strcpy(replace, EXTERNAL_PATH_ROM);
+	// }
 #else
 	strcpy(base_path, SDL_GetPrefPath(SETTING_ORG, SETTING_APP));
 #endif // __ANDROID__

@@ -15,3 +15,6 @@ Platforms/Windows/x86
 Platforms/Windows/XM8.vcxproj.user
 
 build/
+Platforms/Android/app/jni/SDL
+Platforms/Android/app/jni/src/ePC-8801MA
+Platforms/Android/app/jni/src/UI
