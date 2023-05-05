@@ -479,7 +479,8 @@ bool DiskManager::Analyze()
 			((header[0x20] & 0x0f) != 0x00)) {
 			// illegal format
 			if (header[0x21] != 0x00) {
-				num_of_banks = 0;
+				// Adopt up to the point where you can read.
+				// num_of_banks = 0;
 				break;
 			}
 		}
@@ -493,7 +494,7 @@ bool DiskManager::Analyze()
 		len++;
 
 		// size
-		add = (Uint32)header[0x1f];
+			add = (Uint32)header[0x1f];
 		add <<= 8;
 		add |= (Uint32)header[0x1e];
 		add <<= 8;
@@ -513,7 +514,8 @@ bool DiskManager::Analyze()
 
 			// track offset must be 0x10 alignment
 			if ((trkofs & 0xf) != 0) {
-				num_of_banks = 0;
+				// Adopt up to the point where you can read.
+				// num_of_banks = 0;
 				break;
 			}
 		}

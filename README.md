@@ -37,8 +37,8 @@ http://retropc.net/pi/xm8/index.html
 
 | CPU           | 最小OSバージョン    | 実行ファイル                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | OS X v10.9 Mavericks | [x86_64版](https://github.com/bubio/xm8mac/releases/download/1.7.2/XM8_macOS_x86_64.zip) |
-| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.2/XM8_macOS_AppleSilicon.zip) |
+| x86_64        | macOS 10.13 High Sierra | [x86_64版](https://github.com/bubio/xm8mac/releases/download/1.7.3/XM8_macOS_x86_64.zip) |
+| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.3/XM8_macOS_AppleSilicon.zip) |
 
 <br />
 
@@ -81,10 +81,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 - Homebrew
   
   [Homebrew](https://brew.sh/index_ja)のインストールが必要です。
-  SDL2などビルドに必要なツールの取得に使用します。
-  
-  古いOSでバージョンが古い場合、Homebrew自体が動作しないと思いますので、[MacPorts](https://www.macports.org)経由でインストールするのが良いと思います。
-  その場合、cmake、libsdl2をインストールしてください。
+  cmskeなどビルドに必要なツールの取得に使用します。
 
 <br />
 

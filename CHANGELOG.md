@@ -7,7 +7,7 @@
 ## 動作環境
 | Platform | CPU | 最小OSバージョン |
 | ------------- | ------------------- | ------------- |
-| Mac | x86_64 | OS X v10.9 Mavericks |
+| Mac | x86_64 | macOS 10.13 High Sierra |
 | Mac | Apple Silicon | macOS 11 Big Sur |
 | Windows | x86_64 | Windows 10 |
 | Linux | x86_64 | - |
@@ -21,6 +21,8 @@
 - Androidのビルド環境をSDK 33, Gradle 8, AndroidXなど、できるだけ最新にしました。
 - カーソルキーをテンキーの代わりとして使えるオプションを追加しました。
 - 数字キーをテンキーの代わりとして使えるオプションを追加しました。
+- macOS版の最小OSバージョンを10.13に変更しました。
+- d88イメージ読み込み時のチェックを緩和しました。
 
 <br />　
 
