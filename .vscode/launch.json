@@ -5,7 +5,7 @@
             "name": "(lldb) Launch macOS",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/XM8.app/Contents/MacOS/XM8",
+            "program": "${workspaceFolder}/build/XM8.app/Contents/MacOS/xm8",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

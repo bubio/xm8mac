@@ -17,9 +17,19 @@ foreach(_policy CMP0111 CMP0126 CMP0135)
   endif()
 endforeach()
 
+# Projects added via `add_subdirectory` or `FetchContent` may have a lower
+# `cmake_minimum_required` than we set here. Set policies that we require
+# to their new value so that they still apply.
+set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
   message(FATAL_ERROR "DO NOT BUILD in-tree.")
 endif()
+
+include(CMakeDependentOption)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Builder/CMake")
 
 # Get version from environment variable
 set(PROJECT_VERSION 1.7.3)
@@ -27,8 +37,36 @@ set(PROJECT_VERSION 1.7.3)
 # Project Name
 project(XM8 VERSION ${PROJECT_VERSION})
 
+# Packaging options
+option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
+
+include(MoldLinker)
+
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+  set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()
+
+# Despite setting C++ standard to 20, features from this version are not being used.
+# The oldest compiler used is GCC 6.5 - and that defines our C++ feature set (meaning most of C++17).
+# It's present only to take advantage of fmt::format build time errors.
+# set(CMAKE_CXX_STANDARD 20)
+# set(CMAKE_CXX_EXTENSIONS OFF)
+# set(CMAKE_CXX_STANDARD_REQUIRED OFF)
+# set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # for clang-tidy
+# set(CMAKE_THREAD_PREFER_PTHREAD ON)
+# set(THREADS_PREFER_PTHREAD_FLAG ON)
+# find_package(Threads REQUIRED)
+
+# Dependencies must be included after Platforms.
+include(Dependencies)
+
 # Find SDL2 library and add to linker flags
-find_package(SDL2 REQUIRED)
+if(NOT APPLE)
+  # find_package(SDL2 2.24.2 EXACT REQUIRED)
+  find_package(SDL2 REQUIRED)
+endif()
 
 # Add macro definition
 add_definitions(-DSDL)
@@ -100,7 +138,7 @@ set(SRCS
 )
 
 set(BIN_TARGET "xm8")
-add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Platforms/macOS/AppIcon.icns)
+add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Builder/macOS/AppIcon.icns)
 
 if(CMAKE_STRIP)
   add_custom_command(
@@ -112,7 +150,7 @@ if(CMAKE_STRIP)
 endif()
 
 if(APPLE)
-  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Platforms/macOS/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Builder/macOS/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
   set_target_properties(${BIN_TARGET} PROPERTIES
       MACOSX_BUNDLE_GUI_IDENTIFIER "com.bubio.xm8"
       MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2015 PI."
@@ -123,17 +161,17 @@ if(APPLE)
       MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
       MACOSX_BUNDLE_LONG_VERSION_STRING "Version ${PROJECT_VERSION}"
       MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
-      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Platforms/macOS/Info.plist"
+      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Builder/macOS/Info.plist"
   )
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.0")
-  option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
+  # option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
 
   install (TARGETS ${BIN_TARGET} DESTINATION ./)
 
   if(MACOSX_STANDALONE_APP_BUNDLE)
       install(CODE "
         include(BundleUtilities)
-        fixup_bundle(${CMAKE_BINARY_DIR}/${MACOSX_BUNDLE_BUNDLE_NAME}.app \"\" \"\")
+        fixup_bundle(${CMAKE_BINARY_DIR}/${BIN_TARGET}.app \"\" \"\")
         "
         COMPONENT Runtime)
   endif()
@@ -144,12 +182,9 @@ set(CPACK On)
 
 # Set link options
 if(APPLE)
-  target_link_libraries(${BIN_TARGET} PRIVATE
-                        ${SDL2_LIBRARIES}
-                        iconv)
+  target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2 iconv)
 else()
-  target_link_libraries(${BIN_TARGET} PRIVATE
-                        ${SDL2_LIBRARIES})
+  target_link_libraries(${BIN_TARGET} PRIVATE ${SDL2_LIBRARIES})
 endif()
 
 
@@ -162,7 +197,7 @@ if(CPACK)
     # Common *nix files
     set(CPACK_STRIP_FILES TRUE)
     install(TARGETS ${BIN_TARGET} DESTINATION bin)
-    set(desktop_file "${PROJECT_SOURCE_DIR}/Platforms/Linux/${project_name}.desktop")
+    set(desktop_file "${PROJECT_SOURCE_DIR}/Builder/Linux/${project_name}.desktop")
 
     find_program(DFI desktop-file-install)
     if(DFI)
@@ -173,7 +208,7 @@ if(CPACK)
     install(FILES "${desktop_file}"
       DESTINATION "share/applications"
     )
-    install(FILES "${PROJECT_SOURCE_DIR}/Platforms/Linux/icon.png"
+    install(FILES "${PROJECT_SOURCE_DIR}/Builder/Linux/icon.png"
       DESTINATION "share/icons/hicolor/512x512/apps"
       RENAME "${project_name}.png"
     )

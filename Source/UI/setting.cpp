@@ -409,7 +409,7 @@ void Setting::SaveSetting(FILEIO *fio)
 	int loop;
 
 	// version
-	fio->FputUint32(SETTING_VERSION_171);
+	fio->FputUint32(SETTING_VERSION_173);
 
 	// system
 	fio->FputInt32(config.boot_mode);
