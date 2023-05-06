@@ -24,8 +24,8 @@ if ! which "$APPIMAGE_BUILDER"; then
 	fi
 	APPIMAGE_BUILDER=./linuxdeploy-x86_64.AppImage
 fi
-"$APPIMAGE_BUILDER" --appimage-extract-and-run --appdir="$BUILD_DIR"/AppDir --custom-apprun=Platforms/Linux/AppRun -d Platforms/Linux/xm8.desktop -o appimage
+"$APPIMAGE_BUILDER" --appimage-extract-and-run --appdir="$BUILD_DIR"/AppDir --custom-apprun=Builder/Linux/AppRun -d Builder/Linux/xm8.desktop -o appimage
 
-mv XM8*.AppImage Platforms/Linux/xm8_linux_x86_64.appimage
+mv XM8*.AppImage Builder/Linux/xm8_linux_x86_64.appimage
 
 popd
