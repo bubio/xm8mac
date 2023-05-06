@@ -59,13 +59,14 @@ endif()
 # set(THREADS_PREFER_PTHREAD_FLAG ON)
 # find_package(Threads REQUIRED)
 
-# Dependencies must be included after Platforms.
-include(Dependencies)
 
 # Find SDL2 library and add to linker flags
 if(NOT APPLE)
   # find_package(SDL2 2.24.2 EXACT REQUIRED)
   find_package(SDL2 REQUIRED)
+else()
+  # Dependencies must be included after Platforms.
+  include(Dependencies)
 endif()
 
 # Add macro definition

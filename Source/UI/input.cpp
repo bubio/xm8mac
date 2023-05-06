@@ -1248,7 +1248,11 @@ void Input::ChangeNumToNumPad(bool enable)
 	{
 		if (enable == true)
 		{
-			key_table[SDL_SCANCODE_1 + i] = 97 + i;
+			if (i == 9) {
+				key_table[SDL_SCANCODE_0] = 96;
+			} else {
+				key_table[SDL_SCANCODE_1 + i] = 97 + i;
+			}
 		} else {
 			key_table[SDL_SCANCODE_1 + i] = key_base[SDL_SCANCODE_1 + i];
 		}
