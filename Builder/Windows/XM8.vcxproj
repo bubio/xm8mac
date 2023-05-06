@@ -1,0 +1,271 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{734B3F3D-59BD-4FAE-9209-09E65415FA21}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>XM8</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen</AdditionalIncludeDirectories>
+      <StructMemberAlignment>Default</StructMemberAlignment>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>imm32.lib;$(ProjectDir)\SDL\lib\x86\SDL2.lib;$(ProjectDir)\SDL\lib\x86\SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)SDL\lib\x86\SDL2.dll" "$(OutDir)" /i /s /y</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen</AdditionalIncludeDirectories>
+      <StructMemberAlignment>Default</StructMemberAlignment>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>imm32.lib;$(ProjectDir)\SDL\lib\x64\SDL2.lib;$(ProjectDir)\SDL\lib\x64\SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)SDL\lib\x64\SDL2.dll" "$(OutDir)" /i /s /y</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>libcmt.lib;imm32.lib;$(ProjectDir)\SDL\lib\x86\SDL2.lib;$(ProjectDir)\SDL\lib\x86\SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <ImageHasSafeExceptionHandlers>true</ImageHasSafeExceptionHandlers>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)SDL\lib\x86\SDL2.dll" "$(OutDir)" /i /s /y</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>Default</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>libcmt.lib;imm32.lib;$(ProjectDir)\SDL\lib\x64\SDL2.lib;$(ProjectDir)\SDL\lib\x64\SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)SDL\lib\x64\SDL2.dll" "$(OutDir)" /i /s /y</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Source\ePC-8801MA\common.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\config.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\fifo.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\disk.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\disksub.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\event.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\fmgen.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\fmtimer.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\opna.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmgen\psg.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\fmsound.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\i8251.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\i8253.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\i8255.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\pc8801\pc88.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\pc8801\pc8801.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\pcm1bit.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\upd1990a.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\upd765a.cpp" />
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\z80.cpp" />
+    <ClCompile Include="..\..\Source\UI\app.cpp" />
+    <ClCompile Include="..\..\Source\UI\audio.cpp" />
+    <ClCompile Include="..\..\Source\UI\converter.cpp" />
+    <ClCompile Include="..\..\Source\UI\diskmgr.cpp" />
+    <ClCompile Include="..\..\Source\UI\emu.cpp" />
+    <ClCompile Include="..\..\Source\UI\emu_sdl.cpp" />
+    <ClCompile Include="..\..\Source\UI\file.cpp" />
+    <ClCompile Include="..\..\Source\UI\fileio.cpp" />
+    <ClCompile Include="..\..\Source\UI\font.cpp" />
+    <ClCompile Include="..\..\Source\UI\input.cpp" />
+    <ClCompile Include="..\..\Source\UI\main.cpp" />
+    <ClCompile Include="..\..\Source\UI\menu.cpp" />
+    <ClCompile Include="..\..\Source\UI\menuitem.cpp" />
+    <ClCompile Include="..\..\Source\UI\menulist.cpp" />
+    <ClCompile Include="..\..\Source\UI\platform.cpp" />
+    <ClCompile Include="..\..\Source\UI\setting.cpp" />
+    <ClCompile Include="..\..\Source\UI\softkey.cpp" />
+    <ClCompile Include="..\..\Source\UI\tapemgr.cpp" />
+    <ClCompile Include="..\..\Source\UI\video.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\Source\ePC-8801MA\common.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\config.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\emu.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\fifo.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\fileio.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\debugger.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\device.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\disk.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\disksub.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\event.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\file.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\fmgen.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\fmgeninl.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\fmtimer.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\misc.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\opna.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\psg.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmgen\types.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\fmsound.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\i8251.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\i8253.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\i8255.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\pc8801\pc88.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\pc8801\pc8801.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\pcm1bit.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\upd1990a.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\upd765a.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\vm.h" />
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\z80.h" />
+    <ClInclude Include="..\..\Source\UI\app.h" />
+    <ClInclude Include="..\..\Source\UI\audio.h" />
+    <ClInclude Include="..\..\Source\UI\classes.h" />
+    <ClInclude Include="..\..\Source\UI\converter.h" />
+    <ClInclude Include="..\..\Source\UI\diskmgr.h" />
+    <ClInclude Include="..\..\Source\UI\emu_sdl.h" />
+    <ClInclude Include="..\..\Source\UI\font.h" />
+    <ClInclude Include="..\..\Source\UI\headers.h" />
+    <ClInclude Include="..\..\Source\UI\input.h" />
+    <ClInclude Include="..\..\Source\UI\menu.h" />
+    <ClInclude Include="..\..\Source\UI\menuid.h" />
+    <ClInclude Include="..\..\Source\UI\menuitem.h" />
+    <ClInclude Include="..\..\Source\UI\menulist.h" />
+    <ClInclude Include="..\..\Source\UI\os.h" />
+    <ClInclude Include="..\..\Source\UI\platform.h" />
+    <ClInclude Include="..\..\Source\UI\setting.h" />
+    <ClInclude Include="..\..\Source\UI\softkey.h" />
+    <ClInclude Include="..\..\Source\UI\tapemgr.h" />
+    <ClInclude Include="..\..\Source\UI\video.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="XM8.rc" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

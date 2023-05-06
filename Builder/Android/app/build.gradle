@@ -1,0 +1,81 @@
+def buildAsLibrary = project.hasProperty('BUILD_AS_LIBRARY');
+def buildAsApplication = !buildAsLibrary
+if (buildAsApplication) {
+    apply plugin: 'com.android.application'
+}
+else {
+    apply plugin: 'com.android.library'
+}
+
+android {
+    buildToolsVersion "33.0.2"
+//    ndkVersion '25.2.9519653'
+//    ndkVersion '24.0.8215888'
+    ndkVersion '23.2.8568313'
+    compileSdkVersion 33
+    defaultConfig {
+        if (buildAsApplication) {
+            applicationId "net.retropc.pi"
+        }
+        minSdkVersion 16
+        targetSdkVersion 33
+        versionCode 2
+        versionName "1.73"
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        externalNativeBuild {
+            ndkBuild {
+                arguments "APP_PLATFORM=android-16"
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            }
+            // cmake {
+            //     arguments "-DANDROID_APP_PLATFORM=android-16", "-DANDROID_STL=c++_static"
+            //     abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            //     // abiFilters 'arm64-v8a'
+            //     cppFlags "-fexceptions"
+            // }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    namespace 'net.retropc.pi'
+    lint {
+        abortOnError false
+    }
+
+    if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {
+        sourceSets.main {
+            jniLibs.srcDir 'libs'
+        }
+        externalNativeBuild {
+            ndkBuild {
+                path 'jni/Android.mk'
+            }
+            // cmake {
+            //     path "CMakeLists.txt"
+            // }
+        }
+    }
+
+
+    if (buildAsLibrary) {
+        libraryVariants.all { variant ->
+            variant.outputs.each { output ->
+                def outputFile = output.outputFile
+                if (outputFile != null && outputFile.name.endsWith(".aar")) {
+                    def fileName = "net.retropc.pi.aar";
+                    output.outputFile = new File(outputFile.parent, fileName);
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation "androidx.documentfile:documentfile:1.0.1"
+}

@@ -1,15 +1,23 @@
 .DS_Store
 
-macOS/Brewfile.lock.json
+Builder/macOS/Brewfile.lock.json
 
-Linux/*.deb
-Linux/xm8_linux_x86_64.appimage
+Builder/Linux/xm8_linux_x86_64.appimage
 linuxdeploy-x86_64.AppImage
 
-Windows/.vs
-Windows/Debug
-Windows/Release
-Windows/SDL
-Windows/x64
+Builder/Windows/.vs
+Builder/Windows/Debug
+Builder/Windows/Release
+Builder/Windows/SDL/include
+Builder/Windows/SDL/lib
+Builder/Windows/x64
+Builder/Windows/x86
+Builder/Windows/XM8.vcxproj.user
 
 build/
+Builder/Android/app/jni/SDL/include
+Builder/Android/app/jni/SDL/src
+Builder/Android/app/jni/src/ePC-8801MA
+Builder/Android/app/jni/src/UI
+Builder/Android/app/CMakeCache.txt
+Builder/Android/app/release
