@@ -157,6 +157,7 @@
       <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>Default</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

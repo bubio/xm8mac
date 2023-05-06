@@ -121,7 +121,7 @@ cd macOS
 
 ----
 
-Platforms/WindowsフォルダにVisual Studio 2022用のソリューションが入っています。
+Builder/WindowsフォルダにVisual Studio 2022用のソリューションが入っています。
 
 <br />
 
@@ -132,16 +132,16 @@ https://www.libsdl.org
 
 これをSource\Windows\SDLへ展開します。以下のようになります。
 
-Platforms\Windows\SDL\include（インクルードファイル）
-Platforms\Windows\SDL\lib\x86（32bit向けライブラリ）
-Platforms\Windows\SDL\lib\x64（64bit向けライブラリ）
+Builder\Windows\SDL\include（インクルードファイル）
+Builder\Windows\SDL\lib\x86（32bit向けライブラリ）
+Builder\Windows\SDL\lib\x64（64bit向けライブラリ）
 
 <br />
 
 BIOS ROMファイルの置き場所は以下になります。
 
 ```shell
-~/.local/share/retro_pc_pi/xm8/
+%appdata%\retro_pc_pi\xm8
 ```
 
 
@@ -150,11 +150,11 @@ BIOS ROMファイルの置き場所は以下になります。
 
 ----
 
-Platforms/Linuxフォルダにdeb, rpm, appimageパッケージを作成するスクリプトが入っています。
+Builder/Linuxフォルダにdeb, rpm, appimageパッケージを作成するスクリプトが入っています。
 
 ### deb or rpm
 ```shell
-cd Platforms/Linux
+cd Builder/Linux
 ./dist_app.sh
 ```
 これでbuildフォルダにdebファイル、またはrpmファイルが作成されます。
@@ -163,10 +163,10 @@ cd Platforms/Linux
 
 ### appimage
 ```shell
-cd Platforms/Linux
+cd Builder/Linux
 ./appimage.sh
 ```
-これでPlatforms/Linuxフォルダに、appimageファイルが作成されます。
+これでBuilder/Linuxフォルダに、appimageファイルが作成されます。
 
 <br />
 
@@ -182,7 +182,7 @@ BIOS ROMファイルの置き場所は以下になります。
 
 ----
 
-Platforms/AndroidフォルダにAndroid Studio用のプロジェクトが入っています。
+Builder/AndroidフォルダにAndroid Studio用のプロジェクトが入っています。
 
 <br />
 
@@ -191,12 +191,12 @@ https://www.libsdl.org
 
 <br />
 
-Platforms/Android/app/jni/SDL
+Builder/Android/app/jni/SDL
 
 にSDL2のsrcフォルダ、includeフォルダをコピーします。以下のようになります。
 
-Platforms/Android/app/jni/SDL\include（インクルードファイル）
-Platforms/Android/app/jni/SDL\src（ソースファイル）
+Builder/Android/app/jni/SDL\include（インクルードファイル）
+Builder/Android/app/jni/SDL\src（ソースファイル）
 
 <br />
 

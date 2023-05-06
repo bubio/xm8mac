@@ -334,34 +334,53 @@ const char* Platform::FindNext(Uint32 *info)
 	win32_find_data = (LPWIN32_FIND_DATAW)find_data;
 	handle = (HANDLE)find_handle;
 	if (handle != INVALID_HANDLE_VALUE) {
-		result = FindNextFileW((HANDLE)find_handle, win32_find_data);
+		for (;;)
+		{
+			result = FindNextFileW((HANDLE)find_handle, win32_find_data);
 
-		if (result == FALSE) {
-			// fail
-			FindClose(handle);
-			handle = INVALID_HANDLE_VALUE;
-			find_handle = (void*)handle;
-		}
-		else {
-			// success
-			WideCharToMultiByte(932,
-								0,
-								win32_find_data->cFileName,
-								-1,
-								find_name,
-								SDL_arraysize(find_name),
-								NULL,
-								NULL);
-
-			// save info
-			*info = (Uint32)win32_find_data->dwFileAttributes;
-
-			// directory ?
-			if ((win32_find_data->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-				strcat_s(find_name, SDL_arraysize(find_name), "\\");
+			if (result == FALSE) {
+				// fail
+				FindClose(handle);
+				handle = INVALID_HANDLE_VALUE;
+				find_handle = (void*)handle;
+				break;
 			}
+			else {
+				// success
+				WideCharToMultiByte(932,
+					0,
+					win32_find_data->cFileName,
+					-1,
+					find_name,
+					SDL_arraysize(find_name),
+					NULL,
+					NULL);
 
-			return find_name;
+				// save info
+				*info = (Uint32)win32_find_data->dwFileAttributes;
+
+				// directory ?
+				if ((win32_find_data->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+					strcat_s(find_name, SDL_arraysize(find_name), "\\");
+				}
+				else {
+					// hidden ?
+					if ((win32_find_data->dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0) {
+						continue;
+					}
+
+					// supported ?
+					if (check_file_extension(find_name, _T(".d88")) == false &&
+						check_file_extension(find_name, _T(".cmt")) == false &&
+						check_file_extension(find_name, _T(".t88")) == false &&
+						check_file_extension(find_name, _T(".n80")) == false) {
+						// unsupported file
+						continue;
+					}
+				}
+
+				return find_name;
+			}
 		}
 	}
 
