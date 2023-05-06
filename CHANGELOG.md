@@ -10,6 +10,7 @@
 | Mac | x86_64 | macOS 10.13 High Sierra |
 | Mac | Apple Silicon | macOS 11 Big Sur |
 | Windows | x86_64 | Windows 10 |
+| Windows | x86_32 | Windows 10 |
 | Linux | x86_64 | - |
 | Android | Arm | Android 4.1 |
 
@@ -31,7 +32,7 @@
 - Android版で重大な問題があります。
 
   - バックグラウンドに移行してしまうと、再描画できなくなります。
-  - アプリケーションの状態保存が機能していません。
+  - アプリケーションの状態保存が機能しないことがあります。
 
   
 
