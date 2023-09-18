@@ -36,12 +36,12 @@ BEGIN
 		BEGIN
 			VALUE "CompanyName",			"\0"
 			VALUE "FileDescription",		"PC-8801MA EMULATOR XM8\0"
-			VALUE "FileVersion",			"1.7.3.0\0"
+			VALUE "FileVersion",			"1.7.4.0\0"
 			VALUE "InternalName",			"XM8.exe"
 			VALUE "LegalCopyright", 		"Copyright (C) 2015-2018 �o�h�D"
 			VALUE "OriginalFilename",		"XM8.exe"
 			VALUE "ProductName",			"XM8"
-			VALUE "ProductVersion",			"1.7.3.0\0"
+			VALUE "ProductVersion",			"1.7.4.0\0"
 		END
 	END
 	BLOCK "VarFileInfo"
