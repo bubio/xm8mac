@@ -60,6 +60,8 @@
 										// version 1.71
 #define SETTING_VERSION_173		20230501
 										// version 1.73
+#define SETTING_VERSION_174		20231001
+										// version 1.74
 
 // video
 #define DEFAULT_WINDOW_WIDTH	640
@@ -125,6 +127,8 @@
 										// cursor to num pad
 #define DEFAULT_NUM_TO_NUMPAD			(false)
 										// num to num pad
+#define DEFAULT_IMAGE_INTERPOLATION		(false)
+										// image interpolation
 
 //
 // Setting()
@@ -234,6 +238,7 @@ bool Setting::Init()
 	config.monitor_type = SETTING_MONITOR_24K;
 	config.crt_filter = false;
 	config.scan_line = DEFAULT_SCAN_LINE;
+	config.image_interpolation = DEFAULT_IMAGE_INTERPOLATION;
 
 	// default settings (sound)
 	config.sound_frequency = DEFAULT_AUDIO_FREQ;
@@ -364,18 +369,20 @@ bool Setting::LoadSetting(FILEIO *fio)
 
 		// version 1.71
 		if (version >= SETTING_VERSION_171) {
-			
 			audio_output_device = fio->FgetInt32();
 			mouse_move_softkey_enable = fio->FgetBool();
 		}
 
 		// version 1.73
 		if (version >= SETTING_VERSION_173) {
-			
 			cursor_to_numpad_enable = fio->FgetBool();
 			num_to_numpad_enable = fio->FgetBool();
 		}
 
+		// version 1.74
+		if (version >= SETTING_VERSION_174) {
+			config.image_interpolation = fio->FgetBool();
+		}
 		return true;
 	}
 
@@ -409,7 +416,7 @@ void Setting::SaveSetting(FILEIO *fio)
 	int loop;
 
 	// version
-	fio->FputUint32(SETTING_VERSION_173);
+	fio->FputUint32(SETTING_VERSION_174);
 
 	// system
 	fio->FputInt32(config.boot_mode);
@@ -470,6 +477,9 @@ void Setting::SaveSetting(FILEIO *fio)
 	// version 1.73
 	fio->FputBool(cursor_to_numpad_enable);
 	fio->FputBool(num_to_numpad_enable);
+
+	// version 1.74
+	fio->FputBool(config.image_interpolation);
 }
 
 //
@@ -805,6 +815,24 @@ const char* Setting::GetScaleQuality()
 void Setting::SetScaleQuality(int quality)
 {
 	scale_quality[0] = (char)('0' + quality);
+}
+
+//
+// HasImageInterpolation()
+// get image interpolation
+//
+bool Setting::HasImageInterpolation()
+{
+	return config.image_interpolation;
+}
+
+//
+// SetImageInterpolation()
+// set scan line
+//
+void Setting::SetImageInterpolation(bool interpolation)
+{
+	config.image_interpolation = interpolation;
 }
 
 //
