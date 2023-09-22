@@ -69,6 +69,9 @@ else()
   include(Dependencies)
 endif()
 
+# xBRZ
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Source/Filter/xBRZ)
+
 # Add macro definition
 add_definitions(-DSDL)
 add_definitions(-D_PC8801MA)
@@ -85,6 +88,8 @@ if(APPLE)
 else()
   add_compile_options(-Wno-narrowing)
 endif()
+add_compile_options(-Wno-c++11-extensions)
+
 
 # Include directories
 include_directories(
@@ -93,6 +98,7 @@ include_directories(
   Source/ePC-8801MA/vm
   Source/ePC-8801MA/vm/pc8801
   Source/ePC-8801MA/vm/fmgen
+  Source/Filter/xBRZ
 )
 
 # Set source files
@@ -183,9 +189,9 @@ set(CPACK On)
 
 # Set link options
 if(APPLE)
-  target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2 iconv)
+  target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2 iconv xbrz)
 else()
-  target_link_libraries(${BIN_TARGET} PRIVATE ${SDL2_LIBRARIES})
+  target_link_libraries(${BIN_TARGET} PRIVATE ${SDL2_LIBRARIES} xbrz)
 endif()
 
 
