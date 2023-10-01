@@ -1568,8 +1568,8 @@ static const int key_conv_table[9+4][3] = {
 	{0x78, 0x73, 1}, // F9	-> SHIFT + F4
 	{0x79, 0x74, 1}, // F10	-> SHIFT + F5
 	{0x08, 0x2e, 0}, // BS	-> DEL
-	{0x1c, 0x20, 0}, // �ϊ�-> SPACE
-	{0x1d, 0x20, 0}, // ����-> SPACE
+	{0x1c, 0x20, 0}, // 変換-> SPACE
+	{0x1d, 0x20, 0}, // 決定-> SPACE
 	{0xa0, 0x10, 0}, // LSHIFT
 	{0xa1, 0x10, 0}, // RSHIFT
 	{0x5e, 0x0d, 0}, // RETURN(TEN)
@@ -3960,7 +3960,7 @@ void pc88_crtc_t::set_attrib(uint8 code)
 		// color
 		if(code & 8) {
 			attrib.data = (attrib.data & 0x0f) | (code & 0xf0);
-			attrib.mask = 0xf3; //for PC-8801mkIIFR �t���f��
+			attrib.mask = 0xf3; //for PC-8801mkIIFR 付属デモ
 		} else {
 			attrib.data = (attrib.data & 0xf0) | ((code >> 2) & 0x0d) | ((code << 1) & 2);
 			attrib.data ^= reverse;
