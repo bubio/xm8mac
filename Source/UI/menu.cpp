@@ -2281,10 +2281,12 @@ void Menu::CmdVideo(bool down, int id)
 			if (interpolation == true) {
 				setting->SetImageInterpolation(false);
 				list->SetCheck(MENU_VIDEO_INTERPOLATION, false);
+				video->RebuildTexture(false);
 			}
 			else {
 				setting->SetImageInterpolation(true);
 				list->SetCheck(MENU_VIDEO_INTERPOLATION, true);
+				video->RebuildTexture(false);
 			}
 		}
 		break;
