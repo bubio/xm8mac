@@ -723,8 +723,12 @@ void Video::Draw()
 	// frame area
 	if ((draw_ctrl == true) && (draw_line < SCREEN_HEIGHT)) {
 		// require to draw
-		// CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
-		CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
+		if (setting->HasImageInterpolation()) {
+			CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, 0);
+
+		} else {
+			CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
+		}
 	}
 
 	// status area
@@ -1219,55 +1223,24 @@ void Video::CopyFrameBuf(SDL_Texture *texture, Uint32 *src, int height, int top)
 	int ret;
 	void *pixels;
 	int pitch;
-	int y;
 
 	// lock entire texture
 	ret = SDL_LockTexture(texture, NULL, &pixels, &pitch);
 	if (ret == 0) {
 		dest = (Uint32*)pixels;
 
-		int render_width = SCREEN_WIDTH;
-		int render_scale_factor = 1;
 		if (setting->HasImageInterpolation()) {
-			render_width *= SCALE_FACTOR;
-			render_scale_factor = SCALE_FACTOR;
-		}
-
-		if (pitch == (render_width * sizeof(Uint32))) {
-			// offset (top)
+			// Interpolate and copy
+			Uint32 format;
+			SDL_QueryTexture(texture, &format, nullptr, nullptr, nullptr);
+			xbrz::ScalerCfg scaleCfg = xbrz::ScalerCfg();
+			xbrz::ColorFormat colorFormat = format == SDL_PIXELFORMAT_ARGB8888 ? xbrz::ColorFormat::ARGB : xbrz::ColorFormat::RGB;
+			xbrz::scale(SCALE_FACTOR, src, dest, SCREEN_WIDTH, height, colorFormat, scaleCfg, top, height);
+		} else {
+			// Copy as is
 			src += SCREEN_WIDTH * top;
-			dest += render_width * (top * render_scale_factor);
-
-			// copy one time
-			if (setting->HasImageInterpolation()) {
-				Uint32 format;
-				SDL_QueryTexture(texture, &format, nullptr, nullptr, nullptr);
-				if (format == SDL_PIXELFORMAT_ARGB8888) {
-					xbrz::scale(SCALE_FACTOR, src, dest, SCREEN_WIDTH, (height - top), xbrz::ColorFormat::ARGB);
-				} else {
-					xbrz::scale(SCALE_FACTOR, src, dest, SCREEN_WIDTH, (height - top), xbrz::ColorFormat::RGB);
-				}
-			} else {
-				memcpy(dest, src, SCREEN_WIDTH * (height - top) * sizeof(uint32));				
-			}
-		}
-		else {
-			// copy per line
-			pitch /= sizeof(Uint32);
-
-			// offset (top)
-			src += SCREEN_WIDTH * top;
-			dest += pitch * top;
-			height -= top;
-
-			// y loop
-			for (y=0; y<height; y++) {
-				memcpy(dest, src, SCREEN_WIDTH * sizeof(uint32));
-
-				// next y
-				src += SCREEN_WIDTH;
-				dest += pitch;
-			}
+			dest += SCREEN_WIDTH * top;
+			memcpy(dest, src, SCREEN_WIDTH * (height - top) * sizeof(uint32));				
 		}
 
 		// unlock texture
