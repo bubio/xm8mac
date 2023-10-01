@@ -2,4 +2,8 @@
     "cmake.sourceDirectory": "${workspaceFolder}/",
     "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.configureOnOpen": false,
+    "files.associations": {
+        "vector": "cpp",
+        "__config": "cpp"
+    },
 }
