@@ -2910,6 +2910,13 @@ void PC88::draw_screen()
 	// render text screen
 	draw_text();
 
+	// 200/400 line
+	if (Port31_400LINE || config.scan_line) {
+		config.is400Line = true;
+	} else {
+		config.is400Line = false;
+	}
+
 	// render graph screen
 	bool disp_color_graph = true;
 #if defined(_PC8001SR)
@@ -3061,9 +3068,10 @@ void PC88::draw_screen()
 					}
 				}
 				else {
+					scrntype* dest = emu->screen_buffer(y);
 					for (int x = 0; x < 640; x++) {
 						uint32 t = src_t[x];
-						dest1[x] = dest0[x] = t ? palette_text_pc[t] : palette_graph_pc[src_g[x]];
+						dest[x] = t ? palette_text_pc[t] : palette_graph_pc[src_g[x]];
 					}
 				}
 #else
@@ -3088,9 +3096,10 @@ void PC88::draw_screen()
 					}
 				}
 				else {
+					scrntype* dest = emu->screen_buffer(y);
 					for (int x = 0; x < 640; x++) {
 						uint32 t = src_t[x];
-						dest1[x] = dest0[x] = palette_graph_pc[t ? t : src_g[x]];
+						dest[x] = palette_graph_pc[t ? t : src_g[x]];
 					}
 				}
 #else
@@ -3115,9 +3124,10 @@ void PC88::draw_screen()
 					}
 				}
 				else {
+					scrntype* dest = emu->screen_buffer(y);
 					for (int x = 0; x < 640; x++) {
 						uint32 t = src_t[x];
-						dest1[x] = dest0[x] = palette_text_pc[t ? t : src_g[x]];
+						dest[x] = palette_text_pc[t ? t : src_g[x]];
 					}
 				}
 #else
