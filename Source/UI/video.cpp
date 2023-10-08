@@ -101,6 +101,7 @@ Video::Video(App *a)
 
 	// rect
 	SDL_zero(draw_rect);
+	SDL_zero(src_rect);
 	SDL_zero(status_rect);
 	memset(clear_rect, 0, sizeof(clear_rect));
 
@@ -729,6 +730,11 @@ void Video::Draw()
 					setting->HasImageInterpolation() ? 0 : draw_line);
 	}
 
+	// calculate source rect
+	src_rect.w = setting->HasImageInterpolation() ? SCREEN_WIDTH * SCALE_FACTOR : SCREEN_WIDTH;
+	int height = setting->Is400Line() ? SCREEN_HEIGHT : SCREEN_HEIGHT / SCALE_FACTOR;
+	src_rect.h = setting->HasImageInterpolation() ? height * SCALE_FACTOR : height;
+
 	// status area
 	if (status == true) {
 		if (setting->HasStatusLine() == true) {
@@ -763,9 +769,6 @@ void Video::Draw()
 	}
 
 	// draw_texture & status_texture
-	SDL_Rect src_rect = {0, 0, 
-						setting->HasImageInterpolation() ? draw_rect.w : draw_rect.w / 2,
-						setting->Is400Line() ? draw_rect.h : setting->HasImageInterpolation() ? draw_rect.h / 2 : draw_rect.h / 4};
 	ret = SDL_RenderCopy(renderer, draw_texture, &src_rect, &draw_rect);
 	if (ret == 0) {
 		// for transparent status
@@ -1195,9 +1198,6 @@ void Video::DrawMenu(bool status)
 	}
 
 	// draw_texture & status_texture
-	SDL_Rect src_rect = {0, 0, 
-						setting->HasImageInterpolation() ? draw_rect.w : draw_rect.w / 2,
-						setting->Is400Line() ? draw_rect.h : setting->HasImageInterpolation() ? draw_rect.h / 2 : draw_rect.h / 4};
 	ret = SDL_RenderCopy(renderer, draw_texture, &src_rect, &draw_rect);
 	if (ret == 0) {
 		ret = SDL_RenderCopy(renderer, status_texture, NULL, &status_rect);

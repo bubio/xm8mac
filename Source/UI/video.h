@@ -133,6 +133,8 @@ private:
 										// window width
 	int window_height;
 										// window height
+	SDL_Rect src_rect;
+										// source rect
 	SDL_Rect draw_rect;
 										// drawing rect
 	SDL_Rect status_rect;
