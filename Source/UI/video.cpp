@@ -723,12 +723,10 @@ void Video::Draw()
 	// frame area
 	if ((draw_ctrl == true) && (draw_line < SCREEN_HEIGHT)) {
 		// require to draw
-		if (setting->HasImageInterpolation()) {
-			CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, 0);
-
-		} else {
-			CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
-		}
+		CopyFrameBuf(draw_texture,
+						(Uint32*)frame_buf,
+					setting->Is400Line() ? SCREEN_HEIGHT : SCREEN_HEIGHT / 2,
+					setting->HasImageInterpolation() ? 0 : draw_line);
 	}
 
 	// status area
@@ -765,7 +763,10 @@ void Video::Draw()
 	}
 
 	// draw_texture & status_texture
-	ret = SDL_RenderCopy(renderer, draw_texture, NULL, &draw_rect);
+	SDL_Rect src_rect = {0, 0, 
+						setting->HasImageInterpolation() ? draw_rect.w : draw_rect.w / 2,
+						setting->Is400Line() ? draw_rect.h : setting->HasImageInterpolation() ? draw_rect.h / 2 : draw_rect.h / 4};
+	ret = SDL_RenderCopy(renderer, draw_texture, &src_rect, &draw_rect);
 	if (ret == 0) {
 		// for transparent status
 		ret = SDL_RenderCopy(renderer, status_texture, NULL, &status_rect);
@@ -1194,7 +1195,10 @@ void Video::DrawMenu(bool status)
 	}
 
 	// draw_texture & status_texture
-	ret = SDL_RenderCopy(renderer, draw_texture, NULL, &draw_rect);
+	SDL_Rect src_rect = {0, 0, 
+						setting->HasImageInterpolation() ? draw_rect.w : draw_rect.w / 2,
+						setting->Is400Line() ? draw_rect.h : setting->HasImageInterpolation() ? draw_rect.h / 2 : draw_rect.h / 4};
+	ret = SDL_RenderCopy(renderer, draw_texture, &src_rect, &draw_rect);
 	if (ret == 0) {
 		ret = SDL_RenderCopy(renderer, status_texture, NULL, &status_rect);
 	}
