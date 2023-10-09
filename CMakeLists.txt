@@ -170,7 +170,7 @@ if(APPLE)
       MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Builder/macOS/Info.plist"
   )
-  set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.0")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13.0")
   # option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
 
   install (TARGETS ${BIN_TARGET} DESTINATION ./)
