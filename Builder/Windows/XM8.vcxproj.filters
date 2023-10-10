@@ -43,6 +43,12 @@
     <Filter Include="ソース ファイル\ePC-8801MA\vm\pc8801">
       <UniqueIdentifier>{41fba1fe-06f0-4d9a-bd64-cd93d55b2b90}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ヘッダー ファイル\Filter">
+      <UniqueIdentifier>{91ca518e-fb96-41a0-97f2-2d6252d1d15e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Filter">
+      <UniqueIdentifier>{66dee534-0edd-489e-977f-554704204b5c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\Source\UI\main.cpp">
@@ -161,6 +167,9 @@
     </ClCompile>
     <ClCompile Include="..\..\Source\ePC-8801MA\vm\disksub.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Filter\xBRZ\xbrz.cpp">
+      <Filter>ソース ファイル\Filter</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -307,6 +316,15 @@
     </ClInclude>
     <ClInclude Include="..\..\Source\ePC-8801MA\vm\disksub.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Filter\xBRZ\xbrz.h">
+      <Filter>ヘッダー ファイル\Filter</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Filter\xBRZ\xbrz_config.h">
+      <Filter>ヘッダー ファイル\Filter</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Filter\xBRZ\xbrz_tools.h">
+      <Filter>ヘッダー ファイル\Filter</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

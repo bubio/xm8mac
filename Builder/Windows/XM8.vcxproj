@@ -69,6 +69,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -76,6 +78,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -87,8 +91,10 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\Filter\xBRZ;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen</AdditionalIncludeDirectories>
       <StructMemberAlignment>Default</StructMemberAlignment>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -106,8 +112,10 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\Filter\xBRZ;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen</AdditionalIncludeDirectories>
       <StructMemberAlignment>Default</StructMemberAlignment>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -128,10 +136,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\Filter\xBRZ;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -155,9 +165,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_PC8801MA;SDL;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\SDL\include;$(ProjectDir)..\..\Source\UI;$(ProjectDir)..\..\Source\ePC-8801MA;$(ProjectDir)..\..\Source\ePC-8801MA\vm;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\Filter\xBRZ;$(ProjectDir)..\..\Source\ePC-8801MA\vm\fmgen;$(ProjectDir)..\..\Source\ePC-8801MA\vm\pc8801;$(ProjectDir)..\..\Source\Filter\xBRZ;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <LanguageStandard>Default</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -192,6 +203,7 @@
     <ClCompile Include="..\..\Source\ePC-8801MA\vm\upd1990a.cpp" />
     <ClCompile Include="..\..\Source\ePC-8801MA\vm\upd765a.cpp" />
     <ClCompile Include="..\..\Source\ePC-8801MA\vm\z80.cpp" />
+    <ClCompile Include="..\..\Source\Filter\xBRZ\xbrz.cpp" />
     <ClCompile Include="..\..\Source\UI\app.cpp" />
     <ClCompile Include="..\..\Source\UI\audio.cpp" />
     <ClCompile Include="..\..\Source\UI\converter.cpp" />
@@ -242,6 +254,9 @@
     <ClInclude Include="..\..\Source\ePC-8801MA\vm\upd765a.h" />
     <ClInclude Include="..\..\Source\ePC-8801MA\vm\vm.h" />
     <ClInclude Include="..\..\Source\ePC-8801MA\vm\z80.h" />
+    <ClInclude Include="..\..\Source\Filter\xBRZ\xbrz.h" />
+    <ClInclude Include="..\..\Source\Filter\xBRZ\xbrz_config.h" />
+    <ClInclude Include="..\..\Source\Filter\xBRZ\xbrz_tools.h" />
     <ClInclude Include="..\..\Source\UI\app.h" />
     <ClInclude Include="..\..\Source\UI\audio.h" />
     <ClInclude Include="..\..\Source\UI\classes.h" />
