@@ -143,6 +143,7 @@ https://github.com/libsdl-org/SDL/releases
 <br />
 
 Builder/Windows/XM8.sln をVisual Studioでビルドします。
+Builder/Windows/x64、Builder/Windows/Win32に出力されます。実行に必要なのは、XM8.exeとSDL2.dllです。
 
 BIOS ROMファイルの置き場所は以下になります。
 
