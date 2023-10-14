@@ -29,10 +29,12 @@ LOCAL_SRC_FILES := \
     $(wildcard $(LOCAL_PATH)/*.c)
 
 LOCAL_SHARED_LIBRARIES := SDL2
+
 LOCAL_CFLAGS += -DSDL -D_PC8801MA -D__ANDROID__ -Wno-narrowing -std=c17
 LOCAL_CPPFLAGS += -DSDL -D_PC8801MA -D__ANDROID__ -Wno-narrowing -std=c++17
 LOCAL_CPP_FEATURES += exceptions
 
-LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -llog
+# LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -llog
+LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -lOpenSLES -llog -landroid
 
 include $(BUILD_SHARED_LIBRARY)
