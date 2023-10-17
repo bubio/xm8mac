@@ -1568,8 +1568,8 @@ static const int key_conv_table[9+4][3] = {
 	{0x78, 0x73, 1}, // F9	-> SHIFT + F4
 	{0x79, 0x74, 1}, // F10	-> SHIFT + F5
 	{0x08, 0x2e, 0}, // BS	-> DEL
-	{0x1c, 0x20, 0}, // ï¿½ÏŠï¿½-> SPACE
-	{0x1d, 0x20, 0}, // ï¿½ï¿½ï¿½ï¿½-> SPACE
+	{0x1c, 0x20, 0}, // •ÏŠ·-> SPACE
+	{0x1d, 0x20, 0}, // Œˆ’è-> SPACE
 	{0xa0, 0x10, 0}, // LSHIFT
 	{0xa1, 0x10, 0}, // RSHIFT
 	{0x5e, 0x0d, 0}, // RETURN(TEN)
@@ -1882,10 +1882,6 @@ void PC88::reset()
 		xm8_ext_flags |= (((config.dipswitch & XM8_DIP_BAUDRATE) >> XM8_DIP_BAUDRATE_SHIFT) - 7) << XM8_EXT_BAUDRATE_SHIFT;
 	}
 	gvram_access_count = 0;
-
-	// ã¡ã‚‡ã£ã¨å¼·å¼•ï¼Ÿ
-	// UIéƒ¨ã«200/400ãƒ©ã‚¤ãƒ³ã‚’é€šçŸ¥ã—ã¾ã™
-	config.is400Line = Port31_400LINE;
 #endif // SDL
 }
 
@@ -3960,7 +3956,7 @@ void pc88_crtc_t::set_attrib(uint8 code)
 		// color
 		if(code & 8) {
 			attrib.data = (attrib.data & 0x0f) | (code & 0xf0);
-			attrib.mask = 0xf3; //for PC-8801mkIIFR ï¿½tï¿½ï¿½ï¿½fï¿½ï¿½
+			attrib.mask = 0xf3; //for PC-8801mkIIFR •t‘®ƒfƒ‚
 		} else {
 			attrib.data = (attrib.data & 0xf0) | ((code >> 2) & 0x0d) | ((code << 1) & 2);
 			attrib.data ^= reverse;

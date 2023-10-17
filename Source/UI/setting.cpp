@@ -1319,14 +1319,4 @@ void Setting::SetStateNum(int num)
 	state_num = num;
 }
 
-//
-// Get400Line()
-// get 400/200 Lines
-//
-int Setting::Get400Line()
-{
-	return config.is400Line;
-}
-
-
 #endif // SDL
