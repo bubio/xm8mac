@@ -21,8 +21,6 @@
 #include "diskmgr.h"
 #include "video.h"
 
-#include "xbrz.h"
-
 //
 // defines
 //
@@ -54,8 +52,6 @@
 										// softkey mod step
 #define ACCESS_USEC			(200 * 1000)
 										// access lamp delay
-#define SCALE_FACTOR		2
-										// Video rendering Scale factor
 
 //
 // Video()
@@ -207,21 +203,12 @@ bool Video::Init(SDL_Window *win)
 		return false;
 	}
 
-	int render_width = SCREEN_WIDTH;
-	int render_height = SCREEN_HEIGHT;
-	int render_status_height = (MINIMUM_HEIGHT + STATUS_HEIGHT);
-	if (setting->HasImageInterpolation()) {
-		render_width *= SCALE_FACTOR;
-		render_height *= SCALE_FACTOR;
-		render_status_height *= SCALE_FACTOR;
-	}
-
 	// drawing texture
 	draw_texture = SDL_CreateTexture(   renderer,
 										SDL_PIXELFORMAT_RGB888,
 										SDL_TEXTUREACCESS_STREAMING,
-										render_width,
-										render_height);
+										SCREEN_WIDTH,
+										SCREEN_HEIGHT);
 	if (draw_texture == NULL) {
 		Deinit();
 		return false;
@@ -231,8 +218,8 @@ bool Video::Init(SDL_Window *win)
 	menu_texture = SDL_CreateTexture(   renderer,
 										SDL_PIXELFORMAT_ARGB8888,
 										SDL_TEXTUREACCESS_STREAMING,
-										render_width,
-										render_height);
+										SCREEN_WIDTH,
+										SCREEN_HEIGHT);
 	if (menu_texture == NULL) {
 		Deinit();
 		return false;
@@ -242,8 +229,8 @@ bool Video::Init(SDL_Window *win)
 	softkey_texture = SDL_CreateTexture(renderer,
 										SDL_PIXELFORMAT_ARGB8888,
 										SDL_TEXTUREACCESS_STREAMING,
-										render_width,
-										render_height);
+										SCREEN_WIDTH,
+										SCREEN_HEIGHT);
 	if (softkey_texture == NULL) {
 		Deinit();
 		return false;
@@ -253,8 +240,8 @@ bool Video::Init(SDL_Window *win)
 	status_texture = SDL_CreateTexture( renderer,
 										SDL_PIXELFORMAT_ARGB8888,
 										SDL_TEXTUREACCESS_STREAMING,
-										render_width,
-										render_status_height);
+										SCREEN_WIDTH,
+										MINIMUM_HEIGHT + STATUS_HEIGHT);
 	if (status_texture == NULL) {
 		Deinit();
 		return false;
@@ -463,15 +450,6 @@ void Video::RebuildTexture(bool statusonly)
 {
 	SDL_Texture *texture;
 
-	int render_width = SCREEN_WIDTH;
-	int render_height = SCREEN_HEIGHT;
-	int render_status_height = (MINIMUM_HEIGHT + STATUS_HEIGHT);
-	if (setting->HasImageInterpolation()) {
-		render_width *= SCALE_FACTOR;
-		render_height *= SCALE_FACTOR;
-		render_status_height *= SCALE_FACTOR;
-	}
-
 	if (statusonly == false) {
 		// set hint
 		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, setting->GetScaleQuality());
@@ -480,8 +458,8 @@ void Video::RebuildTexture(bool statusonly)
 		texture = SDL_CreateTexture(renderer,
 									SDL_PIXELFORMAT_RGB888,
 									SDL_TEXTUREACCESS_STREAMING,
-									render_width,
-									render_height);
+									SCREEN_WIDTH,
+									SCREEN_HEIGHT);
 		if (texture != NULL) {
 			SDL_DestroyTexture(draw_texture);
 			draw_texture = texture;
@@ -493,8 +471,8 @@ void Video::RebuildTexture(bool statusonly)
 		texture = SDL_CreateTexture(renderer,
 									SDL_PIXELFORMAT_ARGB8888,
 									SDL_TEXTUREACCESS_STREAMING,
-									render_width,
-									render_height);
+									SCREEN_WIDTH,
+									SCREEN_HEIGHT);
 		if (texture != NULL) {
 			SDL_DestroyTexture(menu_texture);
 			menu_texture = texture;
@@ -505,8 +483,8 @@ void Video::RebuildTexture(bool statusonly)
 		texture = SDL_CreateTexture(renderer,
 									SDL_PIXELFORMAT_ARGB8888,
 									SDL_TEXTUREACCESS_STREAMING,
-									render_width,
-									render_height);
+									SCREEN_WIDTH,
+									SCREEN_HEIGHT);
 		if (texture != NULL) {
 			SDL_DestroyTexture(softkey_texture);
 			softkey_texture = texture;
@@ -520,15 +498,15 @@ void Video::RebuildTexture(bool statusonly)
 		texture = SDL_CreateTexture(renderer,
 									SDL_PIXELFORMAT_ARGB8888,
 									SDL_TEXTUREACCESS_STREAMING,
-									render_width,
-									render_status_height);
+									SCREEN_WIDTH,
+									MINIMUM_HEIGHT + STATUS_HEIGHT);
 	}
 	else {
 		texture = SDL_CreateTexture(renderer,
 									SDL_PIXELFORMAT_ARGB8888,
 									SDL_TEXTUREACCESS_STREAMING,
-									render_width,
-									render_height);
+									SCREEN_WIDTH,
+									STATUS_HEIGHT);
 	}
 	if (texture != NULL) {
 		SDL_DestroyTexture(status_texture);
@@ -732,8 +710,7 @@ void Video::Draw()
 	// frame area
 	if ((draw_ctrl == true) && (draw_line < SCREEN_HEIGHT)) {
 		// require to draw
-		// CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
-		CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, 0);
+		CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
 	}
 
 	// status area
@@ -1235,28 +1212,13 @@ void Video::CopyFrameBuf(SDL_Texture *texture, Uint32 *src, int height, int top)
 	if (ret == 0) {
 		dest = (Uint32*)pixels;
 
-		int render_width = SCREEN_WIDTH;
-		int render_height = SCREEN_HEIGHT;
-		int render_status_height = (MINIMUM_HEIGHT + STATUS_HEIGHT);
-		int render_scale_factor = 1;
-		if (setting->HasImageInterpolation()) {
-			render_width *= SCALE_FACTOR;
-			render_height *= SCALE_FACTOR;
-			render_status_height *= SCALE_FACTOR;
-			render_scale_factor = SCALE_FACTOR;
-		}
-
-		if (pitch == (render_width * sizeof(Uint32))) {
+		if (pitch == (SCREEN_WIDTH * sizeof(Uint32))) {
 			// offset (top)
 			src += SCREEN_WIDTH * top;
-			dest += render_width * (top * render_scale_factor);
+			dest += SCREEN_WIDTH * top;
 
 			// copy one time
-			if (setting->HasImageInterpolation()) {
-				xbrz::scale(SCALE_FACTOR, src, dest, SCREEN_WIDTH, (height - top), xbrz::ColorFormat::RGB);
-			} else {
-				memcpy(dest, src, SCREEN_WIDTH * (height - top) * sizeof(uint32));				
-			}
+			memcpy(dest, src, SCREEN_WIDTH * (height - top) * sizeof(uint32));
 		}
 		else {
 			// copy per line
@@ -1334,6 +1296,5 @@ Uint32* Video::GetSoftKeyFrame()
 {
 	return (Uint32*)softkey_buf;
 }
-
 
 #endif // SDL

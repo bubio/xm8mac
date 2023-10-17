@@ -246,8 +246,6 @@ public:
 										// get num to num pad
 	void SetNumToNumPad(bool);
 										// set num to num pad
-	int Get400Line();
-										// is 400 line
 
 private:
 	void Load();
