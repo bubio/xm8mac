@@ -8,17 +8,18 @@ else {
 }
 
 android {
-    if (buildAsApplication) {
-        namespace "net.retropc.pi"
-    }
-    ndkVersion "23.2.8568313"
-    compileSdk 34
+    buildToolsVersion "33.0.2"
+//    ndkVersion '26.0.10792818'
+//    ndkVersion '25.2.9519653'
+//    ndkVersion '24.0.8215888'
+    ndkVersion '23.2.8568313'
+    compileSdkVersion 33
     defaultConfig {
         if (buildAsApplication) {
             applicationId "net.retropc.pi"
         }
-        minSdk 19
-        targetSdk 34
+        minSdkVersion 16
+        targetSdkVersion 33
         versionCode 3
         versionName "1.74"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
@@ -41,13 +42,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    applicationVariants.all { variant ->
-        tasks["merge${variant.name.capitalize()}Assets"]
-            .dependsOn("externalNativeBuild${variant.name.capitalize()}")
-    }
+    namespace 'net.retropc.pi'
     lint {
         abortOnError false
     }
+
     if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {
         sourceSets.main {
             jniLibs.srcDir 'libs'
