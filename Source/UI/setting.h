@@ -145,10 +145,6 @@ public:
 										// get render scale quality
 	void SetScaleQuality(int quality);
 										// set render scale quality
-	bool HasImageInterpolation();
-										// get image interpolation
-	void SetImageInterpolation(bool interpolation);
-										// set image interpolation
 	bool IsForceRGB565();
 										// get RGB565 mode (Android only)
 	void SetForceRGB565(bool enable);
