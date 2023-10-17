@@ -48,10 +48,12 @@ if(CCACHE_PROGRAM)
   set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_C_STANDARD 17)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD_REQUIRED OFF)
+# Despite setting C++ standard to 20, features from this version are not being used.
+# The oldest compiler used is GCC 6.5 - and that defines our C++ feature set (meaning most of C++17).
+# It's present only to take advantage of fmt::format build time errors.
+# set(CMAKE_CXX_STANDARD 20)
+# set(CMAKE_CXX_EXTENSIONS OFF)
+# set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 # set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # for clang-tidy
 # set(CMAKE_THREAD_PREFER_PTHREAD ON)
 # set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -60,6 +62,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 
 # Find SDL2 library and add to linker flags
 if(NOT APPLE)
+  # find_package(SDL2 2.24.2 EXACT REQUIRED)
   find_package(SDL2 REQUIRED)
 else()
   # Dependencies must be included after Platforms.
@@ -75,13 +78,18 @@ add_definitions(-D_PC8801MA)
 
 # Set compile options
 add_compile_options(-Wall)
-add_compile_options(
-  -Wno-macro-redefined
-  -Wno-non-c-typedef-for-linkage
-  -Wno-deprecated-declarations
-  -Wno-overloaded-virtual
-  -Wno-c++11-compat-deprecated-writable-strings
-  -Wno-narrowing)
+if(APPLE)
+  add_compile_options(
+    -Wno-macro-redefined
+    -Wno-non-c-typedef-for-linkage
+    -Wno-deprecated-declarations
+    -Wno-overloaded-virtual
+    -Wno-c++11-compat-deprecated-writable-strings)
+else()
+  add_compile_options(-Wno-narrowing)
+endif()
+add_compile_options(-Wno-c++11-extensions)
+
 
 # Include directories
 include_directories(
