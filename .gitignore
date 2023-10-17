@@ -12,7 +12,6 @@ Builder/Windows/SDL/include
 Builder/Windows/SDL/lib
 Builder/Windows/x64
 Builder/Windows/x86
-Builder/Windows/Win32
 Builder/Windows/XM8.vcxproj.user
 
 build/
