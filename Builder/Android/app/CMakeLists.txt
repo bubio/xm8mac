@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.4.1)
 
 # Get version from environment variable
-#set(PROJECT_VERSION 1.7.4)
+#set(PROJECT_VERSION 1.7.2)
 
 # Project Name
 #project(XM8 VERSION ${PROJECT_VERSION})

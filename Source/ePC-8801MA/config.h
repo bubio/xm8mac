@@ -127,7 +127,6 @@ typedef struct {
 #ifdef USE_SCANLINE
 	bool scan_line;
 #endif
-	bool image_interpolation;
 #ifdef USE_SCREEN_ROTATE
 	bool rotate_type; // FIXME: wanna support +90deg, +180deg and +270deg
 #endif

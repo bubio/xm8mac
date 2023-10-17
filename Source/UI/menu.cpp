@@ -686,7 +686,7 @@ void Menu::EnterVideo()
 	list->AddRadioButton("15kHz monitor (w/reset)", MENU_VIDEO_15K, MENU_VIDEO_MONITOR);
 	list->AddRadioButton("24kHz monitor (w/reset)", MENU_VIDEO_24K, MENU_VIDEO_MONITOR);
 
-	// scan line
+	// else
 	list->AddCheckButton("Scan line", MENU_VIDEO_SCANLINE);
 	list->AddSlider("Brightness", MENU_VIDEO_BRIGHTNESS, 0x40, 0xff, 1);
 
@@ -696,9 +696,6 @@ void Menu::EnterVideo()
 
 	// scaling quality
 	list->AddCheckButton("Scaling filter", MENU_VIDEO_SCALEFILTER);
-
-	// interpolation
-	list->AddCheckButton("Interpolation", MENU_VIDEO_INTERPOLATION);
 
 #ifdef __ANDROID__
 	// force RGB565
@@ -781,9 +778,6 @@ void Menu::EnterVideo()
 	else {
 		list->SetCheck(MENU_VIDEO_SCALEFILTER, true);
 	}
-
-	// image interpolation
-	list->SetCheck(MENU_VIDEO_INTERPOLATION, setting->HasImageInterpolation());
 
 #ifdef __ANDROID__
 	// force RGB565
@@ -2113,7 +2107,6 @@ void Menu::CmdVideo(bool down, int id)
 	bool lowreso;
 	bool radio;
 	bool scanline;
-	bool interpolation;
 	bool status;
 	const char *quality;
 	int width;
@@ -2273,23 +2266,6 @@ void Menu::CmdVideo(bool down, int id)
 			}
 		}
 		break;
-
-	// Image Interpolation
-	case MENU_VIDEO_INTERPOLATION:
-		if (down == false) {
-			interpolation = setting->HasImageInterpolation();
-			if (interpolation == true) {
-				setting->SetImageInterpolation(false);
-				list->SetCheck(MENU_VIDEO_INTERPOLATION, false);
-			}
-			else {
-				setting->SetImageInterpolation(true);
-				list->SetCheck(MENU_VIDEO_INTERPOLATION, true);
-			}
-		}
-		break;
-
-
 
 #ifdef __ANDROID__
 	// force RGB565
