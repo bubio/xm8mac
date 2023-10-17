@@ -90,7 +90,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 プロジェクトのルートをターミナルで開き、以下のコマンドを実行します。
 
 ```shell
-cd Builder/macOS
+cd macOS
 ./dist_app.sh
 ```
 
@@ -209,12 +209,3 @@ Android/data/retro_pc_pi/files/
 Android 11以上の場合、端末内のファイルに自由にアクセスすることができません。
 
 ゲームのディスクイメージも同じ場所に入れることを推奨します。
-
-
-## ライセンス
-
-- xBRZ
-  
-  https://sourceforge.net/projects/xbrz/
-
-  GNU General Public License version 3.0 (GPLv3)
