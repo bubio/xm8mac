@@ -332,6 +332,7 @@ bool App::Init()
 	// set window size
 	SDL_GetWindowSize(window, &width, &height);
 	video->SetWindowSize(width, height);
+
 	// power management
 	for (loop=0; loop<SDL_arraysize(power_level); loop++) {
 		power_level[loop] = 100;
@@ -356,8 +357,7 @@ bool App::Init()
 
 #ifdef __ANDROID__
 	// poll joystick for second launch (see SDL_SYS_JoystickDetect())
-    // Removed in ver 1.7.4
-//	Android_PollJoystick();
+	Android_PollJoystick();
 #endif // __ANDROID__
 
 	return true;
