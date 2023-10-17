@@ -465,7 +465,7 @@ void Video::RebuildTexture(bool statusonly)
 
 	int render_width = SCREEN_WIDTH;
 	int render_height = SCREEN_HEIGHT;
-	int render_status_height = setting->HasStatusLine() ? (MINIMUM_HEIGHT + STATUS_HEIGHT) : STATUS_HEIGHT;
+	int render_status_height = (MINIMUM_HEIGHT + STATUS_HEIGHT);
 	if (setting->HasImageInterpolation()) {
 		render_width *= SCALE_FACTOR;
 		render_height *= SCALE_FACTOR;
@@ -515,12 +515,21 @@ void Video::RebuildTexture(bool statusonly)
 		}
 	}
 
-	// rebuild status texture
-	texture = SDL_CreateTexture(renderer,
-								SDL_PIXELFORMAT_ARGB8888,
-								SDL_TEXTUREACCESS_STREAMING,
-								render_width,
-								render_status_height);
+	if (setting->HasStatusLine() == true) {
+		// rebuild status texture
+		texture = SDL_CreateTexture(renderer,
+									SDL_PIXELFORMAT_ARGB8888,
+									SDL_TEXTUREACCESS_STREAMING,
+									render_width,
+									render_status_height);
+	}
+	else {
+		texture = SDL_CreateTexture(renderer,
+									SDL_PIXELFORMAT_ARGB8888,
+									SDL_TEXTUREACCESS_STREAMING,
+									render_width,
+									render_height);
+	}
 	if (texture != NULL) {
 		SDL_DestroyTexture(status_texture);
 		status_texture = texture;
@@ -724,7 +733,7 @@ void Video::Draw()
 	if ((draw_ctrl == true) && (draw_line < SCREEN_HEIGHT)) {
 		// require to draw
 		// CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
-		CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, draw_line);
+		CopyFrameBuf(draw_texture, (Uint32*)frame_buf, SCREEN_HEIGHT, 0);
 	}
 
 	// status area
@@ -1227,9 +1236,13 @@ void Video::CopyFrameBuf(SDL_Texture *texture, Uint32 *src, int height, int top)
 		dest = (Uint32*)pixels;
 
 		int render_width = SCREEN_WIDTH;
+		int render_height = SCREEN_HEIGHT;
+		int render_status_height = (MINIMUM_HEIGHT + STATUS_HEIGHT);
 		int render_scale_factor = 1;
 		if (setting->HasImageInterpolation()) {
 			render_width *= SCALE_FACTOR;
+			render_height *= SCALE_FACTOR;
+			render_status_height *= SCALE_FACTOR;
 			render_scale_factor = SCALE_FACTOR;
 		}
 
@@ -1240,13 +1253,7 @@ void Video::CopyFrameBuf(SDL_Texture *texture, Uint32 *src, int height, int top)
 
 			// copy one time
 			if (setting->HasImageInterpolation()) {
-				Uint32 format;
-				SDL_QueryTexture(texture, &format, nullptr, nullptr, nullptr);
-				if (format == SDL_PIXELFORMAT_ARGB8888) {
-					xbrz::scale(SCALE_FACTOR, src, dest, SCREEN_WIDTH, (height - top), xbrz::ColorFormat::ARGB);
-				} else {
-					xbrz::scale(SCALE_FACTOR, src, dest, SCREEN_WIDTH, (height - top), xbrz::ColorFormat::RGB);
-				}
+				xbrz::scale(SCALE_FACTOR, src, dest, SCREEN_WIDTH, (height - top), xbrz::ColorFormat::RGB);
 			} else {
 				memcpy(dest, src, SCREEN_WIDTH * (height - top) * sizeof(uint32));				
 			}
