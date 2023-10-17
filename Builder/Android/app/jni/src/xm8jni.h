@@ -8,6 +8,7 @@
 // [ Java Native Interface for Android ]
 //
 
+
 #ifdef SDL
 
 #ifdef __ANDROID__
@@ -54,6 +55,12 @@ int Android_ChkSkipMain(void);
 // request start activity on next launch
 //
 void Android_RequestActivity(void);
+
+//
+// Android_Utf8macToUtf8()
+// UTF-8 NFD to UTF-8 NFC
+//
+int Android_Utf8macToUtf8(const char *src, char *dst, size_t len);
 
 //
 // Android_HasExternalSD()
