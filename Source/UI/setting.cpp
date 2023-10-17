@@ -1320,10 +1320,10 @@ void Setting::SetStateNum(int num)
 }
 
 //
-// Is400Line()
+// Get400Line()
 // get 400/200 Lines
 //
-bool Setting::Is400Line()
+int Setting::Get400Line()
 {
 	return config.is400Line;
 }
