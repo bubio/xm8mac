@@ -1601,8 +1601,7 @@ void Menu::CmdBack()
 
 	// audio output menu
 	case MENU_AUDIO_OUT:
-		EnterMain(MENU_MAIN_AUDIO_OUT);
-		// EnterAudio();
+		EnterAudio();
 		break;
 
 	// input menu
