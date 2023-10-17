@@ -96,26 +96,26 @@ void Converter::Deinit()
 //
 int Converter::Utf8macToUtf8(const char *src, char *dst, size_t len)
 {
-    SDL_iconv_t conv; // conversion descriptor
+    iconv_t conv; // conversion descriptor
     char buf[_MAX_PATH];
-    const char *src_buf = buf;
+    char *src_buf = buf;
     char *dst_buf = dst;
     size_t src_len = strlen(src);
     size_t dst_len = len - 1;
     int ret = 0;
     strncpy(buf, src, sizeof(buf));
-    if ((conv = SDL_iconv_open("UTF-8", "UTF-8-MAC")) == (SDL_iconv_t) - 1) {
-        fprintf(stderr, "error: %s: %s\n", __FUNCTION__, SDL_GetError());
-        return -1;
+    if ((conv = iconv_open("UTF-8", "UTF-8-MAC")) == (iconv_t) - 1) {
+        pr_err("error: %s: %s\n", __FUNCTION__, "iconv open");
+        return -errno;
     }
-    if (SDL_iconv(conv, &src_buf, &src_len, &dst_buf, &dst_len) == (size_t) - 1) {
-        fprintf(stderr, "error: %s: %s\n", __FUNCTION__, SDL_GetError());
-        ret = -1;
+    if (iconv(conv, &src_buf, &src_len, &dst_buf, &dst_len) == (size_t) - 1) {
+        pr_err("error: %s: %s\n", __FUNCTION__, "iconv");
+        ret = -errno;
     }
     *dst_buf = '\0';
-    if (SDL_iconv_close(conv) == -1) {
-        fprintf(stderr, "error: %s: %s\n", __FUNCTION__, SDL_GetError());
-        ret = -1;
+    if (iconv_close(conv) == -1) {
+        pr_err("error: %s: %s\n", __FUNCTION__, "iconv_close");
+        ret = -errno;
     }
 
     return ret;
