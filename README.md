@@ -125,24 +125,18 @@ Builder/WindowsフォルダにVisual Studio 2022用のソリューションが�
 
 <br />
 
-SDL2のWindows (Visual C++ 32bit/64bit)向けライブラリ、ヘッダファイルをダウンロードします。
+SDL2のWindows (Visual C++ 32bit/64bit)向けライブラリ、ソースファイルをダウンロードします。
 https://www.libsdl.org
 
-ダウンロードするファイルは、releasesのAssetsの中から"SDL2-devel-x.xx.x-VC.zip"という名称のものを探してください。
-
-https://github.com/libsdl-org/SDL/releases
-
 <br />
 
-これを解凍してできるinclude, libをxm8の≈\SDLへ展開します。以下のようになります。
+これをSource\Windows\SDLへ展開します。以下のようになります。
 
-- Builder\Windows\SDL\include（インクルードファイル）
-- Builder\Windows\SDL\lib\x86（32bit向けライブラリ）
-- Builder\Windows\SDL\lib\x64（64bit向けライブラリ）
+Builder\Windows\SDL\include（インクルードファイル）
+Builder\Windows\SDL\lib\x86（32bit向けライブラリ）
+Builder\Windows\SDL\lib\x64（64bit向けライブラリ）
 
 <br />
-
-Builder/Windows/XM8.sln をVisual Studioでビルドします。
 
 BIOS ROMファイルの置き場所は以下になります。
 
