@@ -23,7 +23,7 @@ cmake --build build -j 2 --target package
 if [ -f build/xm8*.rpm ]; then
     mv build/xm8*.rpm build/xm8_linux_x86_64.rpm
     
-    read -p "Do you want to install the rpm package? (y/N): " yn
+    read -p "Do you want to install the package? (y/N): " yn
     case "$yn" in [yY]*) ;; *) echo "abort." ; exit ;; esac    
     sudo dnf install ./build/xm8_linux_x86_64.rpm
 fi
@@ -31,7 +31,7 @@ fi
 if [ -f build/xm8*.deb ]; then
     mv build/xm8*.deb build/xm8_linux_x86_64.deb
 
-    read -p "Do you want to install the deb package? (y/N): " yn
+    read -p "Do you want to install the package? (y/N): " yn
     case "$yn" in [yY]*) ;; *) echo "abort." ; exit ;; esac    
     sudo apt install ./build/xm8_linux_x86_64.deb
 fi
