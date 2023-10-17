@@ -181,7 +181,7 @@ set(CPACK On)
 
 # Set link options
 if(APPLE)
-  target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2 xbrz)
+  target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2 iconv xbrz)
 else()
   target_link_libraries(${BIN_TARGET} PRIVATE ${SDL2_LIBRARIES} xbrz)
 endif()
