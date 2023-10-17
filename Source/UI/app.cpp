@@ -209,18 +209,12 @@ bool App::Init()
 	else {
 		height = (width * APP_HEIGHT_TRANSPARENT) / APP_WIDTH;
 	}
-
-
-	Uint32 window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MOUSE_FOCUS;
-#ifdef __ANDROID__
-	window_flags |= SDL_WINDOW_FULLSCREEN;
-#endif
 	window = SDL_CreateWindow(  GetAppTitle(),
 								SDL_WINDOWPOS_UNDEFINED,
 								SDL_WINDOWPOS_UNDEFINED,
 								width,
 								height,
-								window_flags);
+								SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MOUSE_FOCUS);
 	if (window == NULL) {
 		Deinit();
 		return false;
