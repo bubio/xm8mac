@@ -303,6 +303,43 @@ void Android_RequestActivity(void)
 }
 
 //
+// Android_Utf8macToUtf8()
+// UTF-8 NFD to UTF-8 NFC
+//
+int Android_Utf8macToUtf8(const char *src, char *dst, size_t len)
+{
+	JNIEnv *env;
+
+	// get Java environment
+	env = JNI_GetEnvironment();
+	if (env == NULL) {
+		return -1;
+	}
+
+	// find class
+	jclass nfdToNfcConverterClass = (*env)->FindClass(env, JAVA_CLASS_NAME);
+	if (nfdToNfcConverterClass == NULL) {
+		return -1;
+	}
+
+	// get method id
+	jmethodID convertToNFCMethod = (*env)->GetStaticMethodID(env, nfdToNfcConverterClass, "convertToNFC",
+														  "(Ljava/lang/String;)Ljava/lang/String;");
+	if (convertToNFCMethod == NULL) {
+		return -1;
+	}
+
+	jstring nfcResult = (jstring)(*env)->CallStaticObjectMethod(env, nfdToNfcConverterClass, convertToNFCMethod, (*env)->NewStringUTF(env, src));
+
+	// nfcStrをC++のdstにコピー
+	const char *dstStr = (*env)->GetStringUTFChars(env, nfcResult, NULL);
+	strncpy(dst, dstStr, len);
+	(*env)->ReleaseStringUTFChars(env, nfcResult, dstStr);
+
+	return 0;
+}
+
+//
 // Android_HasExternalSD()
 // get external SD flag
 //

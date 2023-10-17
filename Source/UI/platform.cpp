@@ -21,6 +21,7 @@
 #include "app.h"
 #include "converter.h"
 #include "platform.h"
+#include "xm8jni.h"
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #include <locale.h>
@@ -446,10 +447,13 @@ const char* Platform::FindNext(Uint32 *info)
 	}
 
 	// name
-	#ifdef __APPLE__
+	#if defined(__APPLE__)
 	converter->Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
 	converter->UtfToSjis(dir_name_utf8, dir_name);
-	#else
+    #elif defined(__ANDROID__)
+	Android_Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
+	converter->UtfToSjis(dir_name_utf8, dir_name);
+    #else
 	converter->UtfToSjis(entry->d_name, dir_name);
 	#endif
 
