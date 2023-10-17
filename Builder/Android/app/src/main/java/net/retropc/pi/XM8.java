@@ -1,6 +1,7 @@
 package net.retropc.pi;
 
 import java.io.File;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.io.FileInputStream;
@@ -457,4 +458,9 @@ public class XM8 extends SDLActivity {
 
         return storageDirectories;
     }
+
+    // Convert to NFC (called from native)
+     public static String convertToNFC(String input) {
+         return Normalizer.normalize(input, Normalizer.Form.NFC);
+     }
 }

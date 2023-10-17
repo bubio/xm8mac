@@ -73,12 +73,8 @@ private:
 										// DIR *
 	char dir_name[_MAX_PATH * 3];
 										// file name (shift-jis)
-
-	#ifdef __APPLE__
 	char dir_name_utf8[_MAX_PATH * 3];
 										// file name (utf8-mac)
-	#endif
-
 	bool dir_up;
 										// FindUp() result
 #endif // __linux__ || __APPLE__
