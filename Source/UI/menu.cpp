@@ -277,12 +277,18 @@ void Menu::EnterDrive1(int id)
 		// disk banks
 		banks = diskmgr[0]->GetBanks();
 		for (loop=0; loop<banks; loop++) {
+#if defined(_WIN32) && defined(UNICODE)
+			const char* disk_name = diskmgr[0]->GetName(loop);
+			list->AddButton(disk_name, MENU_DRIVE1_BANK0 + loop);
+#else
+
 			// To convert from UTF to SJIS at display time, keep internally in UTF.
 			const char* disk_name = diskmgr[0]->GetName(loop);
 			char* disk_name_utf = (char*)SDL_malloc(strlen(disk_name) * 2 + 1);
 			converter->SjisToUtf(disk_name, disk_name_utf);
 			list->AddButton(disk_name_utf, MENU_DRIVE1_BANK0 + loop);
 			SDL_free(disk_name_utf);
+#endif
 		}
 
 		// current bank -> focus
@@ -308,8 +314,11 @@ void Menu::EnterDrive1(int id)
 
 	// file_expect
 	strcpy(expect, diskmgr[0]->GetFileName());
-	// converter->UtfToSjis(expect, file_expect);
+#if defined(_WIN32) && defined(UNICODE)
+	converter->UtfToSjis(expect, file_expect);
+#else
 	strcpy(file_expect, expect);
+#endif
 }
 
 //
@@ -328,12 +337,17 @@ void Menu::EnterDrive2(int id)
 		// disk banks
 		banks = diskmgr[1]->GetBanks();
 		for (loop=0; loop<banks; loop++) {
+#if defined(_WIN32) && defined(UNICODE)
+			const char* disk_name = diskmgr[1]->GetName(loop);
+			list->AddButton(disk_name, MENU_DRIVE2_BANK0 + loop);
+#else
 			// To convert from UTF to SJIS at display time, keep internally in UTF.
 			const char* disk_name = diskmgr[1]->GetName(loop);
 			char* disk_name_utf = (char*)SDL_malloc(strlen(disk_name) * 2 + 1);
 			converter->SjisToUtf(disk_name, disk_name_utf);
 			list->AddButton(disk_name_utf, MENU_DRIVE2_BANK0 + loop);
 			SDL_free(disk_name_utf);
+#endif
 		}
 
 		// current bank -> focus
@@ -359,8 +373,12 @@ void Menu::EnterDrive2(int id)
 
 	// file_expect
 	strcpy(expect, diskmgr[1]->GetFileName());
-	// converter->UtfToSjis(expect, file_expect);
+#if defined(_WIN32) && defined(UNICODE)
+	converter->UtfToSjis(expect, file_expect);
+#else
 	strcpy(file_expect, expect);
+#endif
+
 }
 
 //
@@ -395,8 +413,11 @@ void Menu::EnterCmt(int id)
 
 	// file_expect
 	strcpy(expect, tapemgr->GetFileName());
-	// converter->UtfToSjis(expect, file_expect);
+#if defined(_WIN32) && defined(UNICODE)
+	converter->UtfToSjis(expect, file_expect);
+#else
 	strcpy(file_expect, expect);
+#endif
 }
 
 //
@@ -3160,8 +3181,11 @@ void Menu::MakeExpect(const char *name)
 	}
 
 	// set directory name to file_expect[]
-	// converter->UtfToSjis(last, file_expect);
+#if defined(_WIN32) && defined(UNICODE)
+	converter->UtfToSjis(last, file_expect);
+#else
 	strcpy(file_expect, last);
+#endif
 }
 
 //
