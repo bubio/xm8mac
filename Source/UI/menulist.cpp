@@ -235,6 +235,7 @@ bool MenuList::SetTitle(const char *title, int id, bool file)
 	}
 	converter->UtfToSjis(title, sjis);
 
+
 	// check length
 	ptr = sjis;
 	while (strlen(ptr) > ((MENUITEM_WIDTH / 8) - 1)) {

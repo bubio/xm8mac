@@ -394,7 +394,11 @@ void MenuItem::ConvertToSjis()
 	// create sjis string
 	Converter *converter = app->GetConverter();
 	item_name_sjis = (char*)SDL_malloc(strlen(item_name) * 3 + 1);
+#if defined(_WIN32) && defined(UNICODE)
+	strcpy(item_name_sjis, item_name);
+#else
 	converter->UtfToSjis(item_name, item_name_sjis);
+#endif
 }
 
 //
