@@ -727,7 +727,7 @@ void Video::Draw()
 		CopyFrameBuf(draw_texture,
 						(Uint32*)frame_buf,
 					setting->Is400Line() ? SCREEN_HEIGHT : SCREEN_HEIGHT / 2,
-					setting->HasImageInterpolation() ? 0 : draw_line);
+					setting->HasImageInterpolation() ? 0 : setting->HasScanline() ? draw_line : draw_line / 2);
 	}
 
 	// calculate source rect
