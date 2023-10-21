@@ -21,7 +21,10 @@
 #include "app.h"
 #include "converter.h"
 #include "platform.h"
+
+#ifdef __ANDROID__
 #include "xm8jni.h"
+#endif
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #include <locale.h>
