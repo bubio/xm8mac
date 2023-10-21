@@ -4,6 +4,8 @@
     "cmake.configureOnOpen": false,
     "files.associations": {
         "vector": "cpp",
-        "__config": "cpp"
+        "__config": "cpp",
+        "typeinfo": "cpp",
+        "ios": "cpp"
     },
 }

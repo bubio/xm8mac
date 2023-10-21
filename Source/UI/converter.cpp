@@ -14,6 +14,10 @@
 #include "common.h"
 #include "converter.h"
 
+#if defined(__ANDROID__)
+#include "xm8jni.h"
+#endif
+
 //
 // Converter()
 // constructor
@@ -239,6 +243,29 @@ void Converter::SjisToUtf(const char *sjis, char *utf)
 // convet UTF-8 to shift-jis
 //
 void Converter::UtfToSjis(const char *utf, char *sjis)
+{
+	char *utf8_nfc = (char*)SDL_malloc(strlen(utf) * 3 + 1);
+	#if defined(__APPLE__)	
+	Utf8macToUtf8(utf, utf8_nfc, strlen(utf) + 1);
+	UtfNfcToSjis(utf8_nfc, sjis);
+	// char *result = SDL_iconv_string("UTF-8-MAC", "Shift-JIS", utf,  SDL_strlen(utf) + 1);
+	// strcpy(sjis, result);
+	// SDL_free(result);
+	#elif defined(__ANDROID__)
+	Android_Utf8macToUtf8(utf, utf8_nfc, strlen(utf) + 1);
+	UtfNfcToSjis(utf8_nfc, sjis);
+	#else
+	UtfNfcToSjis(utf, sjis);
+	#endif
+	SDL_free(utf8_nfc);
+}
+
+
+//
+// UtfNfcToSjis()
+// convet UTF-8 NFC to shift-jis
+//
+void Converter::UtfNfcToSjis(const char *utf, char *sjis)
 {
 	Uint16 high;
 	Uint16 low;
