@@ -113,6 +113,8 @@ public:
 										// up/down slider
 
 private:
+	void ConvertToSjis();
+										// convert item_name to item_name_sjis
 	void DrawText(SDL_Rect *rect, Uint32 fore);
 										// draw item text
 	void DrawFile(SDL_Rect *rect, Uint32 fore);
@@ -130,7 +132,9 @@ private:
 	MenuItem *item_next;
 										// next item
 	char *item_name;
-										// item name
+										// item name (raw encode)
+	char *item_name_sjis;
+										// item name SJIS
 	int item_index;
 										// item index
 	int item_id;

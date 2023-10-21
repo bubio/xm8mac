@@ -18,6 +18,7 @@
 #include "video.h"
 #include "font.h"
 #include "menuitem.h"
+#include "converter.h"
 
 //
 // defines
@@ -43,6 +44,7 @@ MenuItem::MenuItem(App *a)
 	item_type = NotItem;
 	item_next = NULL;
 	item_name = NULL;
+	item_name_sjis = NULL;
 	item_index = -1;
 	item_id = -1;
 	item_group = -1;
@@ -112,6 +114,11 @@ void MenuItem::Deinit()
 	if (item_name != NULL) {
 		SDL_free(item_name);
 		item_name = NULL;
+	}
+
+	if (item_name_sjis != NULL) {
+		SDL_free(item_name_sjis);
+		item_name_sjis = NULL;
 	}
 }
 
@@ -213,6 +220,7 @@ const char* MenuItem::GetName()
 //
 // SetName()
 // set name
+// For title changes, not used for directories and files.
 //
 void MenuItem::SetName(const char *name)
 {
@@ -378,6 +386,18 @@ void MenuItem::UpDownSlider(bool up)
 }
 
 //
+// ConvertToSjis()
+// Convert item_name to item_name_sjis
+//
+void MenuItem::ConvertToSjis()
+{
+	// create sjis string
+	Converter *converter = app->GetConverter();
+	item_name_sjis = (char*)SDL_malloc(strlen(item_name) * 3 + 1);
+	converter->UtfToSjis(item_name, item_name_sjis);
+}
+
+//
 // Draw()
 // draw item
 //
@@ -536,9 +556,12 @@ void MenuItem::DrawText(SDL_Rect *rect, Uint32 fore)
 	}
 
 	// main text
+	if (item_name_sjis == NULL) {
+		ConvertToSjis();
+	}
 	text_rect.x += 24;
 	text_rect.w -= 24;
-	font->DrawSjisBoldOr(frame_buf, &text_rect, item_name, fore);
+	font->DrawSjisBoldOr(frame_buf, &text_rect, item_name_sjis, fore);
 
 	// slider text
 	if (item_type == SliderItem) {
@@ -588,7 +611,12 @@ void MenuItem::DrawFile(SDL_Rect *rect, Uint32 fore)
 	text_rect.x += 4;
 	text_rect.w -= (16 + 4);
 
-	font->DrawSjisLeftOr(frame_buf, &text_rect, item_name, fore);
+	if (item_name_sjis == NULL) {
+		ConvertToSjis();
+	}
+	font->DrawSjisLeftOr(frame_buf, &text_rect, item_name_sjis, fore);
 }
+
+
 
 #endif // SDL

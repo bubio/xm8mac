@@ -43,6 +43,8 @@ private:
 										// UCS-2 to shift-jis table
 	static const Uint16 sjis_table[0x30 * 0xc0];
 										// shift-jis to UCS-2 table
+	void UtfNfcToSjis(const char *utf, char *sjis);
+										// convert UTF-8 Nfc to shift-jis
 };
 
 #endif // CONVERTER_H

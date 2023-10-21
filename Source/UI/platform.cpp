@@ -78,6 +78,7 @@ Platform::Platform(App *a)
 #if defined(__linux__) || defined(__APPLE__)
 	dir_handle = NULL;
 	dir_name[0] = '\0';
+	dir_name_utf8[0] = '\0';
 	dir_up = false;
 #endif // __linux__ || __APPLE__
 }
@@ -450,15 +451,16 @@ const char* Platform::FindNext(Uint32 *info)
 	}
 
 	// name
-	#if defined(__APPLE__)
-	converter->Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
-	converter->UtfToSjis(dir_name_utf8, dir_name);
-    #elif defined(__ANDROID__)
-	Android_Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
-	converter->UtfToSjis(dir_name_utf8, dir_name);
-    #else
-	converter->UtfToSjis(entry->d_name, dir_name);
-	#endif
+	// #if defined(__APPLE__)
+	// converter->Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
+	// converter->UtfToSjis(dir_name_utf8, dir_name);
+    // #elif defined(__ANDROID__)
+	// Android_Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
+	// converter->UtfToSjis(dir_name_utf8, dir_name);
+    // #else
+	// converter->UtfToSjis(entry->d_name, dir_name);
+	// #endif
+	strcpy(dir_name, entry->d_name);
 
 	// directory ?
 	if (entry->d_type == DT_DIR) {
@@ -616,7 +618,8 @@ bool Platform::MakePath(char *dir, const char *name)
 	converter = app->GetConverter();
 
 	// SHIFT-JIS to UTF-8
-	converter->SjisToUtf(name, dir_name);
+	// converter->SjisToUtf(name, dir_name);
+	strcpy(dir_name, name);
 
 	// cat
 	strcat(dir, dir_name);
