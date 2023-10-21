@@ -451,15 +451,6 @@ const char* Platform::FindNext(Uint32 *info)
 	}
 
 	// name
-	// #if defined(__APPLE__)
-	// converter->Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
-	// converter->UtfToSjis(dir_name_utf8, dir_name);
-    // #elif defined(__ANDROID__)
-	// Android_Utf8macToUtf8(entry->d_name, dir_name_utf8, strlen(entry->d_name) + 1);
-	// converter->UtfToSjis(dir_name_utf8, dir_name);
-    // #else
-	// converter->UtfToSjis(entry->d_name, dir_name);
-	// #endif
 	strcpy(dir_name, entry->d_name);
 
 	// directory ?
