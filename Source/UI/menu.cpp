@@ -930,8 +930,21 @@ void Menu::EnterAudioOut()
 	list->AddRadioButton("SYSTEM DEFAULT", MENU_AUDIO_DEVICE_MIN, MENU_AUDIO_DEVICE);
 	int device_num = audio->GetDeviceNum();
 	for (int i = 0; i < device_num; i++) {
+#if defined(_WIN32) && defined(UNICODE)
+		const char* raw_string = audio->GetDeviceName(i);
+		char* sjis = (char*)SDL_malloc(strlen(raw_string) * 3 + 1);
+		if (sjis == NULL) {
+			list->AddRadioButton(raw_string, MENU_AUDIO_DEVICE_MIN + i + 1, MENU_AUDIO_DEVICE);
+		}
+		else
+		{
+			converter->UtfToSjis(raw_string, sjis);
+			list->AddRadioButton(sjis, MENU_AUDIO_DEVICE_MIN + i + 1, MENU_AUDIO_DEVICE);
+		}
+#else
 		const char* raw_string = audio->GetDeviceName(i);
 		list->AddRadioButton(raw_string, MENU_AUDIO_DEVICE_MIN + i + 1, MENU_AUDIO_DEVICE);
+#endif
 	}
 
 	int audio_device = setting->GetAudioDevice();
