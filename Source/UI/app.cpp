@@ -196,7 +196,11 @@ bool App::Init()
 	}
 
 	// spcfiy scaling quality (all platforms)
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, setting->GetScaleQuality());
+	if (setting->IsImageInterpolation()) {
+		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+	} else {
+		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, setting->GetScaleQuality());
+	}
 
 	// platform (1)
 	platform = new Platform(this);

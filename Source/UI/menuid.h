@@ -66,7 +66,8 @@
 										// file menu
 #define MENU_JOYTEST			22
 										// joystick test menu
-
+#define MENU_SCALEFILTER		23
+										// video scale filter
 //
 // main menu
 //
@@ -282,8 +283,6 @@
 										// scaling filter
 #define MENU_VIDEO_FORCERGB565	817
 										// force RGB565
-#define MENU_VIDEO_INTERPOLATION	818
-										// interpolation
 #define MENU_VIDEO_WINDOW		896
 										// window radio
 #define MENU_VIDEO_SKIP			897
@@ -738,7 +737,19 @@
 										// maximum
 
 #define MENU_AUDIO_DEVICE_MIN	1800
+										// minimum
 #define MENU_AUDIO_DEVICE_MAX	1899
+										// maximum
+
+//
+// video scaling filter menu
+//
+#define MENU_SCALEFILTER_MIN			1900
+#define MENU_SCALEFILTER_NEAREST		1901
+#define MENU_SCALEFILTER_LINEAR			1902
+#define MENU_SCALEFILTER_ANISOTROPIC	1903
+#define MENU_SCALEFILTER_XBRZ			1904
+#define MENU_SCALEFILTER_MAX			1999
 
 //
 // file menu
