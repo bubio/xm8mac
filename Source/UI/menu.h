@@ -49,7 +49,7 @@ public:
 										// enter save menu
 	void EnterSystem(int id);
 										// enter system menu
-	void EnterVideo();
+	void EnterVideo(int id);
 										// enter video menu
 	void EnterAudio();
 										// enter audio menu
@@ -71,6 +71,8 @@ public:
 										// enter joymap menu
 	void EnterVmKey(int id);
 										// enter vmkey menu
+	void EnterScalingFilter();
+										// enter scaling filter menu
 	void EnterFile();
 										// enter file menu
 	void EnterJoyTest();
@@ -115,6 +117,8 @@ public:
 										// command (audio out)
 	void CmdFile(int id);
 										// command (file)
+	void CmdScalingFilter(bool down, int id);
+										// command (video scaling filter)
 	void JoyTest();
 										// joystick test
 	void Draw();

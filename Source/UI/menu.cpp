@@ -691,15 +691,9 @@ void Menu::EnterSystem(int id)
 // EnterVideo()
 // enter video menu
 //
-void Menu::EnterVideo()
+void Menu::EnterVideo(int id)
 {
-	int id;
-	const char *quality;
-
 	list->SetTitle("<< Video Options >>", MENU_VIDEO);
-
-	// default focus
-	id = MENU_VIDEO_SKIP0;
 
 #ifndef __ANDROID__
 	// window size
@@ -728,11 +722,8 @@ void Menu::EnterVideo()
 	list->AddCheckButton("Status area", MENU_VIDEO_STATUSCHK);
 	list->AddSlider("Status transparency", MENU_VIDEO_STATUSALPHA, 0, 0xff, 1);
 
-	// scaling quality
-	list->AddCheckButton("Scaling filter", MENU_VIDEO_SCALEFILTER);
-
-	// interpolation
-	list->AddCheckButton("Interpolation", MENU_VIDEO_INTERPOLATION);
+	// scaling filter
+	list->AddButton("Scaling filter", MENU_VIDEO_SCALEFILTER);
 
 #ifdef __ANDROID__
 	// force RGB565
@@ -743,19 +734,15 @@ void Menu::EnterVideo()
 	switch (setting->GetSkipFrame()) {
 	case 0:
 		list->SetRadio(MENU_VIDEO_SKIP0, MENU_VIDEO_SKIP);
-		id = MENU_VIDEO_SKIP0;
 		break;
 	case 1:
 		list->SetRadio(MENU_VIDEO_SKIP1, MENU_VIDEO_SKIP);
-		id = MENU_VIDEO_SKIP1;
 		break;
 	case 2:
 		list->SetRadio(MENU_VIDEO_SKIP2, MENU_VIDEO_SKIP);
-		id = MENU_VIDEO_SKIP2;
 		break;
 	case 3:
 		list->SetRadio(MENU_VIDEO_SKIP3, MENU_VIDEO_SKIP);
-		id = MENU_VIDEO_SKIP3;
 		break;
 	default:
 		break;
@@ -766,23 +753,18 @@ void Menu::EnterVideo()
 	switch (setting->GetWindowWidth()) {
 	case 640:
 		list->SetRadio(MENU_VIDEO_640, MENU_VIDEO_WINDOW);
-		id = MENU_VIDEO_640;
 		break;
 	case 960:
 		list->SetRadio(MENU_VIDEO_960, MENU_VIDEO_WINDOW);
-		id = MENU_VIDEO_960;
 		break;
 	case 1280:
 		list->SetRadio(MENU_VIDEO_1280, MENU_VIDEO_WINDOW);
-		id = MENU_VIDEO_1280;
 		break;
 	case 1600:
 		list->SetRadio(MENU_VIDEO_1600, MENU_VIDEO_WINDOW);
-		id = MENU_VIDEO_1600;
 		break;
 	case 1920:
 		list->SetRadio(MENU_VIDEO_1920, MENU_VIDEO_WINDOW);
-		id = MENU_VIDEO_1920;
 		break;
 	default:
 		break;
@@ -807,18 +789,6 @@ void Menu::EnterVideo()
 	list->SetCheck(MENU_VIDEO_STATUSCHK, setting->HasStatusLine());
 	list->SetSlider(MENU_VIDEO_STATUSALPHA, setting->GetStatusAlpha());
 
-	// scaling quality
-	quality = setting->GetScaleQuality();
-	if (quality[0] == '0') {
-		list->SetCheck(MENU_VIDEO_SCALEFILTER, false);
-	}
-	else {
-		list->SetCheck(MENU_VIDEO_SCALEFILTER, true);
-	}
-
-	// image interpolation
-	list->SetCheck(MENU_VIDEO_INTERPOLATION, setting->HasImageInterpolation());
-
 #ifdef __ANDROID__
 	// force RGB565
 	list->SetCheck(MENU_VIDEO_FORCERGB565, setting->IsForceRGB565());
@@ -827,6 +797,58 @@ void Menu::EnterVideo()
 	// set focus
 	list->SetFocus(id);
 }
+
+//
+// EnterScalingFilter()
+// enter scaling filter menu
+//
+void Menu::EnterScalingFilter()
+{
+	int id;
+	const char *quality;
+	
+	list->SetTitle("<< VIDEO SCALING FILTER >>", MENU_SCALEFILTER);
+
+
+	list->AddRadioButton("Nearest", MENU_SCALEFILTER_NEAREST, MENU_VIDEO_SCALEFILTER);
+	list->AddRadioButton("Linear", MENU_SCALEFILTER_LINEAR, MENU_VIDEO_SCALEFILTER);
+#ifdef _WIN32
+	list->AddRadioButton("Anisotropic ", MENU_SCALEFILTER_ANISOTROPIC, MENU_VIDEO_SCALEFILTER);
+#endif // _WIN32
+	list->AddRadioButton("xBRZ", MENU_SCALEFILTER_XBRZ, MENU_VIDEO_SCALEFILTER);
+
+	quality = setting->GetScaleQuality();
+	switch (*quality)
+	{
+	case '0':
+		list->SetRadio(MENU_SCALEFILTER_NEAREST, MENU_VIDEO_SCALEFILTER);
+		id = MENU_SCALEFILTER_NEAREST;
+		break;
+	
+	case '1':
+		list->SetRadio(MENU_SCALEFILTER_LINEAR, MENU_VIDEO_SCALEFILTER);
+		id = MENU_SCALEFILTER_LINEAR;
+		break;
+
+	case '2':
+		list->SetRadio(MENU_SCALEFILTER_ANISOTROPIC, MENU_VIDEO_SCALEFILTER);
+		id = MENU_SCALEFILTER_ANISOTROPIC;
+		break;
+	case '3':
+		list->SetRadio(MENU_SCALEFILTER_XBRZ, MENU_VIDEO_SCALEFILTER);
+		id = MENU_SCALEFILTER_XBRZ;
+		break;
+
+	default:
+		list->SetRadio(MENU_SCALEFILTER_NEAREST, MENU_VIDEO_SCALEFILTER);
+		id = MENU_SCALEFILTER_NEAREST;
+		break;
+	}
+
+	// set focus
+	list->SetFocus(id);
+}
+
 
 //
 // EnterAudio()
@@ -1494,7 +1516,9 @@ void Menu::Command(bool down, int id)
 
 	// video menu
 	if ((id >= MENU_VIDEO_MIN) && (id <= MENU_VIDEO_MAX)) {
-		CmdVideo(down, id);
+		if (down == false) {
+			CmdVideo(down, id);
+		}
 		return;
 	}
 
@@ -1570,6 +1594,14 @@ void Menu::Command(bool down, int id)
 		return;
 	}
 
+	// audio device menu
+	if ((id >= MENU_SCALEFILTER_MIN) && (id <= MENU_SCALEFILTER_MAX)) {
+		if (down == false) {
+			CmdScalingFilter(down, id);
+		}
+		return;
+	}
+
 	// file menu
 	if (id >= MENU_FILE_MIN) {
 		if (down == false) {
@@ -1633,7 +1665,6 @@ void Menu::CmdBack()
 	// audio output menu
 	case MENU_AUDIO_OUT:
 		EnterMain(MENU_MAIN_AUDIO_OUT);
-		// EnterAudio();
 		break;
 
 	// input menu
@@ -1682,6 +1713,11 @@ void Menu::CmdBack()
 	// joytest menu
 	case MENU_JOYTEST:
 		EnterInput(MENU_INPUT_JOYTEST);
+		break;
+
+	// video scaling filter menu
+	case MENU_SCALEFILTER:
+		EnterVideo(MENU_VIDEO_SCALEFILTER);
 		break;
 
 	// file menu
@@ -1765,7 +1801,7 @@ void Menu::CmdMain(int id)
 
 	// video options
 	case MENU_MAIN_VIDEO:
-		EnterVideo();
+		EnterVideo(MENU_VIDEO_SKIP0);
 		break;
 
 	// audio options
@@ -2145,9 +2181,7 @@ void Menu::CmdVideo(bool down, int id)
 	bool lowreso;
 	bool radio;
 	bool scanline;
-	bool interpolation;
 	bool status;
-	const char *quality;
 	int width;
 
 	// initialize
@@ -2287,43 +2321,8 @@ void Menu::CmdVideo(bool down, int id)
 
 	// scaling quality
 	case MENU_VIDEO_SCALEFILTER:
-		if (down == false) {
-			quality = setting->GetScaleQuality();
-			if (quality[0] != '0') {
-				setting->SetScaleQuality(0);
-				list->SetCheck(MENU_VIDEO_SCALEFILTER, false);
-				video->RebuildTexture(false);
-			}
-			else {
-#ifdef _WIN32
-				setting->SetScaleQuality(2);
-#else
-				setting->SetScaleQuality(1);
-#endif // _WIN32
-				list->SetCheck(MENU_VIDEO_SCALEFILTER, true);
-				video->RebuildTexture(false);
-			}
-		}
-		break;
-
-	// Image Interpolation
-	case MENU_VIDEO_INTERPOLATION:
-		if (down == false) {
-			interpolation = setting->HasImageInterpolation();
-			if (interpolation == true) {
-				setting->SetImageInterpolation(false);
-				list->SetCheck(MENU_VIDEO_INTERPOLATION, false);
-				video->RebuildTexture(false);
-			}
-			else {
-				setting->SetImageInterpolation(true);
-				list->SetCheck(MENU_VIDEO_INTERPOLATION, true);
-				video->RebuildTexture(false);
-			}
-		}
-		break;
-
-
+		EnterScalingFilter();
+		return;
 
 #ifdef __ANDROID__
 	// force RGB565
@@ -3014,9 +3013,6 @@ void Menu::CmdAudioOut(bool down, int id)
 	// get current audio device
 	int current_audio_device = setting->GetAudioDevice();
 
-	// leave flag
-	bool leave = false;
-
 	if (down == false) {
 		list->SetRadio(id, MENU_AUDIO_DEVICE);
 		setting->SetAudioDevice(id - MENU_AUDIO_DEVICE_MIN);
@@ -3026,13 +3022,24 @@ void Menu::CmdAudioOut(bool down, int id)
 	if (setting->GetAudioDevice() != current_audio_device) {
 		app->ChangeAudio();
 	}
-
-	// leave menu
-	if (leave == true) {
-		app->LeaveMenu();
-	}
 }
 
+//
+// CmdScalingFilter()
+// command (Scaling Filter)
+//
+void Menu::CmdScalingFilter(bool down, int id)
+{
+	const char* quality = setting->GetScaleQuality();
+	if (down == false) {
+		int filterId = (id - MENU_SCALEFILTER_MIN - 1);
+		if ((*quality - '0') != filterId) {
+			setting->SetScaleQuality(filterId);
+			EnterScalingFilter();
+			video->RebuildTexture(false);
+		}
+	}
+}
 
 //
 // CmdFile()
