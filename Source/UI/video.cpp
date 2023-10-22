@@ -211,7 +211,7 @@ bool Video::Init(SDL_Window *win)
 	int render_width = SCREEN_WIDTH;
 	int render_height = SCREEN_HEIGHT;
 	int render_status_height = (MINIMUM_HEIGHT + STATUS_HEIGHT);
-	if (setting->HasImageInterpolation()) {
+	if (setting->IsImageInterpolation()) {
 		render_width *= SCALE_FACTOR;
 		render_height *= SCALE_FACTOR;
 		render_status_height *= SCALE_FACTOR;
@@ -467,7 +467,7 @@ void Video::RebuildTexture(bool statusonly)
 	int render_width = SCREEN_WIDTH;
 	int render_height = SCREEN_HEIGHT;
 	int render_status_height = setting->HasStatusLine() ? (MINIMUM_HEIGHT + STATUS_HEIGHT) : STATUS_HEIGHT;
-	if (setting->HasImageInterpolation()) {
+	if (setting->IsImageInterpolation()) {
 		render_width *= SCALE_FACTOR;
 		render_height *= SCALE_FACTOR;
 		render_status_height *= SCALE_FACTOR;
@@ -475,7 +475,11 @@ void Video::RebuildTexture(bool statusonly)
 
 	if (statusonly == false) {
 		// set hint
-		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, setting->GetScaleQuality());
+		if (setting->IsImageInterpolation()) {
+			SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+		} else {
+			SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, setting->GetScaleQuality());
+		}
 
 		// drawing texture
 		texture = SDL_CreateTexture(renderer,
@@ -727,13 +731,13 @@ void Video::Draw()
 		CopyFrameBuf(draw_texture,
 						(Uint32*)frame_buf,
 					setting->Is400Line() ? SCREEN_HEIGHT : SCREEN_HEIGHT / 2,
-					setting->HasImageInterpolation() ? 0 : setting->HasScanline() ? draw_line : draw_line / 2);
+					setting->IsImageInterpolation() ? 0 : setting->HasScanline() ? draw_line : draw_line / 2);
 	}
 
 	// calculate source rect
-	src_rect.w = setting->HasImageInterpolation() ? SCREEN_WIDTH * SCALE_FACTOR : SCREEN_WIDTH;
+	src_rect.w = setting->IsImageInterpolation() ? SCREEN_WIDTH * SCALE_FACTOR : SCREEN_WIDTH;
 	int height = setting->Is400Line() ? SCREEN_HEIGHT : SCREEN_HEIGHT / SCALE_FACTOR;
-	src_rect.h = setting->HasImageInterpolation() ? height * SCALE_FACTOR : height;
+	src_rect.h = setting->IsImageInterpolation() ? height * SCALE_FACTOR : height;
 
 	// status area
 	if (status == true) {
@@ -1233,7 +1237,7 @@ void Video::CopyFrameBuf(SDL_Texture *texture, Uint32 *src, int height, int top)
 	if (ret == 0) {
 		dest = (Uint32*)pixels;
 
-		if (setting->HasImageInterpolation()) {
+		if (setting->IsImageInterpolation()) {
 			// Interpolate and copy
 			Uint32 format;
 			SDL_QueryTexture(texture, &format, nullptr, nullptr, nullptr);

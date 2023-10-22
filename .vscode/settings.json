@@ -6,6 +6,8 @@
         "vector": "cpp",
         "__config": "cpp",
         "typeinfo": "cpp",
-        "ios": "cpp"
+        "ios": "cpp",
+        "new": "cpp",
+        "string": "cpp"
     },
 }
