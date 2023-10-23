@@ -21,7 +21,7 @@ cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_P
 cmake --build build -j 2 --target package
 
 if [ -f build/xm8*.rpm ]; then
-    mv build/xm8*.rpm build/xm8_linux_x86_64.rpm
+    mv build/xm8*.rpm build/XM8_Linux_x86_64.rpm
     
     read -p "Do you want to install the rpm package? (y/N): " yn
     case "$yn" in
