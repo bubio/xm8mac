@@ -1,3 +1,39 @@
+# 1.7.4
+
+2023年10月23日 月曜日
+
+<br/>　
+
+## 動作環境
+| Platform | CPU | 最小OSバージョン |
+| ------------- | ------------------- | ------------- |
+| Mac | x86_64 | macOS 10.13 High Sierra |
+| Mac | Apple Silicon | macOS 11 Big Sur |
+| Windows | x86_64 | Windows 10 |
+| Windows | x86_32 | Windows 10 |
+| Linux | x86_64 | - |
+| Raspberry Pi OS | armhf | -|
+| Android | Arm | Android 4.4 |
+
+<br />　
+
+## 変更点
+- SCALING FILTERにxBRZを追加しました。
+- Raspberry Pi OS版（XM8_Linux_armhf.deb）を追加しました。
+- SDLを2.28.4にしました。
+- Androidのビルド環境をSDK 34にしました。
+- Androidで画面がブラックアウトしてしまう問題を修正しました。
+- ファイルブラウズ関連の実装を見直して、全プラットフォームで文字化けしないようにしました。
+
+
+<br />　
+
+## 既知の問題
+- 特にありません。
+
+<br/>　
+<br/>　
+
 # 1.7.3
 
 2023年5月6日 土曜日
