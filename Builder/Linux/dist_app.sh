@@ -5,7 +5,7 @@
 #
 
 # Debian and Ubuntu
-# sudo apt install build-essentials cmake sdl2-dev
+# sudo apt install build-essentials cmake libsdl2-dev
 
 # Fedora
 # sudo dnf groupinstall "Development Tools"
