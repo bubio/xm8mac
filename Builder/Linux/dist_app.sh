@@ -26,7 +26,7 @@ if [ -f build/xm8*.rpm ]; then
     read -p "Do you want to install the rpm package? (y/N): " yn
     case "$yn" in
         [yY]*)
-            sudo dnf install ./build/xm8_linux_x86_64.rpm
+            sudo dnf install ./build/XM8_Linux_x86_64.rpm
             ;;
         *)
             ;;
@@ -34,25 +34,25 @@ if [ -f build/xm8*.rpm ]; then
 fi
 
 if [ -f build/xm8*amd64.deb ]; then
-    mv build/xm8*amd64.deb build/xm8_linux_x86_64.deb
+    mv build/xm8*amd64.deb build/XM8_Linux_x86_64.deb
 
     read -p "Do you want to install the deb package? (y/N): " yn
     case "$yn" in
         [yY]*)
-            sudo apt install ./build/xm8_linux_x86_64.deb
+            sudo apt install ./build/XM8_Linux_x86_64.deb
             ;;
         *)
             ;;
     esac
 fi
 
-if [ -f build/xm8*amd64.deb ]; then
-    mv build/xm8*amd64.deb build/xm8_linux_armhf.deb
+if [ -f build/xm8*armhf.deb ]; then
+    mv build/xm8*armhf.deb build/XM8_Linux_armhf.deb
 
     read -p "Do you want to install the deb package? (y/N): " yn
     case "$yn" in
         [yY]*)
-            sudo apt install ./build/xm8_linux_armhf.deb
+            sudo apt install ./build/XM8_Linux_armhf.deb
             ;;
         *)
             ;;
