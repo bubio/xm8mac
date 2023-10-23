@@ -300,6 +300,8 @@ void Android_RequestActivity(void)
 
 	// call
 	(*env)->CallVoidMethod(env, java_class, id);
+
+    (*env)->DeleteLocalRef(env, jcls);
 }
 
 //
@@ -309,32 +311,37 @@ void Android_RequestActivity(void)
 int Android_Utf8macToUtf8(const char *src, char *dst, size_t len)
 {
 	JNIEnv *env;
+	jclass jcls;
 
 	// get Java environment
-	env = JNI_GetEnvironment();
-	if (env == NULL) {
-		return -1;
-	}
+    env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    if (env == 0) {
+        return -1;
+    }
 
 	// find class
-	jclass nfdToNfcConverterClass = (*env)->FindClass(env, JAVA_CLASS_NAME);
-	if (nfdToNfcConverterClass == NULL) {
+	jcls = (*env)->FindClass(env, JAVA_CLASS_NAME);
+	if (jcls == NULL) {
 		return -1;
 	}
 
 	// get method id
-	jmethodID convertToNFCMethod = (*env)->GetStaticMethodID(env, nfdToNfcConverterClass, "convertToNFC",
+	jmethodID convertToNFCMethod = (*env)->GetStaticMethodID(env, jcls, "convertToNFC",
 														  "(Ljava/lang/String;)Ljava/lang/String;");
 	if (convertToNFCMethod == NULL) {
 		return -1;
 	}
 
-	jstring nfcResult = (jstring)(*env)->CallStaticObjectMethod(env, nfdToNfcConverterClass, convertToNFCMethod, (*env)->NewStringUTF(env, src));
+    jstring srcString = (*env)->NewStringUTF(env, src);
+	jstring nfcResult = (jstring)(*env)->CallStaticObjectMethod(env, jcls, convertToNFCMethod, srcString);
+    (*env)->DeleteLocalRef(env, srcString);
+    (*env)->DeleteLocalRef(env, jcls);
 
 	// nfcStrをC++のdstにコピー
 	const char *dstStr = (*env)->GetStringUTFChars(env, nfcResult, NULL);
 	strncpy(dst, dstStr, len);
 	(*env)->ReleaseStringUTFChars(env, nfcResult, dstStr);
+    (*env)->DeleteLocalRef(env, nfcResult);
 
 	return 0;
 }
@@ -400,6 +407,8 @@ void Android_ClearTreeUri(void)
 
 	// call
 	(*env)->CallVoidMethod(env, java_class, id);
+
+    (*env)->DeleteLocalRef(env, jcls);
 }
 
 //
@@ -456,7 +465,12 @@ int Android_GetFileDescriptor(const char *path, int type)
 
 	// call
 	jstr = (*env)->NewStringUTF(env, path);
-	return (*env)->CallIntMethod(env, java_class, id, jstr, type);
+	int ret = (*env)->CallIntMethod(env, java_class, id, jstr, type);
+
+    (*env)->DeleteLocalRef(env, jstr);
+    (*env)->DeleteLocalRef(env, jcls);
+
+	return ret;
 }
 
 //
