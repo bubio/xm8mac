@@ -5,7 +5,7 @@
 
 ## XM8 for macOSとは
 ---
-XM8は、ＰＩ．さんが開発したマルチプラットフォーム（Windows/Linux/Android）に対応したPC-8801MA(PC-8801mkIISR上位互換)のエミュレータをmacOS用の改変したものです。
+XM8は、ＰＩ．さんが開発したマルチプラットフォーム（Windows/Linux/Android）に対応したPC-8801MA(PC-8801mkIISR上位互換)のエミュレータをmacOS用に改変したものです。
 
 <p align="center">
 <img width="752" src="https://user-images.githubusercontent.com/78299054/226607145-c6381e6e-acb8-4fba-88dc-0a8462298f6e.png">
@@ -13,7 +13,7 @@ XM8は、ＰＩ．さんが開発したマルチプラットフォーム（Windo
 
 このリポジトリは ＰＩ．さんから許可をいただき作成しています。
 
-公式では配布されていないmacOS版の開発を主に行なっていきますが、Windows/Linux/Android版もできる配布します。
+公式では配布されていないmacOS版の開発を主に行なっていきますが、Windows/Linux/Android版もできる限り配布します。
 
 <br />
 
@@ -39,6 +39,10 @@ http://retropc.net/pi/xm8/index.html
 | ------------- | ------------------- | ------------------------------------------------------------ |
 | x86_64        | macOS 10.13 High Sierra | [x86_64版](https://github.com/bubio/xm8mac/releases/download/1.7.3/XM8_macOS_x86_64.dmg) |
 | Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.3/XM8_macOS_AppleSilicon.dmg) |
+
+<br />
+
+その他のOSはリリースを見てください。
 
 <br />
 
@@ -81,7 +85,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 - Homebrew
   
   [Homebrew](https://brew.sh/index_ja)のインストールが必要です。
-  cmskeなどビルドに必要なツールの取得に使用します。
+  cmakeなどビルドに必要なツールの取得に使用します。
 
 <br />
 
@@ -94,14 +98,7 @@ cd Builder/macOS
 ./dist_app.sh
 ```
 
-これで、macOSフォルダに実行ファイル(.app)が作成されているはずです。
-
-<br />
-
-
-他のプラットフォーム用のビルドについては、[README-BUILD.txt](Documents/README-BUILD.txt)を参照してください。
-
-
+これでmacOSフォルダに実行ファイル(.app)が作成されているはずです。
 
 <br />
 
@@ -113,7 +110,7 @@ cd Builder/macOS
 
 <br />
 
-## おまけ
+## その他のOS
 
 ---
 
@@ -194,6 +191,7 @@ Builder/AndroidフォルダにAndroid Studio用のプロジェクトが入って
 <br />
 
 SDL2のソースファイルをダウンロードします。
+
 https://www.libsdl.org
 
 <br />
@@ -218,7 +216,7 @@ Android 11以上の場合、端末内のファイルに自由にアクセスす�
 ゲームのディスクイメージも同じ場所に入れることを推奨します。
 
 
-## ライセンス
+## 使用しているOSSのライセンス
 
 - xBRZ
   
