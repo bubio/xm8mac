@@ -281,10 +281,9 @@ void Menu::EnterDrive1(int id)
 			const char* disk_name = diskmgr[0]->GetName(loop);
 			list->AddButton(disk_name, MENU_DRIVE1_BANK0 + loop);
 #else
-
 			// To convert from UTF to SJIS at display time, keep internally in UTF.
 			const char* disk_name = diskmgr[0]->GetName(loop);
-			char* disk_name_utf = (char*)SDL_malloc(strlen(disk_name) * 2 + 1);
+			char* disk_name_utf = (char*)SDL_malloc(strlen(disk_name) * 3 + 1);
 			converter->SjisToUtf(disk_name, disk_name_utf);
 			list->AddButton(disk_name_utf, MENU_DRIVE1_BANK0 + loop);
 			SDL_free(disk_name_utf);
@@ -343,7 +342,7 @@ void Menu::EnterDrive2(int id)
 #else
 			// To convert from UTF to SJIS at display time, keep internally in UTF.
 			const char* disk_name = diskmgr[1]->GetName(loop);
-			char* disk_name_utf = (char*)SDL_malloc(strlen(disk_name) * 2 + 1);
+			char* disk_name_utf = (char*)SDL_malloc(strlen(disk_name) * 3 + 1);
 			converter->SjisToUtf(disk_name, disk_name_utf);
 			list->AddButton(disk_name_utf, MENU_DRIVE2_BANK0 + loop);
 			SDL_free(disk_name_utf);
