@@ -98,7 +98,7 @@ cd Builder/macOS
 ./dist_app.sh
 ```
 
-これでmacOSフォルダに実行ファイル(.app)が作成されているはずです。
+これでbuildフォルダに実行ファイル(.app)が作成されているはずです。
 
 <br />
 
