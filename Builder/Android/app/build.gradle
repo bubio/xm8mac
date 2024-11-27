@@ -12,13 +12,13 @@ android {
         namespace "net.retropc.pi"
     }
     ndkVersion "23.2.8568313"
-    compileSdk 34
+    compileSdk 35
     defaultConfig {
         if (buildAsApplication) {
             applicationId "net.retropc.pi"
         }
         minSdk 19
-        targetSdk 34
+        targetSdk 35
         versionCode 4
         versionName "1.75"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
