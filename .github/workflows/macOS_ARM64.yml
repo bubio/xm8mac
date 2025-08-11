@@ -22,7 +22,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-  
+
 jobs:
   build-macos:
     runs-on: macos-15
@@ -43,7 +43,8 @@ jobs:
       - name: Build XM8 macOS app
         run: |
           cd Builder/macOS
-          ./dist_app.sh
+          ./dist_app.sh && \
+          mv build/xm8.dmg build/XM8_macOS_AppleSilicon.dmg
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
