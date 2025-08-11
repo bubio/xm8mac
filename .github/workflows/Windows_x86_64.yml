@@ -32,17 +32,18 @@ jobs:
         uses: actions/checkout@v4
 
       # SDL2 の最新VC向けZIPを取得
-      - name: Download SDL2 VC release
+      - name: Download SDL2 VC 2.32.8
         shell: pwsh
         run: |
-          $release = Invoke-RestMethod https://api.github.com/repos/libsdl-org/SDL/releases/latest
-          $asset = $release.assets | Where-Object { $_.name -match "SDL2-devel-.*-VC\.zip" } | Select-Object -First 1
-          Invoke-WebRequest $asset.browser_download_url -OutFile SDL2.zip
+          $url = "https://github.com/libsdl-org/SDL/releases/download/release-2.32.8/SDL2-devel-2.32.8-VC.zip"
+          Invoke-WebRequest $url -OutFile SDL2.zip
           Expand-Archive SDL2.zip -DestinationPath SDL2_tmp
-          New-Item -ItemType Directory -Path "Builder/Windows/SDL" -Force | Out-Null
-          Copy-Item SDL2_tmp\SDL2-*\include "Builder/Windows/SDL/include" -Recurse -Force
-          Copy-Item SDL2_tmp\SDL2-*\lib\x86 "Builder/Windows/SDL/lib/x86" -Recurse -Force
-          Copy-Item SDL2_tmp\SDL2-*\lib\x64 "Builder/Windows/SDL/lib/x64" -Recurse -Force
+          New-Item -ItemType Directory -Path "Builder/Windows/SDL/include" -Force | Out-Null
+          New-Item -ItemType Directory -Path "Builder/Windows/SDL/lib/x86" -Force | Out-Null
+          New-Item -ItemType Directory -Path "Builder/Windows/SDL/lib/x64" -Force | Out-Null
+          Copy-Item SDL2_tmp\SDL2-2.32.8\include\* "Builder/Windows/SDL/include" -Recurse -Force
+          Copy-Item SDL2_tmp\SDL2-2.32.8\lib\x86\* "Builder/Windows/SDL/lib/x86" -Recurse -Force
+          Copy-Item SDL2_tmp\SDL2-2.32.8\lib\x64\* "Builder/Windows/SDL/lib/x64" -Recurse -Force
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
