@@ -68,14 +68,19 @@ jobs:
           copy Builder\Windows\Win32\Release\XM8.exe artifacts_Win32\
           copy Builder\Windows\SDL\lib\x86\SDL2.dll artifacts_Win32\
 
-      - name: Upload Artifacts (x64)
-        uses: actions/upload-artifact@v4
-        with:
-          name: XM8_Windows_x64
-          path: artifacts_x64/**
+      - name: Create ZIP archives
+        run: |
+          powershell Compress-Archive -Path artifacts_x64\* -DestinationPath XM8_Windows_x86_64.zip
+          powershell Compress-Archive -Path artifacts_Win32\* -DestinationPath XM8_Windows_x86_32.zip
 
-      - name: Upload Artifacts (Win32)
+      - name: Upload Artifacts (XM8_Windows_x86_64.zip)
         uses: actions/upload-artifact@v4
         with:
-          name: XM8_Windows_Win32
-          path: artifacts_Win32/**
+          name: XM8_Windows_x86_64
+          path: XM8_Windows_x86_64.zip
+
+      - name: Upload Artifacts (XM8_Windows_x86_32.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM8_Windows_x86_32
+          path: XM8_Windows_x86_32.zip
