@@ -27,4 +27,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: XM8-macOS-app
-          path: Builder/macOS/build/*.app
+          path: build/*.app
