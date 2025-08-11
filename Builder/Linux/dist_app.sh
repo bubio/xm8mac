@@ -5,11 +5,15 @@
 #
 
 # Debian and Ubuntu
-# sudo apt install build-essentials cmake libsdl2-dev
+# sudo apt install build-essential cmake libsdl2-dev
 
 # Fedora
-# sudo dnf groupinstall "Development Tools"
-# sudo dnf install cmake SDL2-devel
+# for dnf4
+#   sudo dnf groupinstall "Development Tools"
+#   sudo dnf install cmake SDL2-devel
+# for dnf5
+#   sudo dnf install @development-tools
+#   sudo dnf install cmake SDL2-devel
 
 pushd .
 cd ../../

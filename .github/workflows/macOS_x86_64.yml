@@ -44,8 +44,7 @@ jobs:
         run: |
           cd Builder/macOS
           ./dist_app.sh && \
-          pwd && \
-          mv build/xm8.dmg build/XM8_macOS_x86_64.dmg
+          mv ../../build/xm8.dmg ../../build/XM8_macOS_x86_64.dmg
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
