@@ -2,10 +2,27 @@ name: macOS Build (dev branch)
 
 on:
   push:
-    branches: [dev]
+    branches:
+      - dev
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
   pull_request:
-    branches: [dev]
+    types: [opened, synchronize]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  release:
+    types: [published]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+  
 jobs:
   build-macos:
     runs-on: macos-15
