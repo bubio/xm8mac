@@ -63,27 +63,19 @@ jobs:
         run: |
           mkdir artifacts_x64
           copy Builder\Windows\x64\Release\XM8.exe artifacts_x64\
-          copy Builder\Windows\SDL\lib\x64\SDL2.dll artifacts_x64\
+          copy Builder\\Windows\x64\Release\SDL2.dll artifacts_x64\
           mkdir artifacts_Win32
           copy Builder\Windows\Win32\Release\XM8.exe artifacts_Win32\
-          copy Builder\Windows\SDL\lib\x86\SDL2.dll artifacts_Win32\
+          copy Builder\Windows\Win32\Release\SDL2.dll artifacts_Win32\
 
-      - name: Create ZIP archives
-        shell: pwsh
-        run: |
-          $files64 = Get-ChildItem artifacts_x64\* -Recurse
-          Compress-Archive -Path $files64 -DestinationPath XM8_Windows_x86_64.zip
-          $files32 = Get-ChildItem artifacts_Win32\* -Recurse
-          Compress-Archive -Path $files32 -DestinationPath XM8_Windows_x86_32.zip
-
-      - name: Upload Artifacts (XM8_Windows_x86_64.zip)
+      - name: Upload Artifacts (XM8_Windows_x86_64)
         uses: actions/upload-artifact@v4
         with:
           name: XM8_Windows_x86_64
-          path: XM8_Windows_x86_64.zip
+          path: artifacts_x64/
 
-      - name: Upload Artifacts (XM8_Windows_x86_32.zip)
+      - name: Upload Artifacts (XM8_Windows_x86_32)
         uses: actions/upload-artifact@v4
         with:
           name: XM8_Windows_x86_32
-          path: XM8_Windows_x86_32.zip
+          path: artifacts_Win32/
