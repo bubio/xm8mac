@@ -205,6 +205,18 @@ Builder/Android/app/jni/SDL
 
 <br />
 
+Builder/Android/app/src/java/org/libsdl
+
+にSDL2のandroid-project/app/src/main/java/org/libsdl/appフォルダをコピーします。以下のようになります。
+
+- Builder/Android/app/src/java/org/libsdl/app
+  - HIDDevice.java
+  - SDL.java
+    
+    ...
+
+<br />
+
 BIOS ROMファイルの置き場所は以下になります。
 
 ```shell

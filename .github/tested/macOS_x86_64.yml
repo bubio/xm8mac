@@ -49,5 +49,5 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: XM8_macOS_x86_64
+          name: XM8_macOS_x86_64.dmg
           path: build/*.dmg
