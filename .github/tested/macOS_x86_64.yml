@@ -43,7 +43,7 @@ jobs:
       - name: Build XM8 macOS app
         run: |
           cd Builder/macOS
-          ./dist_app.sh && \
+          ./dist_app.sh
           mv ../../build/xm8.dmg ../../build/XM8_macOS_x86_64.dmg
 
       - name: Upload build artifact

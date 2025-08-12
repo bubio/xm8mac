@@ -1,4 +1,4 @@
-name: macOS Build (dev branch)
+name: Linux x86_64 AppImage (dev branch)
 
 on:
   push:
@@ -24,30 +24,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-macos:
-    runs-on: macos-15
-
+  build:
+    runs-on: ubuntu-22.04
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Xcode 16.4
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.4'
+      - name: Install dependency
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
 
-      - name: Install dependencies (Homebrew & CMake)
+      - name: Build XM8 Linux app
         run: |
-          brew install cmake
-
-      - name: Build XM8 macOS app
-        run: |
-          cd Builder/macOS
-          ./dist_app.sh
-          mv ../../build/xm8.dmg ../../build/XM8_macOS_AppleSilicon.dmg
+          cd Builder/Linux
+          ./AppImage.sh
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: XM8_macOS_AppleSilicon
-          path: build/*.dmg
+          name: XM8_Linux_x86_64
+          path: Builder/Linux/*.appimage

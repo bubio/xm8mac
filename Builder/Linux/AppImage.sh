@@ -26,6 +26,6 @@ if ! which "$APPIMAGE_BUILDER"; then
 fi
 "$APPIMAGE_BUILDER" --appimage-extract-and-run --appdir="$BUILD_DIR"/AppDir --custom-apprun=Builder/Linux/AppRun -d Builder/Linux/xm8.desktop -o appimage
 
-mv XM8*.AppImage Builder/Linux/xm8_linux_x86_64.appimage
+mv XM8*.AppImage Builder/Linux/XM8_Linux_x86_64.appimage
 
 popd
