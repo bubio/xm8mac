@@ -61,11 +61,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: Builder/Android
-        run: ./gradlew assembleRelease --no-daemon \
-          -PKEYSTORE_FILE=app/keystore.jks \
-          -PKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
-          -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} \
-          -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon -PKEYSTORE_FILE=app/keystore.jks -PKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
