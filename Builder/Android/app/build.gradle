@@ -35,10 +35,19 @@ android {
             // }
         }
     }
+    signingConfigs {
+        release {
+            storeFile file(project.hasProperty('KEYSTORE_FILE') ? project.KEYSTORE_FILE : '')
+            storePassword project.hasProperty('KEYSTORE_PASSWORD') ? project.KEYSTORE_PASSWORD : ''
+            keyAlias project.hasProperty('KEY_ALIAS') ? project.KEY_ALIAS : ''
+            keyPassword project.hasProperty('KEY_PASSWORD') ? project.KEY_PASSWORD : ''
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     applicationVariants.all { variant ->

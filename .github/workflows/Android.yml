@@ -54,12 +54,22 @@ jobs:
           cp -r SDL2-$SDL_VERSION/android-project/app/src/main/java/org/libsdl/app \
              Builder/Android/app/src/java/org/libsdl/
 
-      - name: Build Debug APK
-        working-directory: Builder/Android
-        run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Debug APK
+      - name: Decode keystore
+        run: |
+          echo ${{ secrets.KEYSTORE_BASE64 }} | base64 --decode > Builder/Android/app/keystore.jks
+
+      - name: Build Release APK
+        working-directory: Builder/Android
+        run: ./gradlew assembleRelease --no-daemon \
+          -PKEYSTORE_FILE=app/keystore.jks \
+          -PKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
+          -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} \
+          -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: XM8_Android.apk
-          path: Builder/Android/app/build/outputs/apk/debug/*.apk
+          name: XM8_Android_APKs
+          path: |
+            Builder/Android/app/build/outputs/apk/release/*.apk
