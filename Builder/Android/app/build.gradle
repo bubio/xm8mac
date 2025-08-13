@@ -37,10 +37,12 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file(project.hasProperty('KEYSTORE_FILE') ? project.KEYSTORE_FILE : '')
-            storePassword project.hasProperty('KEYSTORE_PASSWORD') ? project.KEYSTORE_PASSWORD : ''
-            keyAlias project.hasProperty('KEY_ALIAS') ? project.KEY_ALIAS : ''
-            keyPassword project.hasProperty('KEY_PASSWORD') ? project.KEY_PASSWORD : ''
+            if (project.hasProperty('KEYSTORE_FILE') && file(KEYSTORE_FILE).exists()) {
+                storeFile file(KEYSTORE_FILE)
+                storePassword project.KEYSTORE_PASSWORD
+                keyAlias project.KEY_ALIAS
+                keyPassword project.KEY_PASSWORD
+            }
         }
     }
     buildTypes {
