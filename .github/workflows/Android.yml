@@ -54,14 +54,22 @@ jobs:
           cp -r SDL2-$SDL_VERSION/android-project/app/src/main/java/org/libsdl/app \
              Builder/Android/app/src/java/org/libsdl/
 
-
-      - name: Decode keystore
-        run: |
-          echo ${{ secrets.KEYSTORE_BASE64 }} | base64 --decode > Builder/Android/app/keystore.jks
-
-      - name: Build Release APK
+      - name: Build with Gradle
         working-directory: Builder/Android
-        run: ./gradlew assembleRelease --no-daemon -PKEYSTORE_FILE=app/keystore.jks -PKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+        run: |
+          # 今回は、Secrets が設定されいなければ署名なしのapkファイルが作成されるよう判定処理をいれています。
+          # 確実に署名させたいのであれば、判定処理を外すことで署名エラーとしてしまってもよいと思います。
+          if [[ -n "${{ secrets.KEYSTORE_BASE64 }}" ]]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+            export KEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}"
+            export KEY_ALIAS="${{ secrets.KEY_ALIAS }}"
+            export KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
+          fi
+          ./gradlew assembleRelease
+
+      # - name: Build Release APK
+      #   working-directory: Builder/Android
+      #   run: ./gradlew assembleRelease --no-daemon -PKEYSTORE_FILE=app/keystore.jks -PKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
