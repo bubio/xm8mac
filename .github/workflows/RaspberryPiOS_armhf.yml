@@ -28,8 +28,21 @@ jobs:
 
       - name: Switch apt sources to ports.ubuntu.com for armhf
         run: |
-          sudo sed -i 's|http://archive.ubuntu.com/ubuntu|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list
-          sudo sed -i 's|http://security.ubuntu.com/ubuntu|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list
+          FLAVOR="$(lsb_release -sc)"
+
+          if dpkg-vendor --derives-from Ubuntu; then
+            sudo tee /etc/apt/sources.list.d/armhf.list <<LIST
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR} main restricted
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-updates main restricted
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR} universe
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-updates universe
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR} multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-updates multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-backports main restricted universe multiverse
+          LIST
+            sudo sed -E -i 's/deb (http|file|mirror)/deb [arch=amd64,i386] \1/' /etc/apt/sources.list
+            cat /etc/apt/sources.list
+          fi
 
       - name: Install cross compile tools
         run: |
