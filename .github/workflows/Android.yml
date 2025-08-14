@@ -67,13 +67,13 @@ jobs:
           fi
           ./gradlew assembleRelease
 
-      # - name: Build Release APK
-      #   working-directory: Builder/Android
-      #   run: ./gradlew assembleRelease --no-daemon -PKEYSTORE_FILE=app/keystore.jks -PKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+      - name: Rename APK to XM8_Android.apk
+        run: |
+          APK_PATH=$(ls Builder/Android/app/build/outputs/apk/release/*.apk | head -n 1)
+          mv "$APK_PATH" Builder/Android/app/build/outputs/apk/release/XM8_Android.apk
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: XM8_Android_APKs
-          path: |
-            Builder/Android/app/build/outputs/apk/release/*.apk
+          name: XM8_Android.apk
+          path: Builder/Android/app/build/outputs/apk/release/XM8_Android.apk
