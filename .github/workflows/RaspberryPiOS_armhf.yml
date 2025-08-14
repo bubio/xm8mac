@@ -56,9 +56,10 @@ jobs:
           export PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig
           cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr \
             -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
-            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++
+            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+            -DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=armhf
           cmake --build build --target package -j 2
-          deb_file=$(ls build/xm8*armhf.deb)
+          deb_file=$(ls build/xm8_*_armhf.deb)
           mv "$deb_file" build/XM8_Linux_armhf.deb
 
       - name: Upload build artifact deb
