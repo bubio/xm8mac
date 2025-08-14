@@ -49,10 +49,11 @@ jobs:
           sudo apt-get update
           sudo dpkg --add-architecture armhf
           sudo apt-get update
-          sudo apt-get install -y cmake libsdl2-dev:armhf g++-arm-linux-gnueabihf pkg-config-arm-linux-gnueabihf
+          sudo apt-get install -y cmake pkg-config libsdl2-dev:armhf g++-arm-linux-gnueabihf
 
       - name: Configure and build
         run: |
+          export PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig
           cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr \
             -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
             -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++
