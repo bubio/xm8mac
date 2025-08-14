@@ -1,0 +1,49 @@
+name: Raspberry Pi OS armhf build
+
+on:
+  push:
+    branches:
+      - dev
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  pull_request:
+    types: [opened, synchronize]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  release:
+    types: [published]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross compile tools
+        run: |
+          sudo apt-get update
+          sudo dpkg --add-architecture armhf
+          sudo apt-get update
+          sudo apt-get install -y cmake libsdl2-dev:armhf g++-arm-linux-gnueabihf pkg-config-arm-linux-gnueabihf
+
+      - name: Configure and build
+        run: |
+          cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++
+          cmake --build build --target package -j 2
+          deb_file=$(ls build/xm8*armhf.deb)
+          mv "$deb_file" build/XM8_Linux_armhf.deb
+
+      - name: Upload build artifact deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM8_Linux_armhf.deb
+          path: build/XM8_Linux_armhf.deb
