@@ -10,7 +10,7 @@
 
 cmake_minimum_required(VERSION 3.15)
 
-foreach(_policy CMP0111 CMP0126 CMP0135)
+foreach(_policy CMP0111 CMP0126 CMP0135 CMP0175 CMP0177)
   if(POLICY ${_policy})
     cmake_policy(SET ${_policy} NEW)
     set(CMAKE_POLICY_DEFAULT_${_policy} NEW)
@@ -148,10 +148,9 @@ add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Builder/macOS/AppIcon.icns)
 if(CMAKE_STRIP)
   add_custom_command(
     TARGET ${BIN_TARGET} POST_BUILD
-    DEPENDS ${BIN_TARGET}
     COMMAND $<$<CONFIG:Release>:${CMAKE_STRIP}>
             $<$<CONFIG:MinSizeRel>:${CMAKE_STRIP}>
-    ARGS $<TARGET_FILE:${BIN_TARGET}>)
+            $<TARGET_FILE:${BIN_TARGET}>)
 endif()
 
 if(APPLE)
