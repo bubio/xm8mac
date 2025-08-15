@@ -58,13 +58,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 # find_package(Threads REQUIRED)
 
 
-# Find SDL2 library and add to linker flags
-if(NOT APPLE)
-  find_package(SDL2 REQUIRED)
-else()
-  # Dependencies must be included after Platforms.
-  include(Dependencies)
-endif()
+# Dependencies must be included after Platforms.
+include(Dependencies)
 
 # xBRZ
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Source/Filter/xBRZ)
@@ -163,7 +158,6 @@ if(APPLE)
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Builder/macOS/Info.plist"
   )
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13.0")
-  # option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
 
   install (TARGETS ${BIN_TARGET} DESTINATION ./)
 
