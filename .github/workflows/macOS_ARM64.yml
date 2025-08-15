@@ -36,10 +36,6 @@ jobs:
         with:
           xcode-version: '16.4'
 
-      - name: Install dependencies (Homebrew & CMake)
-        run: |
-          brew install cmake
-
       - name: Build XM8 macOS app
         run: |
           cd Builder/macOS

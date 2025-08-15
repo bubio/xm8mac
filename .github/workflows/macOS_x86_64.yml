@@ -31,14 +31,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Xcode 15.2
+      - name: Set up Xcode 16.4
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '15.2'
-
-      # - name: Install dependencies (Homebrew & CMake)
-      #   run: |
-      #     brew install cmake
+          xcode-version: '16.4'
 
       - name: Build XM8 macOS app
         run: |
