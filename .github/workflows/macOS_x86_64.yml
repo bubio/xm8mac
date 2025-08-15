@@ -36,9 +36,9 @@ jobs:
         with:
           xcode-version: '15.2'
 
-      - name: Install dependencies (Homebrew & CMake)
-        run: |
-          brew install cmake
+      # - name: Install dependencies (Homebrew & CMake)
+      #   run: |
+      #     brew install cmake
 
       - name: Build XM8 macOS app
         run: |
