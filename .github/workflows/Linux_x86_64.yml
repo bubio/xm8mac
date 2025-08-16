@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+      - main
     paths-ignore:
       - '*.md'
       - 'Documents/**'
@@ -55,3 +56,16 @@ jobs:
           name: XM8_Linux_x86_64.deb
           path: build/XM8_Linux_x86_64.deb
 
+      - name: Update Release rpm
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: build/XM8_Linux_x86_64.rpm
+          overwrite: true
+
+      - name: Update Release deb
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: build/XM8_Linux_x86_64.deb
+          overwrite: true

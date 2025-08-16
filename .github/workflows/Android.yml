@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+      - main
     paths-ignore:
       - '*.md'
       - 'Documents/**'
@@ -41,18 +42,11 @@ jobs:
       - name: Install NDK 23.2.8568313
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.2.8568313"
-
-      - name: Download SDL2 source
-        run: |
-          SDL_VERSION=2.32.8
-          curl -LO https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL2-$SDL_VERSION.zip
-          unzip SDL2-$SDL_VERSION.zip
-          mkdir -p Builder/Android/app/jni/SDL
-          cp -r SDL2-$SDL_VERSION/include Builder/Android/app/jni/SDL/
-          cp -r SDL2-$SDL_VERSION/src Builder/Android/app/jni/SDL/
-          mkdir -p Builder/Android/app/src/java/org/libsdl
-          cp -r SDL2-$SDL_VERSION/android-project/app/src/main/java/org/libsdl/app \
-             Builder/Android/app/src/java/org/libsdl/
+          
+      - name: Setup SDL2
+        shell: zsh
+        working-directory: Builder/Android
+        run: ./setup_sdl2.sh
 
       - name: Build with Gradle
         working-directory: Builder/Android
@@ -77,3 +71,10 @@ jobs:
         with:
           name: XM8_Android.apk
           path: Builder/Android/app/build/outputs/apk/release/XM8_Android.apk
+
+      - name: Update Release
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: Builder/Android/app/build/outputs/apk/release/XM8_Android.apk
+          overwrite: true

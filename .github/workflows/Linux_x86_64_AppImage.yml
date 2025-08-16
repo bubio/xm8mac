@@ -1,15 +1,9 @@
-name: macOS Build Arm64
+name: Linux x86_64 AppImage (dev branch)
 
 on:
   push:
     branches:
-      - dev
       - main
-    paths-ignore:
-      - '*.md'
-      - 'Documents/**'
-  pull_request:
-    types: [opened, synchronize]
     paths-ignore:
       - '*.md'
       - 'Documents/**'
@@ -25,33 +19,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-macos:
-    runs-on: macos-15
-
+  build:
+    runs-on: ubuntu-22.04
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Xcode 16.4
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.4'
+      - name: Install dependency
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
 
-      - name: Build XM8 macOS app
+      - name: Build XM8 Linux app
         run: |
-          cd Builder/macOS
-          ./dist_app.sh arm64
-          mv ../../build/xm8.dmg ../../build/XM8_macOS_AppleSilicon.dmg
+          cd Builder/Linux
+          ./AppImage.sh
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: XM8_macOS_AppleSilicon.dmg
-          path: build/*.dmg
+          name: XM8_Linux_x86_64.appimage
+          path: Builder/Linux/*.appimage
 
       - name: Update Release
         if: ${{ github.event_name == 'release' && !env.ACT }}
         uses: svenstaro/upload-release-action@v2
         with:
-          file: build/*.dmg
+          file: Builder/Linux/*.appimage
           overwrite: true
+

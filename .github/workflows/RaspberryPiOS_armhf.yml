@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+      - main
     paths-ignore:
       - '*.md'
       - 'Documents/**'
@@ -67,3 +68,10 @@ jobs:
         with:
           name: XM8_Linux_armhf.deb
           path: build/XM8_Linux_armhf.deb
+
+      - name: Update Release deb
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: build/XM8_Linux_armhf.deb
+          overwrite: true
