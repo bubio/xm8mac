@@ -75,10 +75,6 @@ include(Dependencies)
 # xBRZ
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Source/Filter/xBRZ)
 
-# Add macro definition
-add_definitions(-DSDL)
-add_definitions(-D_PC8801MA)
-
 # Set compile options
 add_compile_options(-Wall)
 add_compile_options(
@@ -144,6 +140,7 @@ set(SRCS
 
 set(BIN_TARGET "xm8")
 add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Builder/macOS/AppIcon.icns)
+target_compile_definitions(${BIN_TARGET} PRIVATE SDL _PC8801MA) 
 
 if(CMAKE_STRIP)
   add_custom_command(
@@ -167,7 +164,6 @@ if(APPLE)
       MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Builder/macOS/Info.plist"
   )
-  # set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13.0")
 
   install (TARGETS ${BIN_TARGET} DESTINATION ./)
 
@@ -181,7 +177,7 @@ if(APPLE)
 
 endif()
 
-set(CPACK On)
+option(ENABLE_PACKAGING "Enable CPack packaging" ON)
 
 # Set link options
 # if(APPLE)
@@ -209,7 +205,7 @@ endif()
 add_dependencies(${BIN_TARGET} SDL2)
 
 # Packaging                      
-if(CPACK)
+if(ENABLE_PACKAGING)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     string(TOLOWER ${PROJECT_NAME} project_name)
     set(CPACK_PACKAGE_NAME ${project_name})
@@ -249,7 +245,8 @@ if(CPACK)
     # -G DEB
     set(CPACK_PACKAGE_CONTACT "bubio")
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "PC-8801MA Emulator\neXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
+    # set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
     # -G RPM
