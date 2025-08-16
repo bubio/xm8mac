@@ -44,7 +44,6 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.2.8568313"
           
       - name: Setup SDL2
-        shell: zsh
         working-directory: Builder/Android
         run: ./setup_sdl2.sh
 
