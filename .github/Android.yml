@@ -1,4 +1,4 @@
-name: Android Build (macOS 15 ARM64 + Preinstall NDK)
+name: Android Build
 
 on:
   push:

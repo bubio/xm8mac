@@ -1,4 +1,4 @@
-name: Windows x86_64 (dev branch)
+name: Windows x86_64
 
 on:
   push:

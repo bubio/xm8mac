@@ -1,4 +1,4 @@
-name: Linux x86_64 AppImage (dev branch)
+name: Linux x86_64 AppImage
 
 on:
   push:
@@ -25,9 +25,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install dependency
-        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
 
       - name: Build XM8 Linux app
         run: |
