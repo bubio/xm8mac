@@ -53,5 +53,5 @@ jobs:
         if: ${{ github.event_name == 'release' && !env.ACT }}
         uses: svenstaro/upload-release-action@v2
         with:
-          file: build/*.dmg
+          file: build/XM8_macOS_Universal.dmg
           overwrite: true
