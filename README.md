@@ -37,8 +37,8 @@ http://retropc.net/pi/xm8/index.html
 
 | CPU           | 最小OSバージョン    | 実行ファイル                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | macOS 10.13 High Sierra | [x86_64版](https://github.com/bubio/xm8mac/releases/download/1.7.5/XM8_macOS_x86_64.dmg) |
-| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.5/XM8_macOS_AppleSilicon.dmg) |
+| x86_64        | macOS 10.13 High Sierra | [x86_64版](https://github.com/bubio/xm8mac/releases/download/1.7.6/XM8_macOS_Universal.dmg) |
+| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/download/1.7.6/XM8_macOS_Universal.dmg) |
 
 <br />
 
@@ -122,16 +122,11 @@ Builder/WindowsフォルダにVisual Studio 2022用のソリューションが�
 
 <br />
 
-SDL2のWindows (Visual C++ 32bit/64bit)向けライブラリ、ヘッダファイルをダウンロードします。
-https://www.libsdl.org
-
-ダウンロードするファイルは、releasesのAssetsの中から"SDL2-devel-x.xx.x-VC.zip"という名称のものを探してください。
-
-https://github.com/libsdl-org/SDL/releases
+Builder/Windowsフォルダにあるsetup_sdl2.ps1を実行すると、ビルドに必要なSDL2をダウンロードして適切な場所に配置します。
 
 <br />
 
-これを解凍してできるinclude, libをxm8の\SDLへ展開します。以下のようになります。
+以下のようになります。
 
 - Builder\Windows\SDL\include（インクルードファイル）
 - Builder\Windows\SDL\lib\x86（32bit向けライブラリ）
@@ -155,6 +150,8 @@ BIOS ROMファイルの置き場所は以下になります。
 ----
 
 Builder/Linuxフォルダにdeb, rpm, appimageパッケージを作成するスクリプトが入っています。
+
+ビルドに必要なライブラリは、dist_app.shを参照してください。
 
 ### deb or rpm
 ```shell
@@ -190,30 +187,19 @@ Builder/AndroidフォルダにAndroid Studio用のプロジェクトが入って
 
 <br />
 
-SDL2のソースファイルをダウンロードします。
-
-https://www.libsdl.org
+Builder/Androioフォルダにあるsetup_sdl2.shを実行すると、ビルドに必要なSDL2をダウンロードして適切な場所に配置します。
 
 <br />
 
-Builder/Android/app/jni/SDL
-
-にSDL2のsrcフォルダ、includeフォルダをコピーします。以下のようになります。
+以下のようになります。
 
 - Builder/Android/app/jni/SDL\include（インクルードファイル）
 - Builder/Android/app/jni/SDL\src（ソースファイル）
+- Builder/Android/app/src/java/org/libsdl/app（Javaソースファイル）
 
 <br />
 
-Builder/Android/app/src/java/org/libsdl
-
-にSDL2のandroid-project/app/src/main/java/org/libsdl/appフォルダをコピーします。以下のようになります。
-
-- Builder/Android/app/src/java/org/libsdl/app
-  - HIDDevice.java
-  - SDL.java
-    
-    ...
+Builder/AndroidをAndroid Studioで開いてビルドします。
 
 <br />
 
