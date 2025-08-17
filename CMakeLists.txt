@@ -60,16 +60,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 
 # Dependencies must be included after Platforms.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13")
-# --- Force using bundled SDL2 instead of system-installed one ---
-# Always (re)define these in the cache so previous CMake runs don't override us.
-set(XM8_SYSTEM_SDL2 OFF CACHE BOOL "Use system-installed SDL2" FORCE)
-set(XM8_STATIC_SDL2 OFF CACHE BOOL "Link SDL2 statically" FORCE)
-
-# Safety: if any path in Dependencies accidentally calls find_package(SDL2),
-# tell CMake to treat it as disabled so it won't pick up Homebrew/pkg-config.
-set(CMAKE_DISABLE_FIND_PACKAGE_SDL2 TRUE CACHE BOOL "Disable find_package(SDL2)" FORCE)
-
-message(STATUS "📦 SDL2: using bundled source (XM8_SYSTEM_SDL2=OFF)")
+if(APPLE)
+  # macOS: Build as bundle and use bundled SDL2 source by default
+  set(XM8_SYSTEM_SDL2 OFF CACHE BOOL "Use system-installed SDL2" FORCE)
+  set(XM8_STATIC_SDL2 OFF CACHE BOOL "Link SDL2 statically" FORCE)
+  message(STATUS "📦 SDL2: using bundled source")
+else()
+  # Linux: Use system-installed SDL2 by default
+  set(XM8_SYSTEM_SDL2 ON CACHE BOOL "Use system-installed SDL2" FORCE)
+  set(XM8_STATIC_SDL2 OFF CACHE BOOL "Link SDL2 statically" FORCE)
+  message(STATUS "📦 SDL2: using system-installed library")
+endif()
 include(Dependencies)
 
 # xBRZ
@@ -179,30 +180,8 @@ endif()
 
 option(ENABLE_PACKAGING "Enable CPack packaging" ON)
 
-# Set link options
-# if(APPLE)
-#   target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2 xbrz)
-# else()
-#   target_link_libraries(${BIN_TARGET} PRIVATE ${SDL2_LIBRARIES} xbrz)
-# endif()
-# Replace the line below with the specified block
-# target_link_libraries(${BIN_TARGET} PUBLIC ${SDL2_MAIN} xbrz)
-
-# Link SDL2 and xBRZ to xm8 target, and add include directories
-if(TARGET SDL2::SDL2)
-    target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2 xbrz)
-    target_include_directories(${BIN_TARGET} PRIVATE $<TARGET_PROPERTY:SDL2::SDL2,INTERFACE_INCLUDE_DIRECTORIES>)
-elseif(TARGET SDL2::SDL2-static)
-    target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2-static xbrz)
-    target_include_directories(${BIN_TARGET} PRIVATE $<TARGET_PROPERTY:SDL2::SDL2-static,INTERFACE_INCLUDE_DIRECTORIES>)
-endif()
-
-if(TARGET SDL2::SDL2main)
-    target_link_libraries(${BIN_TARGET} PRIVATE SDL2::SDL2main)
-endif()
-
-# Ensure SDL2 is built before xm8
-add_dependencies(${BIN_TARGET} SDL2)
+# Link SDL2 and xBRZ to xm8 target using interface target from Dependencies.cmake
+target_link_libraries(${BIN_TARGET} PRIVATE XM8::SDL xbrz)
 
 # Packaging                      
 if(ENABLE_PACKAGING)
