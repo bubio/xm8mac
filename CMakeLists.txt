@@ -229,28 +229,15 @@ if(ENABLE_PACKAGING)
       RENAME "${project_name}.png"
     )
 
-    # Install SDL2 shared libraries to /usr/local/lib/xm8 and set RPATH
-    install(FILES
-      ${SDL2_LIBRARIES}
-      DESTINATION /usr/local/lib/xm8
-    )
-    set_target_properties(${BIN_TARGET} PROPERTIES
-      INSTALL_RPATH "/usr/local/lib/xm8"
-    )
-    set(CPACK_RPM_PACKAGE_REQUIRES "")
-
-    # Disable automatic dependency resolution for DEB packages
-    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
-
     # -G DEB
     set(CPACK_PACKAGE_CONTACT "bubio")
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "PC-8801MA Emulator\neXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA")
-    # set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
     # -G RPM
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+    set(CPACK_RPM_PACKAGE_REQUIRES "SDL2")
 
     find_program(RPMBUILD rpmbuild)
     if(RPMBUILD)

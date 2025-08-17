@@ -32,6 +32,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependency
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+    
       - name: Build XM8 Linux app
         run: |
           cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
