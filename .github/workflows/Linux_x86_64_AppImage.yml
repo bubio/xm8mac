@@ -44,6 +44,6 @@ jobs:
         if: ${{ github.event_name == 'release' && !env.ACT }}
         uses: svenstaro/upload-release-action@v2
         with:
-          file: Builder/Linux/*.appimage
+          file: Builder/Linux/XM8_Linux_x86_64.appimage
           overwrite: true
 
