@@ -3,7 +3,7 @@ name: Linux arm64 AppImage
 on:
   push:
     branches:
-      - dev
+      - main
     paths-ignore:
       - '*.md'
       - 'Documents/**'

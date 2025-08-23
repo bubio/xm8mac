@@ -1,4 +1,4 @@
-name: Windows arm64
+name: Windows arm
 
 on:
   push:
@@ -44,31 +44,31 @@ jobs:
       - name: Setup Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
 
-      # ARM64 ビルド
-      - name: Build XM8 (ARM64)
-        run: msbuild Builder/Windows/XM8.sln /p:Configuration=Release /p:Platform=ARM64
+      # ARM ビルド
+      - name: Build XM8 (ARM)
+        run: msbuild Builder/Windows/XM8.sln /p:Configuration=Release /p:Platform=ARM
 
       - name: Collect Artifacts
         run: |
-          New-Item -ItemType Directory -Path artifacts_arm64 -Force | Out-Null
-          Copy-Item Builder/Windows/ARM64/Release/XM8.exe artifacts_arm64/ -Force
-          Copy-Item Builder/Windows/ARM64/Release/SDL2.dll artifacts_arm64/ -Force
+          New-Item -ItemType Directory -Path artifacts_arm -Force | Out-Null
+          Copy-Item Builder/Windows/ARM/Release/XM8.exe artifacts_arm/ -Force
+          Copy-Item Builder/Windows/ARM/Release/SDL2.dll artifacts_arm/ -Force
 
-      - name: Upload Artifacts (XM8_Windows_arm64)
+      - name: Upload Artifacts (XM8_Windows_arm)
         uses: actions/upload-artifact@v4
         with:
-          name: XM8_Windows_arm64
-          path: artifacts_arm64/
+          name: XM8_Windows_arm
+          path: artifacts_arm/
 
       - name: Package Windows Artifacts
         if: ${{ github.event_name == 'release' && !env.ACT }}
         shell: pwsh
         run: |
-          Compress-Archive -Path artifacts_arm64/* -DestinationPath XM8_Windows_arm64.zip -Force
+          Compress-Archive -Path artifacts_arm/* -DestinationPath XM8_Windows_arm.zip -Force
 
-      - name: Update Release arm64
+      - name: Update Release arm
         if: ${{ github.event_name == 'release' && !env.ACT }}
         uses: svenstaro/upload-release-action@v2
         with:
-          file: XM8_Windows_arm64.zip
+          file: XM8_Windows_arm.zip
           overwrite: true
