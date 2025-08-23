@@ -1,0 +1,49 @@
+name: Linux arm64 AppImage
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  release:
+    types: [published]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04-arm
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install dependency
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+        
+      - name: Build XM8 Linux app
+        run: |
+          cd Builder/Linux
+          ./AppImage_arm64.sh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM8_Linux_arm64.appimage
+          path: Builder/Linux/*.appimage
+
+      - name: Update Release
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: Builder/Linux/XM8_Linux_arm64.appimage
+          overwrite: true
+
