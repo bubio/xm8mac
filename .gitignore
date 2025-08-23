@@ -6,6 +6,7 @@ Builder/Linux/xm8_linux_x86_64.appimage
 linuxdeploy-x86_64.AppImage
 
 Builder/Windows/.vs
+Builder/Windows/XM8
 Builder/Windows/Debug
 Builder/Windows/Release
 Builder/Windows/SDL/include
