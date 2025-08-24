@@ -296,7 +296,7 @@
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(ProjectDir)SDL\lib\x86\SDL2.dll" "$(OutDir)" /i /s /y</Command>
+      <Command>xcopy "$(ProjectDir)SDL\lib\arm64\SDL2.dll" "$(OutDir)" /i /s /y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
