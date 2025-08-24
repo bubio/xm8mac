@@ -293,7 +293,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalDependencies>libcmt.lib;imm32.lib;$(ProjectDir)\SDL\lib\x86\SDL2.lib;$(ProjectDir)\SDL\lib\x86\SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
-      <ImageHasSafeExceptionHandlers>true</ImageHasSafeExceptionHandlers>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
     <PostBuildEvent>
       <Command>xcopy "$(ProjectDir)SDL\lib\x86\SDL2.dll" "$(OutDir)" /i /s /y</Command>
