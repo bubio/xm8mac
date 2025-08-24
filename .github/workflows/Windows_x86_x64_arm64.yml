@@ -52,6 +52,10 @@ jobs:
       - name: Build XM8 (Win32)
         run: msbuild Builder/Windows/XM8.sln /p:Configuration=Release /p:Platform=Win32
 
+      # ARM64 ビルド
+      - name: Build XM8 (ARM64)
+        run: msbuild Builder/Windows/XM8.sln /p:Configuration=Release /p:Platform=ARM64
+
       - name: Collect Artifacts
         run: |
           New-Item -ItemType Directory -Path artifacts_x64 -Force | Out-Null
@@ -60,6 +64,9 @@ jobs:
           New-Item -ItemType Directory -Path artifacts_Win32 -Force | Out-Null
           Copy-Item Builder/Windows/Win32/Release/XM8.exe artifacts_Win32/ -Force
           Copy-Item Builder/Windows/Win32/Release/SDL2.dll artifacts_Win32/ -Force
+          New-Item -ItemType Directory -Path artifacts_ARM64 -Force | Out-Null
+          Copy-Item Builder/Windows/ARM64/Release/XM8.exe artifacts_ARM64/ -Force
+          Copy-Item Builder/Windows/ARM64/Release/SDL2.dll artifacts_ARM64/ -Force
 
       - name: Upload Artifacts (XM8_Windows_x86_64)
         uses: actions/upload-artifact@v4
@@ -73,12 +80,19 @@ jobs:
           name: XM8_Windows_x86_32
           path: artifacts_Win32/
 
+      - name: Upload Artifacts (XM8_Windows_ARM64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM8_Windows_ARM64
+          path: artifacts_ARM64/
+
       - name: Package Windows Artifacts
         if: ${{ github.event_name == 'release' && !env.ACT }}
         shell: pwsh
         run: |
           Compress-Archive -Path artifacts_x64/* -DestinationPath XM8_Windows_x86_64.zip -Force
           Compress-Archive -Path artifacts_Win32/* -DestinationPath XM8_Windows_x86_32.zip -Force
+          Compress-Archive -Path artifacts_ARM64/* -DestinationPath XM8_Windows_ARM64.zip -Force
 
       - name: Update Release x86_64
         if: ${{ github.event_name == 'release' && !env.ACT }}
@@ -92,4 +106,11 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           file: XM8_Windows_x86_32.zip
+          overwrite: true
+
+      - name: Update Release ARM64
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: XM8_Windows_ARM64.zip
           overwrite: true
