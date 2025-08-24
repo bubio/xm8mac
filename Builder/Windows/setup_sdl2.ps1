@@ -57,7 +57,7 @@ Write-Host "Configuring build with CMake for ARM64..."
 Push-Location $buildDir
 Write-Host "Current directory:" (Get-Location)
 
-cmake ..\$srcDir -A ARM64
+cmake ..\$srcDir -A ARM64 -DSDL_LIBC=ON
 Write-Host "Building SDL2 for ARM64..."
 cmake --build . --config Release
 Pop-Location
