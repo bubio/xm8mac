@@ -15,12 +15,10 @@ $libArm64Dir = "$targetDir\lib\arm64"
 
 # 1. Download and extract SDL2 binary ZIP, then copy headers and libraries for x86/x64
 Write-Host "Downloading SDL2 $version..."
-Invoke-WebRequest $url -OutFile $zipName
-
 Write-Host "Extracting $zipName..."
 Expand-Archive $zipName -DestinationPath $tempDir -Force
 
-Write-Host "Creating target directories..."
+# Write-Host "Creating target directories..."
 New-Item -ItemType Directory -Path $includeDir -Force | Out-Null
 New-Item -ItemType Directory -Path $libX86Dir -Force | Out-Null
 New-Item -ItemType Directory -Path $libX64Dir -Force | Out-Null
@@ -49,12 +47,16 @@ Invoke-WebRequest $sourceUrl -OutFile $sourceZipName
 Write-Host "Extracting $sourceZipName..."
 Expand-Archive $sourceZipName -DestinationPath $tempDir -Force
 
+# Set source directory for CMake
+$srcDir = "SDL2-$version"
 $buildDir = "$tempDir\build"
 New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
 
 Write-Host "Configuring build with CMake for ARM64..."
 Push-Location $buildDir
-cmake .. -A ARM64
+Write-Host "Current directory:" (Get-Location)
+
+cmake ..\$srcDir -A ARM64
 Write-Host "Building SDL2 for ARM64..."
 cmake --build . --config Release
 Pop-Location
