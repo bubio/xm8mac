@@ -43,15 +43,25 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.2.8568313"
           
+      - name: Cache SDL2
+        id: cache-sdl2
+        uses: actions/cache@v4
+        with:
+          path: |
+            Builder/Android/app/jni/SDL
+            Builder/Android/app/src/main/java/org/libsdl
+          key: ${{ runner.os }}-android-sdl2-${{ hashFiles('Builder/Android/setup_sdl2.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-android-sdl2-
+
       - name: Setup SDL2
+        if: steps.cache-sdl2.outputs.cache-hit != 'true'
         working-directory: Builder/Android
         run: ./setup_sdl2.sh
 
       - name: Build with Gradle
         working-directory: Builder/Android
         run: |
-          # 今回は、Secrets が設定されいなければ署名なしのapkファイルが作成されるよう判定処理をいれています。
-          # 確実に署名させたいのであれば、判定処理を外すことで署名エラーとしてしまってもよいと思います。
           if [[ -n "${{ secrets.KEYSTORE_BASE64 }}" ]]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
             export KEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}"

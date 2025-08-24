@@ -32,8 +32,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # SDL2 のセットアップをスクリプトで実行
+      # SDL2 のセットアップをキャッシュし、必要ならスクリプトで実行
+      - name: Cache SDL2
+        id: cache-sdl2
+        uses: actions/cache@v4
+        with:
+          path: Builder/Windows/SDL2
+          key: ${{ runner.os }}-sdl2-${{ hashFiles('Builder/Windows/setup_sdl2.ps1') }}
+          restore-keys: |
+            ${{ runner.os }}-sdl2-
+
       - name: Setup SDL2
+        if: steps.cache-sdl2.outputs.cache-hit != 'true'
         shell: pwsh
         working-directory: Builder/Windows
         run: .\setup_sdl2.ps1
