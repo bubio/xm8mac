@@ -15,6 +15,7 @@ $libArm64Dir = "$targetDir\lib\arm64"
 
 # 1. Download and extract SDL2 binary ZIP, then copy headers and libraries for x86/x64
 Write-Host "Downloading SDL2 $version..."
+Invoke-WebRequest $url -OutFile $zipName
 Write-Host "Extracting $zipName..."
 Expand-Archive $zipName -DestinationPath $tempDir -Force
 
