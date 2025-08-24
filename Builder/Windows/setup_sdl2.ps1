@@ -24,7 +24,6 @@ New-Item -ItemType Directory -Path $includeDir -Force | Out-Null
 New-Item -ItemType Directory -Path $libX86Dir -Force | Out-Null
 New-Item -ItemType Directory -Path $libX64Dir -Force | Out-Null
 New-Item -ItemType Directory -Path $libArm64Dir -Force | Out-Null
-New-Item -ItemType Directory -Path "$targetDir\bin" -Force | Out-Null
 
 Write-Host "Copying include files..."
 Copy-Item "$tempDir\SDL2-$version\include\*" $includeDir -Recurse -Force
@@ -66,8 +65,9 @@ Write-Host "Copying ARM64 include files..."
 Copy-Item "$tempDir\SDL2-$version\include\*" $includeDir -Recurse -Force
 
 Write-Host "Copying ARM64 library files..."
+Copy-Item "$buildDir\Release\SDL2.dll" $libArm64Dir -Force
 Copy-Item "$buildDir\Release\SDL2.lib" $libArm64Dir -Force
-Copy-Item "$buildDir\Release\SDL2.dll" "$targetDir\bin\SDL2.dll" -Force
+Copy-Item "$buildDir\Release\SDL2main.lib" $libArm64Dir -Force
 
 Write-Host "Cleaning up source extraction..."
 Remove-Item $tempDir -Recurse -Force
