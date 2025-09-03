@@ -1,0 +1,95 @@
+name: Windows x86_64
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  pull_request:
+    types: [opened, synchronize]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  release:
+    types: [published]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # SDL2 のセットアップをスクリプトで実行
+      - name: Setup SDL2
+        shell: pwsh
+        working-directory: Builder/Windows
+        run: .\setup_sdl2.ps1
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # x64 ビルド
+      - name: Build XM8 (x64)
+        run: msbuild Builder/Windows/XM8.sln /p:Configuration=Release /p:Platform=x64
+
+      # Win32 ビルド
+      - name: Build XM8 (Win32)
+        run: msbuild Builder/Windows/XM8.sln /p:Configuration=Release /p:Platform=Win32
+
+      - name: Collect Artifacts
+        run: |
+          New-Item -ItemType Directory -Path artifacts_x64 -Force | Out-Null
+          Copy-Item Builder/Windows/x64/Release/XM8.exe artifacts_x64/ -Force
+          Copy-Item Builder/Windows/x64/Release/SDL2.dll artifacts_x64/ -Force
+          New-Item -ItemType Directory -Path artifacts_Win32 -Force | Out-Null
+          Copy-Item Builder/Windows/Win32/Release/XM8.exe artifacts_Win32/ -Force
+          Copy-Item Builder/Windows/Win32/Release/SDL2.dll artifacts_Win32/ -Force
+
+      - name: Upload Artifacts (XM8_Windows_x86_64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM8_Windows_x86_64
+          path: artifacts_x64/
+
+      - name: Upload Artifacts (XM8_Windows_x86_32)
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM8_Windows_x86_32
+          path: artifacts_Win32/
+
+      - name: Package Windows Artifacts
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        shell: pwsh
+        run: |
+          Compress-Archive -Path artifacts_x64/* -DestinationPath XM8_Windows_x86_64.zip -Force
+          Compress-Archive -Path artifacts_Win32/* -DestinationPath XM8_Windows_x86_32.zip -Force
+
+      - name: Update Release x86_64
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: XM8_Windows_x86_64.zip
+          overwrite: true
+
+      - name: Update Release x86_32
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: XM8_Windows_x86_32.zip
+          overwrite: true
