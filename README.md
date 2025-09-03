@@ -84,7 +84,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 
 - Homebrew
   
-  [Homebrew](https://brew.sh/index_ja)のインストールが必要です。
+  [Homebrew](https://brew.sh/)のインストールが必要です。
   cmakeなどビルドに必要なツールの取得に使用します。
 
 <br />
