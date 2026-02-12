@@ -61,6 +61,17 @@ int FIFO::read_not_remove(int pt)
 	}
 	return 0;
 }
+
+void FIFO::write_not_push(int pt, int d)
+{
+	if(pt >= 0 && pt < cnt) {
+		pt += wpt;
+		if(pt >= size) {
+			pt -= size;
+		}
+		buf[pt] = d;
+	}
+}
 int FIFO::count()
 {
 	return cnt;
@@ -103,6 +114,15 @@ bool FIFO::load_state(void *f)
 	cnt = state_fio->FgetInt32();
 	rpt = state_fio->FgetInt32();
 	wpt = state_fio->FgetInt32();
+	return true;
+}
+
+bool FIFO::process_state(void *f, bool loading)
+{
+	if(loading) {
+		return load_state(f);
+	}
+	save_state(f);
 	return true;
 }
 

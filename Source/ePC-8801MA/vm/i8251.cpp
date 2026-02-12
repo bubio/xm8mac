@@ -102,6 +102,8 @@ void I8251::write_io8(uint32 addr, uint32 data)
 			write_signals(&outputs_dtr, (data & 2) ? 0xffffffff : 0);
 			// rst/sbrk
 			write_signals(&outputs_rst, (data & 8) ? 0xffffffff : 0);
+			// rts
+			write_signals(&outputs_rts, (data & 0x20) ? 0xffffffff : 0);
 			// rxen
 			rxen = ((data & 4) != 0);
 			if(rxen && !recv_buffer->empty() && recv_id == -1) {
@@ -274,6 +276,15 @@ bool I8251::load_state(FILEIO* state_fio)
 	}
 	recv_id = state_fio->FgetInt32();
 	send_id = state_fio->FgetInt32();
+	return true;
+}
+
+bool I8251::process_state(FILEIO* state_fio, bool loading)
+{
+	if(loading) {
+		return load_state(state_fio);
+	}
+	save_state(state_fio);
 	return true;
 }
 

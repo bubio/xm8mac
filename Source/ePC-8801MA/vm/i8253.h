@@ -21,6 +21,11 @@
 #define SIG_I8253_GATE_1	4
 #define SIG_I8253_GATE_2	5
 
+enum {
+	INTEL_8253 = 0,
+	INTEL_8254,
+};
+
 class I8253 : public DEVICE
 {
 private:
@@ -69,6 +74,7 @@ public:
 			init_output_signals(&counter[i].outputs);
 			counter[i].freq = 0;
 		}
+		device_model = INTEL_8253;
 	}
 	~I8253() {}
 	
@@ -85,6 +91,7 @@ public:
 	}
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading);
 	
 	// unique functions
 	void set_context_ch0(DEVICE* device, int id, uint32 mask)
@@ -103,6 +110,7 @@ public:
 	{
 		counter[ch].freq = hz;
 	}
+	int device_model;
 };
 
 #endif

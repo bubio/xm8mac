@@ -37,6 +37,7 @@ private:
 	outputs_t outputs_txe;
 	outputs_t outputs_dtr;
 	outputs_t outputs_rst;
+	outputs_t outputs_rts;
 	
 	// buffer
 	FIFO *recv_buffer;
@@ -53,6 +54,7 @@ public:
 		init_output_signals(&outputs_txe);
 		init_output_signals(&outputs_dtr);
 		init_output_signals(&outputs_rst);
+		init_output_signals(&outputs_rts);
 	}
 	~I8251() {}
 	
@@ -66,6 +68,7 @@ public:
 	void event_callback(int event_id, int err);
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading);
 	
 	// unique functions
 	void set_context_out(DEVICE* device, int id)
@@ -88,6 +91,10 @@ public:
 	{
 		register_output_signal(&outputs_txe, device, id, mask);
 	}
+	void set_context_txempty(DEVICE* device, int id, uint32 mask)
+	{
+		set_context_txe(device, id, mask);
+	}
 	void set_context_dtr(DEVICE* device, int id, uint32 mask)
 	{
 		register_output_signal(&outputs_dtr, device, id, mask);
@@ -95,6 +102,14 @@ public:
 	void set_context_rst(DEVICE* device, int id, uint32 mask)
 	{
 		register_output_signal(&outputs_rst, device, id, mask);
+	}
+	void set_context_brk(DEVICE* device, int id, uint32 mask)
+	{
+		set_context_rst(device, id, mask);
+	}
+	void set_context_rts(DEVICE* device, int id, uint32 mask)
+	{
+		register_output_signal(&outputs_rts, device, id, mask);
 	}
 };
 
