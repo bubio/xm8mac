@@ -488,6 +488,11 @@ void UPD765A::event_callback(int event_id, int err)
 	}
 }
 
+void UPD765A::update_config()
+{
+	// reserved for optional noise device contexts
+}
+
 void UPD765A::set_irq(bool val)
 {
 #ifdef _FDC_DEBUG_LOG

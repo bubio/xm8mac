@@ -644,6 +644,32 @@ bool DISK::get_sector(int trk, int side, int index)
 	return true;
 }
 
+bool DISK::get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uint8* r, uint8* n, bool* mfm, int* length)
+{
+	if(!get_sector(trk, side, index)) {
+		return false;
+	}
+	if(c != NULL) {
+		*c = id[0];
+	}
+	if(h != NULL) {
+		*h = id[1];
+	}
+	if(r != NULL) {
+		*r = id[2];
+	}
+	if(n != NULL) {
+		*n = id[3];
+	}
+	if(mfm != NULL) {
+		*mfm = (density == 0x00);
+	}
+	if(length != NULL) {
+		*length = sector_size.sd;
+	}
+	return true;
+}
+
 void DISK::set_sector_info(uint8 *t)
 {
 	// header info
@@ -692,6 +718,16 @@ void DISK::set_crc_error(bool value)
 		t[8] = (t[8] & 0x0f) | (value ? 0xb0 : t[7]); // FIXME: always data crc error ?
 	}
 	crc_error = value;
+}
+
+void DISK::set_data_mark_missing()
+{
+	if(sector != NULL) {
+		uint8 *t = sector - 0x10;
+		t[8] = (t[8] & 0x0f) | 0xf0;
+		t[14] = t[15] = 0;
+	}
+	crc_error = false;
 }
 
 bool DISK::format_track(int trk, int side)
@@ -829,6 +865,17 @@ int DISK::get_rpm()
 		return (media_type == MEDIA_TYPE_2HD) ? 360 : 300;
 	} else {
 		return (drive_type == DRIVE_TYPE_2HD) ? 360 : 300;
+	}
+}
+
+int DISK::get_max_tracks()
+{
+	if(drive_type != DRIVE_TYPE_UNK) {
+		return (drive_type != DRIVE_TYPE_2D) ? 84 : 42;
+	} else if(inserted) {
+		return (media_type != MEDIA_TYPE_2D) ? 84 : 42;
+	} else {
+		return 84;
 	}
 }
 
