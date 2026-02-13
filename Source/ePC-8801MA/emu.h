@@ -58,17 +58,33 @@ public:
 	{
 		return key_status;
 	}
+	uint8* get_key_buffer()
+	{
+		return key_buffer();
+	}
 	uint32* joy_buffer()
 	{
 		return joy_status;
+	}
+	uint32* get_joy_buffer()
+	{
+		return joy_buffer();
 	}
 	int* mouse_buffer()
 	{
 		return mouse_status;
 	}
+	int* get_mouse_buffer()
+	{
+		return mouse_buffer();
+	}
 
 	// screen
 	scrntype* screen_buffer(int y);
+	scrntype* get_screen_buffer(int y)
+	{
+		return screen_buffer(y);
+	}
 #ifdef USE_CRT_FILTER
 	bool screen_skip_line;
 #endif

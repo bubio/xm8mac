@@ -143,6 +143,7 @@ public:
 	void event_callback(int event_id, int err);
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading);
 	
 	// unique function
 	void set_context_irq(DEVICE* device, int id, uint32 mask)
@@ -163,15 +164,33 @@ public:
 	}
 	DISK* get_disk_handler(int drv)
 	{
-		return disk[drv];
+		if(drv < 4) {
+			return disk[drv];
+		}
+		return NULL;
 	}
+	void open_disk(int drv, const _TCHAR* path, int bank);
 	void open_disk(int drv, _TCHAR path[], int bank);
 	void close_disk(int drv);
 	bool disk_inserted(int drv);
 	bool disk_inserted();	// current hdu
+	bool is_disk_inserted(int drv)
+	{
+		return disk_inserted(drv);
+	}
+	bool is_disk_inserted()	// current hdu
+	{
+		return disk_inserted();
+	}
 	bool disk_ejected(int drv);
 	bool disk_ejected();	// current hdu
+	void is_disk_protected(int drv, bool value);
+	bool is_disk_protected(int drv);
 	uint8 media_type(int drv);
+	uint8 get_media_type(int drv)
+	{
+		return media_type(drv);
+	}
 	void set_drive_type(int drv, uint8 type);
 	uint8 get_drive_type(int drv);
 	void set_drive_rpm(int drv, int rpm);

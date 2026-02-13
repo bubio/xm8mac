@@ -86,7 +86,7 @@ void I8255::write_io8(uint32 addr, uint32 data)
 					val &= ~BIT_INTR_A;
 				}
 				if(port[1].mode == 1) {
-					if(port[1].mode == 0xff) {
+					if(port[1].rmask == 0xff) {
 						val &= ~BIT_IBF_B;
 					} else {
 						val |= BIT_OBF_B;
@@ -189,7 +189,7 @@ void I8255::write_signal(int id, uint32 data, uint32 mask)
 			}
 		}
 		if(port[1].mode == 1) {
-			if(port[0].rmask == 0xff) {
+			if(port[1].rmask == 0xff) {
 				if(mask & BIT_STB_B) {
 					if((port[2].rreg & BIT_STB_B) && !(data & BIT_STB_B)) {
 						write_io8(2, port[2].wreg | BIT_IBF_B);
@@ -261,6 +261,15 @@ bool I8255::load_state(FILEIO* state_fio)
 		port[i].mode = state_fio->FgetUint8();
 		port[i].first = state_fio->FgetBool();
 	}
+	return true;
+}
+
+bool I8255::process_state(FILEIO* state_fio, bool loading)
+{
+	if(loading) {
+		return load_state(state_fio);
+	}
+	save_state(state_fio);
 	return true;
 }
 

@@ -164,6 +164,7 @@ public:
 		}
 	}
 	
+	void open(const _TCHAR* path, int bank);
 	void open(_TCHAR path[], int bank);
 	void close();
 	bool get_track(int trk, int side);
@@ -171,6 +172,10 @@ public:
 	bool get_sector(int trk, int side, int index);
 	void set_deleted(bool value);
 	void set_crc_error(bool value);
+	void set_data_crc_error(bool value)
+	{
+		set_crc_error(value);
+	}
 	
 	bool format_track(int trk, int side);
 	void insert_sector(uint8 c, uint8 h, uint8 r, uint8 n, bool deleted, bool crc_error, uint8 fill_data, int length);
@@ -178,7 +183,12 @@ public:
 	
 	int get_rpm();
 	int get_track_size();
+	double get_usec_per_track()
+	{
+		return get_usec_per_bytes(get_track_size());
+	}
 	double get_usec_per_bytes(int bytes);
+	int get_bytes_per_usec(double usec);
 	bool check_media_type();
 	
 	bool inserted;
@@ -218,6 +228,7 @@ public:
 	// state
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading);
 };
 
 #endif

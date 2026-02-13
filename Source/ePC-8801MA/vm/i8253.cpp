@@ -97,20 +97,22 @@ void I8253::write_io8(uint32 addr, uint32 data)
 		if((data & 0xc0) == 0xc0) {
 #ifdef HAS_I8254
 			// i8254 read-back command
-			for(ch = 0; ch < 3; ch++) {
-				uint8 bit = 2 << ch;
-				if(!(data & 0x10) && !counter[ch].status_latched) {
-					counter[ch].status = counter[ch].ctrl_reg & 0x3f;
-					if(counter[ch].prev_out) {
-						counter[ch].status |= 0x80;
+			if(device_model == INTEL_8254) {
+				for(ch = 0; ch < 3; ch++) {
+					uint8 bit = 2 << ch;
+					if(!(data & 0x10) && !counter[ch].status_latched) {
+						counter[ch].status = counter[ch].ctrl_reg & 0x3f;
+						if(counter[ch].prev_out) {
+							counter[ch].status |= 0x80;
+						}
+						if(counter[ch].null_count) {
+							counter[ch].status |= 0x40;
+						}
+						counter[ch].status_latched = true;
 					}
-					if(counter[ch].null_count) {
-						counter[ch].status |= 0x40;
+					if(!(data & 0x20) && !counter[ch].count_latched) {
+						latch_count(ch);
 					}
-					counter[ch].status_latched = true;
-				}
-				if(!(data & 0x20) && !counter[ch].count_latched) {
-					latch_count(ch);
 				}
 			}
 #endif
@@ -156,9 +158,11 @@ uint32 I8253::read_io8(uint32 addr)
 	case 1:
 	case 2:
 #ifdef HAS_I8254
-		if(counter[ch].status_latched) {
-			counter[ch].status_latched = false;
-			return counter[ch].status;
+		if(device_model == INTEL_8254) {
+			if(counter[ch].status_latched) {
+				counter[ch].status_latched = false;
+				return counter[ch].status;
+			}
 		}
 #endif
 		// if not latched, through current count
@@ -479,5 +483,14 @@ bool I8253::load_state(FILEIO* state_fio)
 		counter[i].prev_clk = state_fio->FgetUint32();
 	}
 	cpu_clocks = state_fio->FgetUint64();
+	return true;
+}
+
+bool I8253::process_state(FILEIO* state_fio, bool loading)
+{
+	if(loading) {
+		return load_state(state_fio);
+	}
+	save_state(state_fio);
 	return true;
 }

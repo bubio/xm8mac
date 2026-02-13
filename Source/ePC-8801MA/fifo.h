@@ -25,11 +25,13 @@ public:
 	void write(int val);
 	int read();
 	int read_not_remove(int pt);
+	void write_not_push(int pt, int d);
 	int count();
 	bool full();
 	bool empty();
 	void save_state(void *f);
 	bool load_state(void *f);
+	bool process_state(void *f, bool loading);
 };
 
 #endif
