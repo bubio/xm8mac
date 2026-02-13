@@ -224,6 +224,23 @@ DEVICE* VM::get_device(int id)
 	return NULL;
 }
 
+UPD765A* VM::get_floppy_disk_controller(int drv)
+{
+	if(drv == 0 || drv == 1) {
+		return pc88fdc_sub;
+	}
+	return NULL;
+}
+
+DISK* VM::get_floppy_disk_handler(int drv)
+{
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		return controller->get_disk_handler(drv & 1);
+	}
+	return NULL;
+}
+
 // ----------------------------------------------------------------------------
 // drive virtual machine
 // ----------------------------------------------------------------------------
@@ -324,6 +341,14 @@ int VM::sound_buffer_ptr()
 	return pc88event->sound_buffer_ptr();
 }
 
+void VM::set_sound_device_volume(int ch, int decibel_l, int decibel_r)
+{
+	// XM8 SDL core does not expose per-chip volume control in common format.
+	(void)ch;
+	(void)decibel_l;
+	(void)decibel_r;
+}
+
 // ----------------------------------------------------------------------------
 // notify key
 // ----------------------------------------------------------------------------
@@ -337,23 +362,85 @@ void VM::key_up(int code)
 {
 }
 
+bool VM::get_caps_locked()
+{
+	return pc88->get_caps_locked();
+}
+
+bool VM::get_kana_locked()
+{
+	return pc88->get_kana_locked();
+}
+
 // ----------------------------------------------------------------------------
 // user interface
 // ----------------------------------------------------------------------------
 
 void VM::open_disk(int drv, _TCHAR* file_path, int bank)
 {
-	pc88fdc_sub->open_disk(drv, file_path, bank);
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		controller->open_disk(drv & 1, file_path, bank);
+	}
 }
 
 void VM::close_disk(int drv)
 {
-	pc88fdc_sub->close_disk(drv);
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		controller->close_disk(drv & 1);
+	}
 }
 
 bool VM::disk_inserted(int drv)
 {
-	return pc88fdc_sub->disk_inserted(drv);
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		return controller->disk_inserted(drv & 1);
+	}
+	return false;
+}
+
+bool VM::is_floppy_disk_connected(int drv)
+{
+	return (get_floppy_disk_handler(drv) != NULL);
+}
+
+void VM::is_floppy_disk_protected(int drv, bool value)
+{
+	DISK* handler = get_floppy_disk_handler(drv);
+	if(handler != NULL) {
+		handler->write_protected = value;
+	}
+}
+
+bool VM::is_floppy_disk_protected(int drv)
+{
+	DISK* handler = get_floppy_disk_handler(drv);
+	if(handler != NULL) {
+		return handler->write_protected;
+	}
+	return false;
+}
+
+uint32 VM::is_floppy_disk_accessed()
+{
+	uint32 status = 0;
+	UPD765A* controller = get_floppy_disk_controller(0);
+	if(controller != NULL) {
+		status |= (uint32)(controller->read_signal(0) & 0x03);
+	}
+	return status;
+}
+
+uint32 VM::floppy_disk_indicator_color()
+{
+	UPD765A* controller = get_floppy_disk_controller(0);
+	if(controller == NULL) {
+		return 0;
+	}
+	return ((controller->get_drive_type(0) == DRIVE_TYPE_2HD) ? 1 : 0) |
+		   ((controller->get_drive_type(1) == DRIVE_TYPE_2HD) ? 2 : 0);
 }
 
 void VM::play_tape(_TCHAR* file_path)
@@ -374,6 +461,28 @@ void VM::close_tape()
 bool VM::tape_inserted()
 {
 	return pc88->tape_inserted();
+}
+
+void VM::open_compact_disc(int drv, const _TCHAR* file_path)
+{
+	(void)drv;
+	(void)file_path;
+}
+
+void VM::close_compact_disc(int drv)
+{
+	(void)drv;
+}
+
+bool VM::is_compact_disc_inserted(int drv)
+{
+	(void)drv;
+	return false;
+}
+
+uint32 VM::is_compact_disc_accessed()
+{
+	return 0;
 }
 
 bool VM::now_skip()

@@ -17,8 +17,9 @@
 #define EVENT_LOST	2
 #define EVENT_RESULT7	3
 #define EVENT_INDEX	4
-#define EVENT_SEEK	5
-#define EVENT_UNLOAD	9
+#define EVENT_SEEK_STEP	5
+#define EVENT_SEEK	9
+#define EVENT_UNLOAD	13
 
 #define PHASE_IDLE	0
 #define PHASE_CMD	1
@@ -140,6 +141,11 @@
 			cancel_event(this, seek_id[d]); \
 			seek_id[d] = -1; \
 		} \
+		if(seek_step_id[d] != -1) { \
+			cancel_event(this, seek_step_id[d]); \
+			seek_step_id[d] = -1; \
+		} \
+		seek_step_remain[d] = 0; \
 		if(head_unload_id[d] != -1) { \
 			cancel_event(this, head_unload_id[d]); \
 			head_unload_id[d] = -1; \
@@ -177,6 +183,7 @@ void UPD765A::initialize()
 	
 	// initialize fdc
 	memset(fdc, 0, sizeof(fdc));
+	memset(cur_track, 0, sizeof(cur_track));
 	memset(head_load, 0, sizeof(head_load));
 	memset(buffer, 0, sizeof(buffer));
 	
@@ -186,6 +193,8 @@ void UPD765A::initialize()
 	bufptr = buffer; // temporary
 	phase_id = drq_id = lost_id = result7_id = -1;
 	seek_id[0] = seek_id[1] = seek_id[2] = seek_id[3] = -1;
+	seek_step_id[0] = seek_step_id[1] = seek_step_id[2] = seek_step_id[3] = -1;
+	seek_step_remain[0] = seek_step_remain[1] = seek_step_remain[2] = seek_step_remain[3] = 0;
 	head_unload_id[0] = head_unload_id[1] = head_unload_id[2] = head_unload_id[3] = -1;
 	head_unload_time = 0;
 	no_dma_mode = false;
@@ -225,8 +234,14 @@ void UPD765A::reset()
 //	CANCEL_EVENT();
 	phase_id = drq_id = lost_id = result7_id = -1;
 	seek_id[0] = seek_id[1] = seek_id[2] = seek_id[3] = -1;
+	seek_step_id[0] = seek_step_id[1] = seek_step_id[2] = seek_step_id[3] = -1;
+	seek_step_remain[0] = seek_step_remain[1] = seek_step_remain[2] = seek_step_remain[3] = 0;
 	head_unload_id[0] = head_unload_id[1] = head_unload_id[2] = head_unload_id[3] = -1;
 	head_load[0] = head_load[1] = head_load[2] = head_load[3] = false;
+	cur_track[0] = fdc[0].track;
+	cur_track[1] = fdc[1].track;
+	cur_track[2] = fdc[2].track;
+	cur_track[3] = fdc[3].track;
 	
 	set_irq(false);
 	set_drq(false);
@@ -515,8 +530,31 @@ void UPD765A::event_callback(int event_id, int err)
 			write_signals(&outputs_index, now_index ? 0xffffffff : 0);
 			prev_index = now_index;
 		}
+	} else if(event_id >= EVENT_SEEK_STEP && event_id < EVENT_SEEK_STEP + 4) {
+		int drv = event_id - EVENT_SEEK_STEP;
+		if(cur_track[drv] < fdc[drv].track) {
+			cur_track[drv]++;
+		} else if(cur_track[drv] > fdc[drv].track) {
+			cur_track[drv]--;
+		}
+		if(seek_step_remain[drv] > 0) {
+			seek_step_remain[drv]--;
+			if(d_noise_seek != NULL) {
+				d_noise_seek->play();
+			}
+		}
+		if((cur_track[drv] == fdc[drv].track || seek_step_remain[drv] <= 0) && seek_step_id[drv] != -1) {
+			cancel_event(this, seek_step_id[drv]);
+			seek_step_id[drv] = -1;
+		}
 	} else if(event_id >= EVENT_SEEK && event_id < EVENT_SEEK + 4) {
 		int drv = event_id - EVENT_SEEK;
+		if(seek_step_id[drv] != -1) {
+			cancel_event(this, seek_step_id[drv]);
+			seek_step_id[drv] = -1;
+		}
+		seek_step_remain[drv] = 0;
+		cur_track[drv] = fdc[drv].track;
 		seek_id[drv] = -1;
 		seek_event(drv);
 	} else if(event_id >= EVENT_UNLOAD && event_id < EVENT_UNLOAD + 4) {
@@ -692,16 +730,14 @@ void UPD765A::cmd_sence_intstat()
 uint8 UPD765A::get_devstat(int drv)
 {
 	if(drv >= MAX_DRIVE) {
-		return 0x80 | drv;
+		return ST3_FT | drv;
 	}
-#ifdef SDL
-	if(!disk[drv]->inserted && !force_ready) {
-#else
-	if(!disk[drv]->inserted) {
-#endif // SDL
-		return drv;
-	}
-	return 0x28 | drv | (fdc[drv].track ? 0 : 0x10) | ((fdc[drv].track & 1) ? 0x04 : 0) | (disk[drv]->write_protected ? 0x40 : 0);
+	return drv |
+	       ((cur_track[drv] & 1) ? ST3_HD : 0) |
+	       ST3_TS |
+	       (cur_track[drv] ? 0 : ST3_T0) |
+	       ((force_ready || disk[drv]->inserted) ? ST3_RY : 0) |
+	       (disk[drv]->write_protected ? ST3_WP : 0);
 }
 
 void UPD765A::cmd_seek()
@@ -733,12 +769,15 @@ void UPD765A::cmd_recalib()
 void UPD765A::seek(int drv, int trk)
 {
 	// get distance
-	int prev_track = fdc[drv].track;
-	int seektime = 32 - 2 * step_rate_time;
+	int distance = abs(trk - cur_track[drv]);
+	int steptime = 32 - 2 * step_rate_time;
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
-		seektime /= 2;
+		steptime /= 2;
 	}
-	seektime = (trk == fdc[drv].track) ? 120 : seektime * abs(trk - fdc[drv].track) + 500; //usec
+	if(steptime <= 0) {
+		steptime = 1;
+	}
+	int seektime = (distance == 0) ? 120 : steptime * distance + 500; // usec
 	
 	if(drv >= MAX_DRIVE) {
 		// invalid drive number
@@ -746,20 +785,33 @@ void UPD765A::seek(int drv, int trk)
 		set_irq(true);
 	} else {
 		fdc[drv].track = trk;
-		if(prev_track != trk && d_noise_seek != NULL) {
+#ifdef UPD765A_DONT_WAIT_SEEK
+		if(distance > 0 && d_noise_seek != NULL) {
 			d_noise_seek->play();
 		}
-#ifdef UPD765A_DONT_WAIT_SEEK
+		cur_track[drv] = fdc[drv].track;
 		seek_event(drv);
 #else
+		if(seek_step_id[drv] != -1) {
+			cancel_event(this, seek_step_id[drv]);
+		}
 		if(seek_id[drv] != -1) {
 			cancel_event(this, seek_id[drv]);
 		}
+		seek_step_id[drv] = -1;
+		seek_step_remain[drv] = 0;
 #ifdef SDL
 		if (config.ignore_crc) {
 			seektime = 100;
+			distance = 0;
 		}
 #endif // SDL
+		if(distance > 0) {
+			seek_step_remain[drv] = distance;
+			register_event(this, EVENT_SEEK_STEP + drv, steptime, true, &seek_step_id[drv]);
+		} else {
+			cur_track[drv] = fdc[drv].track;
+		}
 		register_event(this, EVENT_SEEK + drv, seektime, false, &seek_id[drv]);
 		seekstat |= 1 << drv;
 #endif
@@ -1757,7 +1809,7 @@ void UPD765A::set_drive_mfm(int drv, bool mfm)
 	}
 }
 
-#define STATE_VERSION	2
+#define STATE_VERSION	4
 
 void UPD765A::save_state(FILEIO* state_fio)
 {
@@ -1801,6 +1853,9 @@ void UPD765A::save_state(FILEIO* state_fio)
 	state_fio->FputInt32(lost_id);
 	state_fio->FputInt32(result7_id);
 	state_fio->Fwrite(seek_id, sizeof(seek_id), 1);
+	state_fio->Fwrite(seek_step_id, sizeof(seek_step_id), 1);
+	state_fio->Fwrite(seek_step_remain, sizeof(seek_step_remain), 1);
+	state_fio->Fwrite(cur_track, sizeof(cur_track), 1);
 	state_fio->FputBool(force_ready);
 	state_fio->FputBool(reset_signal);
 	state_fio->FputBool(prev_index);
@@ -1858,6 +1913,25 @@ bool UPD765A::load_state(FILEIO* state_fio)
 	lost_id = state_fio->FgetInt32();
 	result7_id = state_fio->FgetInt32();
 	state_fio->Fread(seek_id, sizeof(seek_id), 1);
+	if(state_version >= 3) {
+		state_fio->Fread(seek_step_id, sizeof(seek_step_id), 1);
+		state_fio->Fread(seek_step_remain, sizeof(seek_step_remain), 1);
+		if(state_version >= 4) {
+			state_fio->Fread(cur_track, sizeof(cur_track), 1);
+		} else {
+			cur_track[0] = fdc[0].track;
+			cur_track[1] = fdc[1].track;
+			cur_track[2] = fdc[2].track;
+			cur_track[3] = fdc[3].track;
+		}
+	} else {
+		seek_step_id[0] = seek_step_id[1] = seek_step_id[2] = seek_step_id[3] = -1;
+		seek_step_remain[0] = seek_step_remain[1] = seek_step_remain[2] = seek_step_remain[3] = 0;
+		cur_track[0] = fdc[0].track;
+		cur_track[1] = fdc[1].track;
+		cur_track[2] = fdc[2].track;
+		cur_track[3] = fdc[3].track;
+	}
 	force_ready = state_fio->FgetBool();
 	reset_signal = state_fio->FgetBool();
 	prev_index = state_fio->FgetBool();

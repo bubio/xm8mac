@@ -43,11 +43,9 @@ private:
 		int mode;
 		bool delay;
 		bool start;
-#ifdef HAS_I8254
 		bool null_count;
 		bool status_latched;
 		uint8 status;
-#endif
 		// constant clock
 		uint64 freq;
 		int register_id;

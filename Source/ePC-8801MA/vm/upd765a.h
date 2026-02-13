@@ -51,6 +51,7 @@ private:
 		int next_trans_position;
 		uint32 prev_clock;
 	} fdc[4];
+	uint8 cur_track[4];
 	bool head_load[4];
 	DISK* disk[4];
 	
@@ -71,7 +72,8 @@ private:
 	uint8 buffer[0x8000];
 	int count;
 	int event_phase;
-	int phase_id, drq_id, lost_id, result7_id, seek_id[4], head_unload_id[4];
+	int phase_id, drq_id, lost_id, result7_id, seek_id[4], seek_step_id[4], head_unload_id[4];
+	int seek_step_remain[4];
 	bool force_ready;
 	bool reset_signal;
 	bool prev_index;

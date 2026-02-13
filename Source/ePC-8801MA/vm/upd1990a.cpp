@@ -19,6 +19,7 @@ void UPD1990A::initialize()
 	
 	// register events
 #ifdef SDL
+	// Keep period under the SDL event manager's long-loop edge case at high CPU clocks.
 	register_event(this, EVENT_1SEC, 100000.0, true, &register_id_1sec);
 	event_count = 0;
 #else
@@ -169,6 +170,7 @@ void UPD1990A::write_signal(int id, uint32 data, uint32 mask)
 					cancel_event(this, register_id_1sec);
 #ifdef SDL
 					register_event(this, EVENT_1SEC, 100000.0, true, &register_id_1sec);
+					event_count = 0;
 #else
 					register_event(this, EVENT_1SEC, 1000000.0, true, &register_id_1sec);
 #endif // SDL
@@ -200,12 +202,11 @@ void UPD1990A::event_callback(int event_id, int err)
 	if(event_id == EVENT_1SEC) {
 #ifdef SDL
 		event_count++;
-		if (event_count < 10) {
+		if(event_count < 10) {
 			return;
 		}
 		event_count = 0;
 #endif // SDL
-
 		if(cur_time.initialized) {
 			if(!hold) {
 				cur_time.increment();
@@ -281,7 +282,12 @@ bool UPD1990A::load_state(FILEIO* state_fio)
 #endif
 
 	// version 1.60
+#ifdef SDL
 	adjust_event(register_id_1sec, 100000.0);
+	event_count = 0;
+#else
+	adjust_event(register_id_1sec, 1000000.0);
+#endif // SDL
 
 	return true;
 }

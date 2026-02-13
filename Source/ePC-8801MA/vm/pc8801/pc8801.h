@@ -116,6 +116,7 @@ class PC80S31K;
 #endif // SDL
 class UPD765A;
 class NOISE;
+class DISK;
 
 #ifdef SUPPORT_PC88_PCG8100
 class I8253;
@@ -166,6 +167,9 @@ protected:
 	
 	int boot_mode;
 	
+	UPD765A* get_floppy_disk_controller(int drv);
+	DISK* get_floppy_disk_handler(int drv);
+	
 public:
 	// ----------------------------------------
 	// initialize
@@ -182,6 +186,10 @@ public:
 	void reset();
 	void run();
 	double frame_rate();
+	double get_frame_rate()
+	{
+		return frame_rate();
+	}
 	
 #ifdef USE_DEBUGGER
 	// debugger
@@ -196,24 +204,84 @@ public:
 	void initialize_sound(int rate, int samples);
 	uint16* create_sound(int* extra_frames);
 	int sound_buffer_ptr();
+	int get_sound_buffer_ptr()
+	{
+		return sound_buffer_ptr();
+	}
+	void set_sound_device_volume(int ch, int decibel_l, int decibel_r);
 	
 	// notify key
 	void key_down(int code, bool repeat);
 	void key_up(int code);
+	bool get_caps_locked();
+	bool get_kana_locked();
 	
 	// user interface
 	void open_disk(int drv, _TCHAR* file_path, int bank);
+	void open_floppy_disk(int drv, const _TCHAR* file_path, int bank)
+	{
+		open_disk(drv, const_cast<_TCHAR*>(file_path), bank);
+	}
 	void close_disk(int drv);
+	void close_floppy_disk(int drv)
+	{
+		close_disk(drv);
+	}
 	bool disk_inserted(int drv);
+	bool is_floppy_disk_connected(int drv);
+	bool is_floppy_disk_inserted(int drv)
+	{
+		return disk_inserted(drv);
+	}
+	void is_floppy_disk_protected(int drv, bool value);
+	bool is_floppy_disk_protected(int drv);
+	uint32 is_floppy_disk_accessed();
+	uint32 floppy_disk_indicator_color();
 	void play_tape(_TCHAR* file_path);
+	void play_tape(int drv, const _TCHAR* file_path)
+	{
+		(void)drv;
+		play_tape(const_cast<_TCHAR*>(file_path));
+	}
 	void rec_tape(_TCHAR* file_path);
+	void rec_tape(int drv, const _TCHAR* file_path)
+	{
+		(void)drv;
+		rec_tape(const_cast<_TCHAR*>(file_path));
+	}
 	void close_tape();
+	void close_tape(int drv)
+	{
+		(void)drv;
+		close_tape();
+	}
 	bool tape_inserted();
+	bool is_tape_inserted(int drv)
+	{
+		(void)drv;
+		return tape_inserted();
+	}
+	void open_compact_disc(int drv, const _TCHAR* file_path);
+	void close_compact_disc(int drv);
+	bool is_compact_disc_inserted(int drv);
+	uint32 is_compact_disc_accessed();
 	bool now_skip();
+	bool is_frame_skippable()
+	{
+		return now_skip();
+	}
 	
 	void update_config();
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading)
+	{
+		if(loading) {
+			return load_state(state_fio);
+		}
+		save_state(state_fio);
+		return true;
+	}
 	
 	// ----------------------------------------
 	// for each device

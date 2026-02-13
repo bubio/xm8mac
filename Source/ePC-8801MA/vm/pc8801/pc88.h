@@ -278,6 +278,7 @@ public:
 #endif
 	
 	uint32 read_dma_data8(uint32 addr);
+	void write_dma_data8(uint32 addr, uint32 data);
 	void write_dma_io8(uint32 addr, uint32 data);
 	
 	void write_signal(int id, uint32 data, uint32 mask);
@@ -290,8 +291,24 @@ public:
 #endif // SDL
 	uint32 intr_ack();
 	void intr_ei();
+	uint32 get_intr_ack()
+	{
+		return intr_ack();
+	}
+	void notify_intr_ei()
+	{
+		intr_ei();
+	}
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading)
+	{
+		if(loading) {
+			return load_state(state_fio);
+		}
+		save_state(state_fio);
+		return true;
+	}
 	
 	// unique functions
 	void set_context_cpu(Z80* device)
@@ -348,6 +365,14 @@ public:
 	}
 #endif
 	void key_down(int code, bool repeat);
+	bool get_caps_locked()
+	{
+		return key_caps != 0;
+	}
+	bool get_kana_locked()
+	{
+		return key_kana != 0;
+	}
 	
 	void play_tape(_TCHAR* file_path);
 	void rec_tape(_TCHAR* file_path);
@@ -356,7 +381,15 @@ public:
 	{
 		return (cmt_play || cmt_rec);
 	}
+	bool is_tape_inserted()
+	{
+		return tape_inserted();
+	}
 	bool now_skip();
+	bool is_frame_skippable()
+	{
+		return now_skip();
+	}
 	
 	void draw_screen();
 
@@ -390,6 +423,22 @@ public:
 	int get_m1_wait(int pattern, uint32 addr);
 	void create_pattern(int pattern, bool read);
 	void update_memmap(int pattern, bool read);
+	void update_low_read()
+	{
+		update_memmap(-1, true);
+	}
+	void update_low_read_sub()
+	{
+		update_memmap(-1, true);
+	}
+	void update_low_write()
+	{
+		update_memmap(-1, false);
+	}
+	void update_low_write_sub()
+	{
+		update_memmap(-1, false);
+	}
 	void insert_gvram_wait(int index, int *wait);
 	uint32 port30_in();
 	void port31_out(uint8 mod);
