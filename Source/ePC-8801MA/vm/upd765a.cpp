@@ -857,8 +857,8 @@ void UPD765A::cmd_write_data()
 		if(result) {
 			shift_to_result7();
 		} else {
-			int length = 0x80 << (id[3] & 7);
-			if(!(id[3] & 7)) {
+			int length = 0x80 << min((int)id[3], 7);
+			if(id[3] == 0) {
 				length = __min(dtl, 0x80);
 				memset(buffer + length, 0, 0x80 - length);
 			}
@@ -961,7 +961,7 @@ void UPD765A::cmd_read_diagnostic()
 		read_diagnostic();
 		break;
 	case PHASE_READ:
-		if(result) {
+		if(result & ~ST1_ND) {
 			shift_to_result7();
 			break;
 		}
@@ -977,7 +977,7 @@ void UPD765A::cmd_read_diagnostic()
 		break;
 	case PHASE_TIMER:
 //		result = ST0_AT | ST1_EN;
-		result = ST1_EN;
+		result |= ST1_EN;
 		shift_to_result7();
 		break;
 	}
@@ -1006,7 +1006,7 @@ void UPD765A::read_data(bool deleted, bool scan)
 		REGISTER_PHASE_EVENT(PHASE_TIMER, 100000);
 		return;
 	}
-	int length = (id[3] & 7) ? (0x80 << (id[3] & 7)) : (__min(dtl, 0x80));
+	int length = (id[3] != 0) ? (0x80 << min((int)id[3], 7)) : (__min(dtl, 0x80));
 	if(!scan) {
 		shift_to_read(length);
 	} else {
@@ -1051,7 +1051,7 @@ void UPD765A::read_diagnostic()
 	memcpy(buffer + disk[drv]->get_track_size() - disk[drv]->data_position[0], disk[drv]->track, disk[drv]->data_position[0]);
 	fdc[drv].next_trans_position = disk[drv]->data_position[0];
 	
-	shift_to_read(0x80 << (id[3] & 7));
+	shift_to_read(0x80 << min((int)id[3], 7));
 	return;
 }
 
@@ -1639,7 +1639,7 @@ void UPD765A::open_disk(int drv, const _TCHAR* path, int bank)
 			emu->out_debug_log("FDC: Disk Changed (Drive=%d)\n", drv);
 #endif
 			if(raise_irq_when_media_changed) {
-				fdc[drv].result = (drv & DRIVE_MASK) | ST0_AI;
+				fdc[drv].result = (drv & DRIVE_MASK) | ST0_AI | ST0_NR;
 				set_irq(true);
 			}
 		}
