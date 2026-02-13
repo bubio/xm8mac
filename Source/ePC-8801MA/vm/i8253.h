@@ -75,6 +75,7 @@ public:
 			counter[i].freq = 0;
 		}
 		device_model = INTEL_8253;
+		set_device_name(_T("8253 PIT"));
 	}
 	~I8253() {}
 	
