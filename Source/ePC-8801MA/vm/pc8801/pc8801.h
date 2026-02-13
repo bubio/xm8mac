@@ -116,6 +116,7 @@ class PC80S31K;
 #endif // SDL
 class UPD765A;
 class NOISE;
+class DISK;
 
 #ifdef SUPPORT_PC88_PCG8100
 class I8253;
@@ -165,6 +166,9 @@ protected:
 	PC88* pc88;
 	
 	int boot_mode;
+	
+	UPD765A* get_floppy_disk_controller(int drv);
+	DISK* get_floppy_disk_handler(int drv);
 	
 public:
 	// ----------------------------------------

@@ -224,6 +224,23 @@ DEVICE* VM::get_device(int id)
 	return NULL;
 }
 
+UPD765A* VM::get_floppy_disk_controller(int drv)
+{
+	if(drv == 0 || drv == 1) {
+		return pc88fdc_sub;
+	}
+	return NULL;
+}
+
+DISK* VM::get_floppy_disk_handler(int drv)
+{
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		return controller->get_disk_handler(drv & 1);
+	}
+	return NULL;
+}
+
 // ----------------------------------------------------------------------------
 // drive virtual machine
 // ----------------------------------------------------------------------------
@@ -353,52 +370,69 @@ bool VM::get_kana_locked()
 
 void VM::open_disk(int drv, _TCHAR* file_path, int bank)
 {
-	pc88fdc_sub->open_disk(drv, file_path, bank);
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		controller->open_disk(drv & 1, file_path, bank);
+	}
 }
 
 void VM::close_disk(int drv)
 {
-	pc88fdc_sub->close_disk(drv);
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		controller->close_disk(drv & 1);
+	}
 }
 
 bool VM::disk_inserted(int drv)
 {
-	return pc88fdc_sub->disk_inserted(drv);
+	UPD765A* controller = get_floppy_disk_controller(drv);
+	if(controller != NULL) {
+		return controller->disk_inserted(drv & 1);
+	}
+	return false;
 }
 
 bool VM::is_floppy_disk_connected(int drv)
 {
-	if(pc88fdc_sub == NULL) {
-		return false;
-	}
-	return (drv >= 0 && drv < 2 && pc88fdc_sub->get_disk_handler(drv) != NULL);
+	return (get_floppy_disk_handler(drv) != NULL);
 }
 
 void VM::is_floppy_disk_protected(int drv, bool value)
 {
-	pc88fdc_sub->is_disk_protected(drv, value);
+	DISK* handler = get_floppy_disk_handler(drv);
+	if(handler != NULL) {
+		handler->write_protected = value;
+	}
 }
 
 bool VM::is_floppy_disk_protected(int drv)
 {
-	return pc88fdc_sub->is_disk_protected(drv);
+	DISK* handler = get_floppy_disk_handler(drv);
+	if(handler != NULL) {
+		return handler->write_protected;
+	}
+	return false;
 }
 
 uint32 VM::is_floppy_disk_accessed()
 {
-	if(pc88fdc_sub == NULL) {
-		return 0;
+	uint32 status = 0;
+	UPD765A* controller = get_floppy_disk_controller(0);
+	if(controller != NULL) {
+		status |= (uint32)(controller->read_signal(0) & 0x03);
 	}
-	return (uint32)(pc88fdc_sub->read_signal(0) & 0x03);
+	return status;
 }
 
 uint32 VM::floppy_disk_indicator_color()
 {
-	if(pc88fdc_sub == NULL) {
+	UPD765A* controller = get_floppy_disk_controller(0);
+	if(controller == NULL) {
 		return 0;
 	}
-	return ((pc88fdc_sub->get_drive_type(0) == DRIVE_TYPE_2HD) ? 1 : 0) |
-		   ((pc88fdc_sub->get_drive_type(1) == DRIVE_TYPE_2HD) ? 2 : 0);
+	return ((controller->get_drive_type(0) == DRIVE_TYPE_2HD) ? 1 : 0) |
+		   ((controller->get_drive_type(1) == DRIVE_TYPE_2HD) ? 2 : 0);
 }
 
 void VM::play_tape(_TCHAR* file_path)
