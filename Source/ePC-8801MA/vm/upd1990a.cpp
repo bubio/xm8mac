@@ -61,7 +61,8 @@ void UPD1990A::write_signal(int id, uint32 data, uint32 mask)
 		clk = next;
 	} else if(id == SIG_UPD1990A_STB) {
 		bool next = ((data & mask) != 0);
-		if(!stb && next && !clk) {
+		// Accept strobe on rising edge regardless of current CLK level.
+		if(!stb && next) {
 #ifdef HAS_UPD4990A
 			if(cmd == 7) {
 				mode = shift_cmd | 0x80;
