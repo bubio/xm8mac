@@ -719,16 +719,14 @@ void UPD765A::cmd_sence_intstat()
 uint8 UPD765A::get_devstat(int drv)
 {
 	if(drv >= MAX_DRIVE) {
-		return 0x80 | drv;
+		return ST3_FT | drv;
 	}
-#ifdef SDL
-	if(!disk[drv]->inserted && !force_ready) {
-#else
-	if(!disk[drv]->inserted) {
-#endif // SDL
-		return drv;
-	}
-	return 0x28 | drv | (fdc[drv].track ? 0 : 0x10) | ((fdc[drv].track & 1) ? 0x04 : 0) | (disk[drv]->write_protected ? 0x40 : 0);
+	return drv |
+	       ((fdc[drv].track & 1) ? ST3_HD : 0) |
+	       ST3_TS |
+	       (fdc[drv].track ? 0 : ST3_T0) |
+	       ((force_ready || disk[drv]->inserted) ? ST3_RY : 0) |
+	       (disk[drv]->write_protected ? ST3_WP : 0);
 }
 
 void UPD765A::cmd_seek()
