@@ -508,7 +508,9 @@ void UPD765A::event_callback(int event_id, int err)
 		shift_to_result7_event();
 	} else if(event_id == EVENT_INDEX) {
 		int drv = hdu & DRIVE_MASK;
-		bool now_index = (disk[drv]->inserted && get_cur_position(drv) == 0);
+		// index hole signal width is approximately 5ms.
+		bool now_index = (disk[drv]->inserted &&
+		                  get_cur_position(drv) < disk[drv]->get_bytes_per_usec(5000));
 		if(prev_index != now_index) {
 			write_signals(&outputs_index, now_index ? 0xffffffff : 0);
 			prev_index = now_index;
@@ -1575,7 +1577,7 @@ void UPD765A::finish_transfer()
 
 int UPD765A::get_cur_position(int drv)
 {
-	return (int)(fdc[drv].cur_position + passed_usec(fdc[drv].prev_clock) / disk[drv]->get_usec_per_bytes(1)) % disk[drv]->get_track_size();
+	return (fdc[drv].cur_position + disk[drv]->get_bytes_per_usec(passed_usec(fdc[drv].prev_clock))) % disk[drv]->get_track_size();
 }
 
 double UPD765A::get_usec_to_exec_phase()
