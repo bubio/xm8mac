@@ -36,7 +36,7 @@ private:
 	outputs_t outputs_txrdy;
 	outputs_t outputs_txe;
 	outputs_t outputs_dtr;
-	outputs_t outputs_rst;
+	outputs_t outputs_brk;
 	outputs_t outputs_rts;
 	
 	// buffer
@@ -53,7 +53,7 @@ public:
 		init_output_signals(&outputs_txrdy);
 		init_output_signals(&outputs_txe);
 		init_output_signals(&outputs_dtr);
-		init_output_signals(&outputs_rst);
+		init_output_signals(&outputs_brk);
 		init_output_signals(&outputs_rts);
 		set_device_name(_T("8251 SIO"));
 	}
@@ -100,13 +100,14 @@ public:
 	{
 		register_output_signal(&outputs_dtr, device, id, mask);
 	}
-	void set_context_rst(DEVICE* device, int id, uint32 mask)
-	{
-		register_output_signal(&outputs_rst, device, id, mask);
-	}
 	void set_context_brk(DEVICE* device, int id, uint32 mask)
 	{
-		set_context_rst(device, id, mask);
+		register_output_signal(&outputs_brk, device, id, mask);
+	}
+	void set_context_rst(DEVICE* device, int id, uint32 mask)
+	{
+		// Backward-compatible alias.
+		set_context_brk(device, id, mask);
 	}
 	void set_context_rts(DEVICE* device, int id, uint32 mask)
 	{
