@@ -195,7 +195,8 @@ public:
 	bool check_media_type();
 	bool correct_timing()
 	{
-		return false;
+		// Keep current XM8 behavior: standard images use fixed timing path.
+		return !is_standard_image;
 	}
 	bool ignore_crc()
 	{

@@ -1033,6 +1033,9 @@ uint32 UPD765A::read_sector()
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+			continue;
+		}
 		cy = disk[drv]->id[0];
 #if 0
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] /*|| disk[drv]->id[3] != id[3]*/) {
@@ -1051,7 +1054,7 @@ uint32 UPD765A::read_sector()
 		}
 		fdc[drv].next_trans_position = disk[drv]->data_position[i];
 		
-		if(disk[drv]->crc_error) {
+		if(disk[drv]->crc_error && !disk[drv]->ignore_crc()) {
 			return ST0_AT | ST1_DE | ST2_DD;
 		}
 		if(disk[drv]->deleted) {
@@ -1094,6 +1097,9 @@ uint32 UPD765A::write_sector(bool deleted)
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+			continue;
+		}
 		cy = disk[drv]->id[0];
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] /*|| disk[drv]->id[3] != id[3]*/) {
 			continue;
@@ -1131,6 +1137,9 @@ uint32 UPD765A::find_id()
 	int cy = -1;
 	for(int i = 0; i < secnum; i++) {
 		if(!disk[drv]->get_sector(trk, side, i)) {
+			continue;
+		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
 			continue;
 		}
 		cy = disk[drv]->id[0];
@@ -1301,14 +1310,18 @@ uint32 UPD765A::read_id()
 	}
 	for(int i = 0; i < secnum; i++) {
 		int index = (first_sector + i) % secnum;
-		if(disk[drv]->get_sector(trk, side, index)) {
-			id[0] = disk[drv]->id[0];
-			id[1] = disk[drv]->id[1];
-			id[2] = disk[drv]->id[2];
-			id[3] = disk[drv]->id[3];
-			fdc[drv].next_trans_position = disk[drv]->id_position[index] + 6;
-			return 0;
+		if(!disk[drv]->get_sector(trk, side, index)) {
+			continue;
 		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+			continue;
+		}
+		id[0] = disk[drv]->id[0];
+		id[1] = disk[drv]->id[1];
+		id[2] = disk[drv]->id[2];
+		id[3] = disk[drv]->id[3];
+		fdc[drv].next_trans_position = disk[drv]->id_position[index] + 6;
+		return 0;
 	}
 	return ST0_AT | ST1_ND;
 }
@@ -1472,8 +1485,8 @@ double UPD765A::get_usec_to_exec_phase()
 	int trk = fdc[drv].track;
 	int side = (hdu >> 2) & 1;
 	
-	// XXX: this is a standard image and skew may be incorrect
-	if(disk[drv]->is_standard_image) {
+	// XXX: this image may have incorrect skew, so use constant period.
+	if(!disk[drv]->correct_timing()) {
 		return 100;
 	}
 	
