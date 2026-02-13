@@ -63,7 +63,9 @@ void I8251::reset()
 	// dont reset dsr
 	status &= DSR;
 	status |= TXRDY | TXE;
-	txen = rxen = loopback = false;
+	// XM8 v1.10 behavior: transmitter remains enabled after reset.
+	txen = true;
+	rxen = loopback = false;
 	
 	recv_buffer->clear();
 	send_buffer->clear();
