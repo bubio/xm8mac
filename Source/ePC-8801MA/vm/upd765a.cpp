@@ -761,7 +761,7 @@ void UPD765A::seek(int drv, int trk)
 {
 	// get distance
 	int distance = abs(trk - fdc[drv].track);
-	int steptime = 16 - step_rate_time;
+	int steptime = 32 - 2 * step_rate_time;
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
 		steptime /= 2;
 	}
