@@ -51,6 +51,7 @@ private:
 		int next_trans_position;
 		uint32 prev_clock;
 	} fdc[4];
+	bool head_load[4];
 	DISK* disk[4];
 	
 	uint8 hdu, hdue, id[4], eot, gpl, dtl;
@@ -59,6 +60,7 @@ private:
 	uint8 status, seekstat, command;
 	uint32 result;
 	int step_rate_time;
+	int head_unload_time;
 	bool no_dma_mode, motor_on;
 #ifdef UPD765A_DMA_MODE
 	bool dma_data_lost;
@@ -69,7 +71,7 @@ private:
 	uint8 buffer[0x8000];
 	int count;
 	int event_phase;
-	int phase_id, drq_id, lost_id, result7_id, seek_id[4];
+	int phase_id, drq_id, lost_id, result7_id, seek_id[4], head_unload_id[4];
 	bool force_ready;
 	bool reset_signal;
 	bool prev_index;
@@ -95,6 +97,8 @@ private:
 	void shift_to_result(int length);
 	void shift_to_result7();
 	void shift_to_result7_event();
+	void start_transfer();
+	void finish_transfer();
 	
 	// command
 	void process_cmd(int cmd);

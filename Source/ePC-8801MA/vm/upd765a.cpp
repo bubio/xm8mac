@@ -18,6 +18,7 @@
 #define EVENT_RESULT7	3
 #define EVENT_INDEX	4
 #define EVENT_SEEK	5
+#define EVENT_UNLOAD	9
 
 #define PHASE_IDLE	0
 #define PHASE_CMD	1
@@ -139,6 +140,10 @@
 			cancel_event(this, seek_id[d]); \
 			seek_id[d] = -1; \
 		} \
+		if(head_unload_id[d] != -1) { \
+			cancel_event(this, head_unload_id[d]); \
+			head_unload_id[d] = -1; \
+		} \
 	} \
 }
 
@@ -172,6 +177,7 @@ void UPD765A::initialize()
 	
 	// initialize fdc
 	memset(fdc, 0, sizeof(fdc));
+	memset(head_load, 0, sizeof(head_load));
 	memset(buffer, 0, sizeof(buffer));
 	
 	phase = prevphase = PHASE_IDLE;
@@ -180,6 +186,8 @@ void UPD765A::initialize()
 	bufptr = buffer; // temporary
 	phase_id = drq_id = lost_id = result7_id = -1;
 	seek_id[0] = seek_id[1] = seek_id[2] = seek_id[3] = -1;
+	head_unload_id[0] = head_unload_id[1] = head_unload_id[2] = head_unload_id[3] = -1;
+	head_unload_time = 0;
 	no_dma_mode = false;
 	motor_on = false;	// motor off
 	force_ready = false;
@@ -217,6 +225,8 @@ void UPD765A::reset()
 //	CANCEL_EVENT();
 	phase_id = drq_id = lost_id = result7_id = -1;
 	seek_id[0] = seek_id[1] = seek_id[2] = seek_id[3] = -1;
+	head_unload_id[0] = head_unload_id[1] = head_unload_id[2] = head_unload_id[3] = -1;
+	head_load[0] = head_load[1] = head_load[2] = head_load[3] = false;
 	
 	set_irq(false);
 	set_drq(false);
@@ -507,6 +517,15 @@ void UPD765A::event_callback(int event_id, int err)
 		int drv = event_id - EVENT_SEEK;
 		seek_id[drv] = -1;
 		seek_event(drv);
+	} else if(event_id >= EVENT_UNLOAD && event_id < EVENT_UNLOAD + 4) {
+		int drv = event_id - EVENT_UNLOAD;
+		if(head_load[drv]) {
+			if(d_noise_head_up != NULL) {
+				d_noise_head_up->play();
+			}
+			head_load[drv] = false;
+		}
+		head_unload_id[drv] = -1;
 	}
 }
 
@@ -747,8 +766,6 @@ void UPD765A::seek(int drv, int trk)
 
 void UPD765A::seek_event(int drv)
 {
-	int trk = fdc[drv].track;
-	
 	if(drv >= MAX_DRIVE) {
 		fdc[drv].result = (drv & DRIVE_MASK) | ST0_SE | ST0_NR | ST0_AT;
 	} else if(force_ready || disk[drv]->inserted) {
@@ -776,6 +793,7 @@ void UPD765A::cmd_read_data()
 		break;
 	case PHASE_CMD:
 		get_sector_params();
+		start_transfer();
 		REGISTER_PHASE_EVENT_NEW(PHASE_EXEC, get_usec_to_exec_phase());
 		break;
 	case PHASE_EXEC:
@@ -818,6 +836,7 @@ void UPD765A::cmd_write_data()
 		break;
 	case PHASE_CMD:
 		get_sector_params();
+		start_transfer();
 		REGISTER_PHASE_EVENT_NEW(PHASE_EXEC, get_usec_to_exec_phase());
 		break;
 	case PHASE_EXEC:
@@ -885,6 +904,7 @@ void UPD765A::cmd_scan()
 	case PHASE_CMD:
 		get_sector_params();
 		dtl = dtl | 0x100;
+		start_transfer();
 		REGISTER_PHASE_EVENT_NEW(PHASE_EXEC, get_usec_to_exec_phase());
 		break;
 	case PHASE_EXEC:
@@ -928,6 +948,7 @@ void UPD765A::cmd_read_diagnostic()
 		break;
 	case PHASE_CMD:
 		get_sector_params();
+		start_transfer();
 		REGISTER_PHASE_EVENT_NEW(PHASE_EXEC, get_usec_to_exec_phase());
 		break;
 	case PHASE_EXEC:
@@ -1258,6 +1279,7 @@ void UPD765A::cmd_read_id()
 		break;
 	case PHASE_CMD:
 		set_hdu(buffer[0]);
+		start_transfer();
 //		break;
 	case PHASE_EXEC:
 #ifdef SDL
@@ -1303,6 +1325,7 @@ void UPD765A::cmd_write_id()
 			REGISTER_PHASE_EVENT(PHASE_TIMER, 1000000);
 			break;
 		}
+		start_transfer();
 		fdc[hdu & DRIVE_MASK].next_trans_position = get_cur_position(hdu & DRIVE_MASK);
 		shift_to_write(4 * eot);
 		break;
@@ -1399,6 +1422,7 @@ void UPD765A::cmd_specify()
 		break;
 	case PHASE_CMD:
 		step_rate_time = buffer[0] >> 4;
+		head_unload_time = buffer[1] >> 1;
 		no_dma_mode = ((buffer[1] & 1) != 0);
 		shift_to_idle();
 		status = 0x80;//0xff;
@@ -1492,6 +1516,7 @@ void UPD765A::shift_to_result7()
 	} else
 #endif
 	shift_to_result7_event();
+	finish_transfer();
 }
 
 void UPD765A::shift_to_result7_event()
@@ -1509,6 +1534,38 @@ void UPD765A::shift_to_result7_event()
 	buffer[6] = id[3];
 	set_irq(true);
 	shift_to_result(7);
+}
+
+void UPD765A::start_transfer()
+{
+	int drv = hdu & DRIVE_MASK;
+	
+	if(head_unload_id[drv] != -1) {
+		cancel_event(this, head_unload_id[drv]);
+		head_unload_id[drv] = -1;
+	}
+	if(!head_load[drv]) {
+		if(d_noise_head_down != NULL) {
+			d_noise_head_down->play();
+		}
+		head_load[drv] = true;
+	}
+}
+
+void UPD765A::finish_transfer()
+{
+	int drv = hdu & DRIVE_MASK;
+	
+	if(head_load[drv]) {
+		if(head_unload_id[drv] != -1) {
+			cancel_event(this, head_unload_id[drv]);
+		}
+		int time = (16 * (head_unload_time + 1)) * 1000; // msec -> usec
+		if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
+			time /= 2;
+		}
+		register_event(this, EVENT_UNLOAD + drv, time, false, &head_unload_id[drv]);
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -1596,6 +1653,16 @@ void UPD765A::open_disk(int drv, _TCHAR path[], int bank)
 void UPD765A::close_disk(int drv)
 {
 	if(drv < MAX_DRIVE && disk[drv]->inserted) {
+		if(head_unload_id[drv] != -1) {
+			cancel_event(this, head_unload_id[drv]);
+			head_unload_id[drv] = -1;
+		}
+		if(head_load[drv]) {
+			if(d_noise_head_up != NULL) {
+				d_noise_head_up->play();
+			}
+			head_load[drv] = false;
+		}
 		disk[drv]->close();
 #ifdef _FDC_DEBUG_LOG
 		emu->out_debug_log("FDC: Disk Ejected (Drive=%d)\n", drv);
@@ -1687,7 +1754,7 @@ void UPD765A::set_drive_mfm(int drv, bool mfm)
 	}
 }
 
-#define STATE_VERSION	1
+#define STATE_VERSION	2
 
 void UPD765A::save_state(FILEIO* state_fio)
 {
@@ -1735,11 +1802,15 @@ void UPD765A::save_state(FILEIO* state_fio)
 	state_fio->FputBool(reset_signal);
 	state_fio->FputBool(prev_index);
 	state_fio->FputUint32(prev_drq_clock);
+	state_fio->Fwrite(head_load, sizeof(head_load), 1);
+	state_fio->FputInt32(head_unload_time);
+	state_fio->Fwrite(head_unload_id, sizeof(head_unload_id), 1);
 }
 
 bool UPD765A::load_state(FILEIO* state_fio)
 {
-	if(state_fio->FgetUint32() != STATE_VERSION) {
+	uint32 state_version = state_fio->FgetUint32();
+	if(state_version < 1 || state_version > STATE_VERSION) {
 		return false;
 	}
 	if(state_fio->FgetInt32() != this_device_id) {
@@ -1788,6 +1859,15 @@ bool UPD765A::load_state(FILEIO* state_fio)
 	reset_signal = state_fio->FgetBool();
 	prev_index = state_fio->FgetBool();
 	prev_drq_clock = state_fio->FgetUint32();
+	if(state_version >= 2) {
+		state_fio->Fread(head_load, sizeof(head_load), 1);
+		head_unload_time = state_fio->FgetInt32();
+		state_fio->Fread(head_unload_id, sizeof(head_unload_id), 1);
+	} else {
+		head_load[0] = head_load[1] = head_load[2] = head_load[3] = false;
+		head_unload_time = 0;
+		head_unload_id[0] = head_unload_id[1] = head_unload_id[2] = head_unload_id[3] = -1;
+	}
 	return true;
 }
 
