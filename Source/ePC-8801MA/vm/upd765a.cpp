@@ -11,6 +11,9 @@
 #include "upd765a.h"
 #include "disk.h"
 #include "noise.h"
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 
 #define EVENT_PHASE	0
 #define EVENT_DRQ	1
@@ -70,6 +73,39 @@
 #define ST3_FT	0x80
 
 #define DRIVE_MASK	3
+
+static FILE* g_fdc_trace_file = NULL;
+static bool g_fdc_trace_checked = false;
+static int g_fdc_trace_lines = 0;
+
+static bool fdc_trace_enabled()
+{
+	if(!g_fdc_trace_checked) {
+		const char* env = getenv("XM8_FDC_TRACE");
+		if(env != NULL && env[0] != '\0' && env[0] != '0') {
+			g_fdc_trace_file = fopen("xm8_fdc_trace.log", "w");
+		}
+		g_fdc_trace_checked = true;
+	}
+	return g_fdc_trace_file != NULL;
+}
+
+static void fdc_trace(const char* fmt, ...)
+{
+	if(!fdc_trace_enabled()) {
+		return;
+	}
+	if(g_fdc_trace_lines > 20000) {
+		return;
+	}
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(g_fdc_trace_file, fmt, ap);
+	va_end(ap);
+	fputc('\n', g_fdc_trace_file);
+	fflush(g_fdc_trace_file);
+	g_fdc_trace_lines++;
+}
 
 #define REGISTER_PHASE_EVENT(phs, usec) { \
 	if(phase_id != -1) { \
@@ -155,6 +191,7 @@
 
 void UPD765A::initialize()
 {
+	fdc_trace("=== FDC trace start ===");
 	// initialize d88 handler
 	for(int i = 0; i < 4; i++) {
 		disk[i] = new DISK(emu);
@@ -225,6 +262,13 @@ void UPD765A::release()
 			disk[i]->close();
 			delete disk[i];
 		}
+	}
+	if(g_fdc_trace_file != NULL) {
+		fdc_trace("=== FDC trace end ===");
+		fclose(g_fdc_trace_file);
+		g_fdc_trace_file = NULL;
+		g_fdc_trace_checked = false;
+		g_fdc_trace_lines = 0;
 	}
 }
 
@@ -648,6 +692,7 @@ void UPD765A::set_hdu(uint8 val)
 
 void UPD765A::process_cmd(int cmd)
 {
+	fdc_trace("cmd=%02x phase=%d hdu=%d C=%02x H=%02x R=%02x N=%02x", cmd & 0x1f, phase, hdu & DRIVE_MASK, id[0], id[1], id[2], id[3]);
 	switch(cmd & 0x1f) {
 	case 0x02:
 		cmd_read_diagnostic();
@@ -784,6 +829,7 @@ void UPD765A::seek(int drv, int trk)
 		// get distance
 		int distance = abs(trk - cur_track[drv]);
 		int seektime = (distance == 0) ? 120 : steptime * distance + 500; // usec
+		fdc_trace("seek: drv=%d from=%d to=%d dist=%d steptime=%d seektime=%d", drv, cur_track[drv], trk, distance, steptime, seektime);
 		fdc[drv].track = trk;
 #ifdef UPD765A_DONT_WAIT_SEEK
 		if(distance > 0 && d_noise_seek != NULL) {
@@ -833,6 +879,7 @@ void UPD765A::seek_event(int drv)
 	}
 	set_irq(true);
 	seekstat &= ~(1 << drv);
+	fdc_trace("seek_end: drv=%d cur=%d target=%d result=%02x", drv, cur_track[drv], fdc[drv].track, fdc[drv].result);
 	
 	// reset dsch flag
 	disk[drv]->changed = false;
@@ -1138,6 +1185,7 @@ uint32 UPD765A::read_sector()
 #ifdef _FDC_DEBUG_LOG
 		emu->out_debug_log("FDC: TRACK NOT FOUND (TRK=%d SIDE=%d)\n", trk, side);
 #endif
+		fdc_trace("read_sector: track not found drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int secnum = disk[drv]->sector_num.sd;
@@ -1145,6 +1193,7 @@ uint32 UPD765A::read_sector()
 #ifdef _FDC_DEBUG_LOG
 		emu->out_debug_log("FDC: NO SECTORS IN TRACK (TRK=%d SIDE=%d)\n", trk, side);
 #endif
+		fdc_trace("read_sector: no sectors drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int cy = -1;
@@ -1164,6 +1213,7 @@ uint32 UPD765A::read_sector()
 			continue;
 		}
 		if(disk[drv]->sector_size.sd == 0) {
+			fdc_trace("read_sector: zero size drv=%d trk=%d side=%d idx=%d", drv, trk, side, i);
 			continue;
 		}
 		// sector number is matched
@@ -1180,26 +1230,33 @@ uint32 UPD765A::read_sector()
 		fdc[drv].next_trans_position = disk[drv]->data_position[i];
 		
 		if((disk[drv]->addr_crc_error || disk[drv]->data_crc_error) && !disk[drv]->ignore_crc()) {
+			fdc_trace("read_sector: crc err drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x addr=%d data=%d", drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3], disk[drv]->addr_crc_error ? 1 : 0, disk[drv]->data_crc_error ? 1 : 0);
 			return ST0_AT | ST1_DE | (disk[drv]->data_crc_error ? ST2_DD : 0);
 		}
 		if(disk[drv]->deleted) {
+			fdc_trace("read_sector: deleted mark drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x", drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3]);
 			return ST2_CM;
 		}
+		fdc_trace("read_sector: ok drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x len=%d", drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3], disk[drv]->sector_size.sd);
 		return 0;
 	}
 	#ifdef _FDC_DEBUG_LOG
 	emu->out_debug_log("FDC: SECTOR NOT FOUND (TRK=%d SIDE=%d ID=%2x,%2x,%2x,%2x)\n", trk, side, id[0], id[1], id[2], id[3]);
 	#endif
 	if(cy == -1) {
+		fdc_trace("read_sector: no density/id match drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 		return ST0_AT | ST1_MA;
 	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
+			fdc_trace("read_sector: bad cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_BC;
 		} else {
+			fdc_trace("read_sector: no cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_NC;
 		}
 	}
+	fdc_trace("read_sector: not found drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 	return ST0_AT | ST1_ND;
 }
 
@@ -1214,10 +1271,12 @@ uint32 UPD765A::write_sector(bool deleted)
 	}
 	// get sector counts in the current track
 	if(!disk[drv]->get_track(trk, side)) {
+		fdc_trace("find_id: track not found drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int secnum = disk[drv]->sector_num.sd;
 	if(!secnum) {
+		fdc_trace("find_id: no sectors drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int cy = -1;
@@ -1280,20 +1339,25 @@ uint32 UPD765A::find_id()
 		if(disk[drv]->sector_size.sd == 0) {
 			continue;
 		}
-		// sector number is matched
-		fdc[drv].next_trans_position = disk[drv]->data_position[i];
-		return 0;
-	}
+			// sector number is matched
+			fdc[drv].next_trans_position = disk[drv]->data_position[i];
+			fdc_trace("find_id: ok drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x", drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3]);
+			return 0;
+		}
 	if(cy == -1) {
+		fdc_trace("find_id: no density/id match drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 		return ST0_AT | ST1_MA;
 	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
+			fdc_trace("find_id: bad cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_BC;
 		} else {
+			fdc_trace("find_id: no cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_NC;
 		}
 	}
+	fdc_trace("find_id: not found drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 	return ST0_AT | ST1_ND;
 }
 
@@ -1460,8 +1524,10 @@ uint32 UPD765A::read_id()
 		id[2] = disk[drv]->id[2];
 		id[3] = disk[drv]->id[3];
 		fdc[drv].next_trans_position = disk[drv]->id_position[index] + 6;
+		fdc_trace("read_id: ok drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x", drv, trk, side, index, id[0], id[1], id[2], id[3]);
 		return 0;
 	}
+	fdc_trace("read_id: not found drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 	return ST0_AT | ST1_MA;
 }
 
@@ -1500,6 +1566,7 @@ void UPD765A::cmd_specify()
 		step_rate_time = buffer[0] >> 4;
 		head_unload_time = buffer[1] >> 1;
 		no_dma_mode = ((buffer[1] & 1) != 0);
+		fdc_trace("specify: srt=%d hut=%d ndma=%d", step_rate_time, head_unload_time, no_dma_mode ? 1 : 0);
 		shift_to_idle();
 		status = 0x80;//0xff;
 		break;
