@@ -85,6 +85,7 @@ public:
 	}
 #ifdef SDL
 	void resync(void) { cur_time.initialized = false; }
+	uint32 event_count;
 #endif // SDL
 };
 
