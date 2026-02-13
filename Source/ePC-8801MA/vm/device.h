@@ -631,6 +631,62 @@ public:
 		}
 		event_manager->set_lines_per_frame(lines);
 	}
+	virtual int get_lines_per_frame()
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		return event_manager->get_lines_per_frame();
+	}
+	virtual void update_event_in_op(int clock)
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		event_manager->update_event_in_op(clock);
+	}
+	virtual uint32 get_event_remaining_clock(int register_id)
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		return event_manager->get_event_remaining_clock(register_id);
+	}
+	virtual double get_event_remaining_usec(int register_id)
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		return event_manager->get_event_remaining_usec(register_id);
+	}
+	virtual uint32 get_passed_clock_since_vline()
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		return event_manager->get_passed_clock_since_vline();
+	}
+	virtual double get_passed_usec_since_vline()
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		return event_manager->get_passed_usec_since_vline();
+	}
+	virtual int get_cur_vline()
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		return event_manager->get_cur_vline();
+	}
+	virtual int get_cur_vline_clocks()
+	{
+		if(event_manager == NULL) {
+			event_manager = vm->first_device->next_device;
+		}
+		return event_manager->get_cur_vline_clocks();
+	}
 #ifdef SDL
 	virtual void abort_main_cpu()
 	{

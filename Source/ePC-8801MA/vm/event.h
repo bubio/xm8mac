@@ -72,6 +72,8 @@ private:
 	
 	double frames_per_sec, next_frames_per_sec;
 	int lines_per_frame, next_lines_per_frame;
+	uint32 vline_start_clock;
+	int cur_vline;
 	
 	void update_event(int clock);
 	void insert_event(event_t *event_handle);
@@ -114,6 +116,8 @@ public:
 		first_fire_event = NULL;
 		
 		event_clocks = 0;
+		vline_start_clock = 0;
+		cur_vline = 0;
 		
 		// force update timing in the first frame
 		frames_per_sec = 0.0;
@@ -144,6 +148,10 @@ public:
 	{
 		return this_device_id;
 	}
+	int get_event_manager_id()
+	{
+		return event_manager_id();
+	}
 	void set_frames_per_sec(double new_frames_per_sec)
 	{
 		next_frames_per_sec = new_frames_per_sec;
@@ -152,6 +160,11 @@ public:
 	{
 		next_lines_per_frame = new_lines_per_frame;
 	}
+	int get_lines_per_frame()
+	{
+		return next_lines_per_frame;
+	}
+	void update_event_in_op(int clock);
 	void register_event(DEVICE* device, int event_id, double usec, bool loop, int* register_id);
 #ifdef SDL
 	void register_event_by_clock(DEVICE* device, int event_id, uint32 clock, bool loop, int* register_id);
@@ -161,9 +174,33 @@ public:
 	void cancel_event(DEVICE* device, int register_id);
 	void register_frame_event(DEVICE* device);
 	void register_vline_event(DEVICE* device);
+	uint32 get_event_remaining_clock(int register_id);
+	double get_event_remaining_usec(int register_id);
 	uint32 current_clock();
+	uint32 get_current_clock()
+	{
+		return current_clock();
+	}
 	uint32 passed_clock(uint32 prev);
+	uint32 get_passed_clock(uint32 prev)
+	{
+		return passed_clock(prev);
+	}
 	double passed_usec(uint32 prev);
+	double get_passed_usec(uint32 prev)
+	{
+		return passed_usec(prev);
+	}
+	uint32 get_passed_clock_since_vline();
+	double get_passed_usec_since_vline();
+	int get_cur_vline()
+	{
+		return cur_vline;
+	}
+	int get_cur_vline_clocks()
+	{
+		return (0 <= cur_vline && cur_vline < lines_per_frame) ? vclocks[cur_vline] : 0;
+	}
 	uint32 get_cpu_pc(int index);
 	void request_skip_frames();
 	
@@ -172,11 +209,19 @@ public:
 	{
 		return next_frames_per_sec;
 	}
+	double get_frame_rate()
+	{
+		return frame_rate();
+	}
 	void drive();
 	
 	void initialize_sound(int rate, int samples);
 	uint16* create_sound(int* extra_frames);
 	int sound_buffer_ptr();
+	int get_sound_buffer_ptr()
+	{
+		return sound_buffer_ptr();
+	}
 	
 	void set_context_cpu(DEVICE* device, uint32 clocks)
 	{
@@ -208,6 +253,10 @@ public:
 		}
 	}
 	bool now_skip();
+	bool is_frame_skippable()
+	{
+		return now_skip();
+	}
 #ifdef SDL
 	void abort_main_cpu() { d_cpu[0].device->write_signal(SIG_CPU_FIRQ, 1, 1); }
 	void abort_sub_cpu() { d_cpu[1].device->write_signal(SIG_CPU_FIRQ, 1, 1); }

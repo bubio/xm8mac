@@ -109,6 +109,8 @@ void EVENT::reset()
 	
 	event_remain = 0;
 	cpu_remain = cpu_accum = cpu_done = 0;
+	cur_vline = 0;
+	vline_start_clock = current_clock();
 	
 	// reset sound
 	if(sound_buffer) {
@@ -199,6 +201,9 @@ void EVENT::drive()
 		int main_cpu_exec;
 		int sub_cpu_exec;
 		int sub_cpu_done;
+
+		cur_vline = v;
+		vline_start_clock = current_clock();
 
 		// get execute lines from PC88::event_vline()
 		exec_lines = vline_event[0]->event_vline(v);
@@ -306,6 +311,9 @@ void EVENT::drive()
 	mix_sound_block();
 #else
 	for(int v = 0; v < lines_per_frame; v++) {
+		cur_vline = v;
+		vline_start_clock = current_clock();
+
 		// run virtual machine per line
 		for(int i = 0; i < vline_event_count; i++) {
 			vline_event[i]->event_vline(v, vclocks[v]);
@@ -360,6 +368,33 @@ void EVENT::drive()
 				event_remain -= event_done;
 			}
 		}
+	}
+#endif // SDL
+}
+
+void EVENT::update_event_in_op(int clock)
+{
+#ifdef SDL
+	// SDL path updates events in drive(). Keep this as a compatibility no-op.
+	(void)clock;
+#else
+	if(clock <= 0) {
+		return;
+	}
+	cpu_remain -= clock;
+	cpu_accum += clock;
+	int event_done = cpu_accum >> power;
+	cpu_accum -= event_done << power;
+	
+	if(event_done > 0) {
+		if(event_remain > 0) {
+			if(event_done > event_remain) {
+				update_event(event_remain);
+			} else {
+				update_event(event_done);
+			}
+		}
+		event_remain -= event_done;
 	}
 #endif // SDL
 }
@@ -521,6 +556,16 @@ uint32 EVENT::passed_clock(uint32 prev)
 double EVENT::passed_usec(uint32 prev)
 {
 	return 1000000.0 * passed_clock(prev) / d_cpu[0].cpu_clocks;
+}
+
+uint32 EVENT::get_passed_clock_since_vline()
+{
+	return passed_clock(vline_start_clock);
+}
+
+double EVENT::get_passed_usec_since_vline()
+{
+	return passed_usec(vline_start_clock);
 }
 
 uint32 EVENT::get_cpu_pc(int index)
@@ -753,6 +798,11 @@ void EVENT::cancel_event(DEVICE* device, int register_id)
 void EVENT::register_frame_event(DEVICE* dev)
 {
 	if(frame_event_count < MAX_EVENT) {
+		for(int i = 0; i < frame_event_count; i++) {
+			if(frame_event[i] == dev) {
+				return;
+			}
+		}
 		frame_event[frame_event_count++] = dev;
 	} else {
 #ifdef _DEBUG_LOG
@@ -764,12 +814,41 @@ void EVENT::register_frame_event(DEVICE* dev)
 void EVENT::register_vline_event(DEVICE* dev)
 {
 	if(vline_event_count < MAX_EVENT) {
+		for(int i = 0; i < vline_event_count; i++) {
+			if(vline_event[i] == dev) {
+				return;
+			}
+		}
 		vline_event[vline_event_count++] = dev;
 	} else {
 #ifdef _DEBUG_LOG
 		emu->out_debug_log(_T("EVENT: too many vline events !!!\n"));
 #endif
 	}
+}
+
+uint32 EVENT::get_event_remaining_clock(int register_id)
+{
+	if(0 <= register_id && register_id < MAX_EVENT) {
+		event_t *event_handle = &event[register_id];
+		if(event_handle->active) {
+#ifdef SDL
+			if(event_handle->remain_clock > event_handle->passed_clock) {
+				return (event_handle->remain_clock - event_handle->passed_clock + 0x3ff) >> 10;
+			}
+#else
+			if(event_handle->expired_clock > event_clocks) {
+				return (uint32)(event_handle->expired_clock - event_clocks);
+			}
+#endif // SDL
+		}
+	}
+	return 0;
+}
+
+double EVENT::get_event_remaining_usec(int register_id)
+{
+	return 1000000.0 * get_event_remaining_clock(register_id) / d_cpu[0].cpu_clocks;
 }
 
 #ifdef SDL
