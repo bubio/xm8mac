@@ -170,17 +170,20 @@ public:
 	bool get_track(int trk, int side);
 	bool make_track(int trk, int side);
 	bool get_sector(int trk, int side, int index);
+	bool get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uint8* r, uint8* n, bool* mfm, int* length);
 	void set_deleted(bool value);
 	void set_crc_error(bool value);
 	void set_data_crc_error(bool value)
 	{
 		set_crc_error(value);
 	}
+	void set_data_mark_missing();
 	
 	bool format_track(int trk, int side);
 	void insert_sector(uint8 c, uint8 h, uint8 r, uint8 n, bool deleted, bool crc_error, uint8 fill_data, int length);
 	void sync_buffer();
 	
+	int get_max_tracks();
 	int get_rpm();
 	int get_track_size();
 	double get_usec_per_track()
@@ -190,6 +193,15 @@ public:
 	double get_usec_per_bytes(int bytes);
 	int get_bytes_per_usec(double usec);
 	bool check_media_type();
+	bool correct_timing()
+	{
+		// Keep current XM8 behavior: standard images use fixed timing path.
+		return !is_standard_image;
+	}
+	bool ignore_crc()
+	{
+		return config.ignore_crc;
+	}
 	
 	bool inserted;
 	bool ejected;

@@ -115,6 +115,7 @@ class DiskSub;
 class PC80S31K;
 #endif // SDL
 class UPD765A;
+class NOISE;
 
 #ifdef SUPPORT_PC88_PCG8100
 class I8253;
@@ -149,6 +150,9 @@ protected:
 #endif // SDL
 	I8255* pc88pio_sub;
 	UPD765A* pc88fdc_sub;
+	NOISE* pc88noise_seek;
+	NOISE* pc88noise_head_down;
+	NOISE* pc88noise_head_up;
 	Z80* pc88cpu_sub;
 	
 #ifdef SUPPORT_PC88_PCG8100

@@ -10,6 +10,7 @@
 
 #include "upd765a.h"
 #include "disk.h"
+#include "noise.h"
 
 #define EVENT_PHASE	0
 #define EVENT_DRQ	1
@@ -146,6 +147,27 @@ void UPD765A::initialize()
 	// initialize d88 handler
 	for(int i = 0; i < 4; i++) {
 		disk[i] = new DISK(emu);
+	}
+	
+	// initialize optional drive noise players
+	if(d_noise_seek != NULL) {
+		d_noise_seek->set_device_name(_T("Noise Player (FDD Seek)"));
+		if(!d_noise_seek->load_wav_file(_T("FDDSEEK.WAV"))) {
+			if(!d_noise_seek->load_wav_file(_T("FDDSEEK1.WAV"))) {
+				d_noise_seek->load_wav_file(_T("SEEK.WAV"));
+			}
+		}
+		d_noise_seek->set_mute(false);
+	}
+	if(d_noise_head_down != NULL) {
+		d_noise_head_down->set_device_name(_T("Noise Player (FDD Head Load)"));
+		d_noise_head_down->load_wav_file(_T("HEADDOWN.WAV"));
+		d_noise_head_down->set_mute(false);
+	}
+	if(d_noise_head_up != NULL) {
+		d_noise_head_up->set_device_name(_T("Noise Player (FDD Head Unload)"));
+		d_noise_head_up->load_wav_file(_T("HEADUP.WAV"));
+		d_noise_head_up->set_mute(false);
 	}
 	
 	// initialize fdc
@@ -488,6 +510,11 @@ void UPD765A::event_callback(int event_id, int err)
 	}
 }
 
+void UPD765A::update_config()
+{
+	// reserved for optional noise device contexts
+}
+
 void UPD765A::set_irq(bool val)
 {
 #ifdef _FDC_DEBUG_LOG
@@ -685,6 +712,7 @@ void UPD765A::cmd_recalib()
 void UPD765A::seek(int drv, int trk)
 {
 	// get distance
+	int prev_track = fdc[drv].track;
 	int seektime = 32 - 2 * step_rate_time;
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
 		seektime /= 2;
@@ -697,6 +725,9 @@ void UPD765A::seek(int drv, int trk)
 		set_irq(true);
 	} else {
 		fdc[drv].track = trk;
+		if(prev_track != trk && d_noise_seek != NULL) {
+			d_noise_seek->play();
+		}
 #ifdef UPD765A_DONT_WAIT_SEEK
 		seek_event(drv);
 #else
@@ -1028,12 +1059,18 @@ uint32 UPD765A::read_sector()
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+			continue;
+		}
 		cy = disk[drv]->id[0];
 #if 0
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] /*|| disk[drv]->id[3] != id[3]*/) {
 #else
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] || disk[drv]->id[3] != id[3]) {
 #endif
+			continue;
+		}
+		if(disk[drv]->sector_size.sd == 0) {
 			continue;
 		}
 		// sector number is matched
@@ -1046,7 +1083,7 @@ uint32 UPD765A::read_sector()
 		}
 		fdc[drv].next_trans_position = disk[drv]->data_position[i];
 		
-		if(disk[drv]->crc_error) {
+		if(disk[drv]->crc_error && !disk[drv]->ignore_crc()) {
 			return ST0_AT | ST1_DE | ST2_DD;
 		}
 		if(disk[drv]->deleted) {
@@ -1054,9 +1091,12 @@ uint32 UPD765A::read_sector()
 		}
 		return 0;
 	}
-#ifdef _FDC_DEBUG_LOG
+	#ifdef _FDC_DEBUG_LOG
 	emu->out_debug_log("FDC: SECTOR NOT FOUND (TRK=%d SIDE=%d ID=%2x,%2x,%2x,%2x)\n", trk, side, id[0], id[1], id[2], id[3]);
-#endif
+	#endif
+	if(cy == -1) {
+		return ST0_AT | ST1_MA;
+	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
 			return ST0_AT | ST1_ND | ST2_BC;
@@ -1089,12 +1129,18 @@ uint32 UPD765A::write_sector(bool deleted)
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+			continue;
+		}
 		cy = disk[drv]->id[0];
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] /*|| disk[drv]->id[3] != id[3]*/) {
 			continue;
 		}
+		if(disk[drv]->sector_size.sd == 0) {
+			continue;
+		}
 		// sector number is matched
-		int size = 0x80 << (id[3] & 7);
+		int size = 0x80 << min((int)id[3], 7);
 		memcpy(disk[drv]->sector, buffer, __min(size, disk[drv]->sector_size.sd));
 		disk[drv]->set_deleted(deleted);
 		return 0;
@@ -1128,13 +1174,22 @@ uint32 UPD765A::find_id()
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+			continue;
+		}
 		cy = disk[drv]->id[0];
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] /*|| disk[drv]->id[3] != id[3]*/) {
+			continue;
+		}
+		if(disk[drv]->sector_size.sd == 0) {
 			continue;
 		}
 		// sector number is matched
 		fdc[drv].next_trans_position = disk[drv]->data_position[i];
 		return 0;
+	}
+	if(cy == -1) {
+		return ST0_AT | ST1_MA;
 	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
@@ -1296,16 +1351,20 @@ uint32 UPD765A::read_id()
 	}
 	for(int i = 0; i < secnum; i++) {
 		int index = (first_sector + i) % secnum;
-		if(disk[drv]->get_sector(trk, side, index)) {
-			id[0] = disk[drv]->id[0];
-			id[1] = disk[drv]->id[1];
-			id[2] = disk[drv]->id[2];
-			id[3] = disk[drv]->id[3];
-			fdc[drv].next_trans_position = disk[drv]->id_position[index] + 6;
-			return 0;
+		if(!disk[drv]->get_sector(trk, side, index)) {
+			continue;
 		}
+		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+			continue;
+		}
+		id[0] = disk[drv]->id[0];
+		id[1] = disk[drv]->id[1];
+		id[2] = disk[drv]->id[2];
+		id[3] = disk[drv]->id[3];
+		fdc[drv].next_trans_position = disk[drv]->id_position[index] + 6;
+		return 0;
 	}
-	return ST0_AT | ST1_ND;
+	return ST0_AT | ST1_MA;
 }
 
 uint32 UPD765A::write_id()
@@ -1313,7 +1372,7 @@ uint32 UPD765A::write_id()
 	int drv = hdu & DRIVE_MASK;
 	int trk = fdc[drv].track;
 	int side = (hdu >> 2) & 1;
-	int length = 0x80 << (id[3] & 7);
+	int length = 0x80 << min((int)id[3], 7);
 	
 	if((result = check_cond(true)) != 0) {
 		return result;
@@ -1467,8 +1526,8 @@ double UPD765A::get_usec_to_exec_phase()
 	int trk = fdc[drv].track;
 	int side = (hdu >> 2) & 1;
 	
-	// XXX: this is a standard image and skew may be incorrect
-	if(disk[drv]->is_standard_image) {
+	// XXX: this image may have incorrect skew, so use constant period.
+	if(!disk[drv]->correct_timing()) {
 		return 100;
 	}
 	

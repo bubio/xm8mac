@@ -24,6 +24,7 @@
 
 #include "../disk.h"
 #include "../disksub.h"
+#include "../noise.h"
 #include "../upd765a.h"
 
 #ifdef USE_DEBUGGER
@@ -88,6 +89,9 @@ VM::VM(EMU* parent_emu) : emu(parent_emu)
 //	pc88pcm->set_context_event_manager(pc88event);
 #endif
 	pc88sb2 = new FMSound(this, emu);
+	pc88noise_seek = new NOISE(this, emu);
+	pc88noise_head_down = new NOISE(this, emu);
+	pc88noise_head_up = new NOISE(this, emu);
 
 	
 #ifdef SUPPORT_PC88_HIGH_CLOCK
@@ -99,6 +103,9 @@ VM::VM(EMU* parent_emu) : emu(parent_emu)
 	pc88event->set_context_sound(pc88opn);
 	pc88event->set_context_sound(pc88sb2);
 	pc88event->set_context_sound(pc88pcm);
+	pc88event->set_context_sound(pc88noise_seek);
+	pc88event->set_context_sound(pc88noise_head_down);
+	pc88event->set_context_sound(pc88noise_head_up);
 #ifdef SUPPORT_PC88_PCG8100
 	pc88event->set_context_sound(pc88pcm0);
 	pc88event->set_context_sound(pc88pcm1);
@@ -143,6 +150,9 @@ VM::VM(EMU* parent_emu) : emu(parent_emu)
 	pc88pio_sub->set_context_port_c(pc88pio, SIG_I8255_PORT_C, 0xf0, -4);
 	pc88pio_sub->clear_ports_by_cmdreg = true;
 	pc88fdc_sub->set_context_irq(pc88cpu_sub, SIG_CPU_IRQ, 1);
+	pc88fdc_sub->set_context_noise_seek(pc88noise_seek);
+	pc88fdc_sub->set_context_noise_head_down(pc88noise_head_down);
+	pc88fdc_sub->set_context_noise_head_up(pc88noise_head_up);
 	pc88cpu_sub->set_context_mem(pc88sub);
 	pc88cpu_sub->set_context_io(pc88sub);
 	pc88cpu_sub->set_context_intr(pc88sub);

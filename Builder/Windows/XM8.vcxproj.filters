@@ -108,6 +108,9 @@
     <ClCompile Include="..\..\Source\ePC-8801MA\vm\pc8801\pc8801.cpp">
       <Filter>ソース ファイル\ePC-8801MA\vm\pc8801</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\ePC-8801MA\vm\noise.cpp">
+      <Filter>ソース ファイル\ePC-8801MA\vm</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\UI\emu.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
@@ -238,6 +241,9 @@
     </ClInclude>
     <ClInclude Include="..\..\Source\ePC-8801MA\vm\pc8801\pc8801.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm\pc8801</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\ePC-8801MA\vm\noise.h">
+      <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\UI\emu_sdl.h">
       <Filter>ヘッダー ファイル\UI</Filter>

@@ -127,6 +127,7 @@ set(SRCS
   Source/ePC-8801MA/vm/i8255.cpp
   Source/ePC-8801MA/vm/disksub.cpp
   Source/ePC-8801MA/vm/pcm1bit.cpp
+  Source/ePC-8801MA/vm/noise.cpp
   Source/ePC-8801MA/vm/upd765a.cpp
   Source/ePC-8801MA/vm/upd1990a.cpp
   Source/ePC-8801MA/vm/fmsound.cpp

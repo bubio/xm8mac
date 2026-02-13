@@ -25,6 +25,7 @@
 #define SIG_UPD765A_FREADY	7
 
 class DISK;
+class NOISE;
 
 class UPD765A : public DEVICE
 {
@@ -34,6 +35,11 @@ private:
 	outputs_t outputs_drq;
 	outputs_t outputs_hdu;
 	outputs_t outputs_index;
+	
+	// drive noise (optional)
+	NOISE* d_noise_seek;
+	NOISE* d_noise_head_down;
+	NOISE* d_noise_head_up;
 	
 	// fdc
 	struct {
@@ -126,7 +132,11 @@ public:
 		init_output_signals(&outputs_drq);
 		init_output_signals(&outputs_hdu);
 		init_output_signals(&outputs_index);
+		d_noise_seek = NULL;
+		d_noise_head_down = NULL;
+		d_noise_head_up = NULL;
 		raise_irq_when_media_changed = false;
+		set_device_name(_T("uPD765A FDC"));
 	}
 	~UPD765A() {}
 	
@@ -141,6 +151,7 @@ public:
 	void write_signal(int id, uint32 data, uint32 mask);
 	uint32 read_signal(int ch);
 	void event_callback(int event_id, int err);
+	void update_config();
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
 	bool process_state(FILEIO* state_fio, bool loading);
@@ -161,6 +172,30 @@ public:
 	void set_context_index(DEVICE* device, int id, uint32 mask)
 	{
 		register_output_signal(&outputs_index, device, id, mask);
+	}
+	void set_context_noise_seek(NOISE* device)
+	{
+		d_noise_seek = device;
+	}
+	NOISE* get_context_noise_seek()
+	{
+		return d_noise_seek;
+	}
+	void set_context_noise_head_down(NOISE* device)
+	{
+		d_noise_head_down = device;
+	}
+	NOISE* get_context_noise_head_down()
+	{
+		return d_noise_head_down;
+	}
+	void set_context_noise_head_up(NOISE* device)
+	{
+		d_noise_head_up = device;
+	}
+	NOISE* get_context_noise_head_up()
+	{
+		return d_noise_head_up;
 	}
 	DISK* get_disk_handler(int drv)
 	{
