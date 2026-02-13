@@ -534,16 +534,16 @@ void UPD765A::event_callback(int event_id, int err)
 		int drv = event_id - EVENT_SEEK_STEP;
 		if(cur_track[drv] < fdc[drv].track) {
 			cur_track[drv]++;
-			if(d_noise_seek != NULL) {
-				d_noise_seek->play();
-			}
 		} else if(cur_track[drv] > fdc[drv].track) {
 			cur_track[drv]--;
+		}
+		if(seek_step_remain[drv] > 0) {
+			seek_step_remain[drv]--;
 			if(d_noise_seek != NULL) {
 				d_noise_seek->play();
 			}
 		}
-		if(cur_track[drv] == fdc[drv].track && seek_step_id[drv] != -1) {
+		if((cur_track[drv] == fdc[drv].track || seek_step_remain[drv] <= 0) && seek_step_id[drv] != -1) {
 			cancel_event(this, seek_step_id[drv]);
 			seek_step_id[drv] = -1;
 		}
@@ -553,6 +553,7 @@ void UPD765A::event_callback(int event_id, int err)
 			cancel_event(this, seek_step_id[drv]);
 			seek_step_id[drv] = -1;
 		}
+		seek_step_remain[drv] = 0;
 		cur_track[drv] = fdc[drv].track;
 		seek_id[drv] = -1;
 		seek_event(drv);
@@ -732,9 +733,9 @@ uint8 UPD765A::get_devstat(int drv)
 		return ST3_FT | drv;
 	}
 	return drv |
-	       ((fdc[drv].track & 1) ? ST3_HD : 0) |
+	       ((cur_track[drv] & 1) ? ST3_HD : 0) |
 	       ST3_TS |
-	       (fdc[drv].track ? 0 : ST3_T0) |
+	       (cur_track[drv] ? 0 : ST3_T0) |
 	       ((force_ready || disk[drv]->inserted) ? ST3_RY : 0) |
 	       (disk[drv]->write_protected ? ST3_WP : 0);
 }
@@ -767,9 +768,12 @@ void UPD765A::cmd_recalib()
 
 void UPD765A::seek(int drv, int trk)
 {
-	int steptime = (32 - 2 * step_rate_time) * 1000; // msec -> usec
+	int steptime = 32 - 2 * step_rate_time;
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
 		steptime /= 2;
+	}
+	if(steptime <= 0) {
+		steptime = 1;
 	}
 	
 	if(drv >= MAX_DRIVE) {
@@ -777,15 +781,13 @@ void UPD765A::seek(int drv, int trk)
 		fdc[drv].result = (drv & DRIVE_MASK) | ST0_SE | ST0_NR | ST0_AT;
 		set_irq(true);
 	} else {
-		cur_track[drv] = fdc[drv].track;
-		fdc[drv].track = trk;
+		// get distance
 		int distance = abs(trk - cur_track[drv]);
 		int seektime = (distance == 0) ? 120 : steptime * distance + 500; // usec
+		fdc[drv].track = trk;
 #ifdef UPD765A_DONT_WAIT_SEEK
-		if(cur_track[drv] != fdc[drv].track) {
-			if(d_noise_seek != NULL) {
-				d_noise_seek->play();
-			}
+		if(distance > 0 && d_noise_seek != NULL) {
+			d_noise_seek->play();
 		}
 		cur_track[drv] = fdc[drv].track;
 		seek_event(drv);
@@ -803,9 +805,11 @@ void UPD765A::seek(int drv, int trk)
 			seektime = 100;
 		}
 #endif // SDL
-		if(cur_track[drv] != fdc[drv].track) {
+		if(distance > 0) {
 			seek_step_remain[drv] = distance;
 			register_event(this, EVENT_SEEK_STEP + drv, steptime, true, &seek_step_id[drv]);
+		} else {
+			cur_track[drv] = fdc[drv].track;
 		}
 		register_event(this, EVENT_SEEK + drv, seektime, false, &seek_id[drv]);
 		seekstat |= 1 << drv;
