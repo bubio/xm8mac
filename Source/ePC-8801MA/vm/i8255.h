@@ -39,6 +39,7 @@ public:
 			port[i].wreg = port[i].rreg = 0;//0xff;
 		}
 		clear_ports_by_cmdreg = false;
+		set_device_name(_T("8255 PIO"));
 	}
 	~I8255() {}
 	

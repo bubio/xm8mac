@@ -401,6 +401,7 @@ void DISK::close()
 	file_size.d = 0;
 	sector_size.sd = sector_num.sd = 0;
 	sector = NULL;
+	track_mfm = drive_mfm;
 }
 
 bool DISK::get_track(int trk, int side)
@@ -435,16 +436,33 @@ bool DISK::get_track(int trk, int side)
 	pair data_size;
 	data_size.read_2bytes_le_from(sector + 14);
 	
+	// detect actual density from sector headers in this track.
+	track_mfm = false;
+	if(sector_num.sd == 0) {
+		track_mfm = drive_mfm;
+	} else {
+		uint8* t = sector;
+		for(int i = 0; i < sector_num.sd; i++) {
+			data_size.read_2bytes_le_from(t + 14);
+			// t[6]: 0x00 = MFM(double-density), 0x40 = FM(single-density)
+			if(t[6] == 0x00) {
+				track_mfm = true;
+				break;
+			}
+			t += data_size.sd + 0x10;
+		}
+	}
+	
 	// create each sector position in track
-	int sync_size  = drive_mfm ? 12 : 6;
-	int am_size = drive_mfm ? 3 : 0;
-	int gap0_size = drive_mfm ? 80 : 40;
-	int gap1_size = drive_mfm ? 50 : 26;
-	int gap2_size = drive_mfm ? 22 : 11;
+	int sync_size  = track_mfm ? 12 : 6;
+	int am_size = track_mfm ? 3 : 0;
+	int gap0_size = track_mfm ? 80 : 40;
+	int gap1_size = track_mfm ? 50 : 26;
+	int gap2_size = track_mfm ? 22 : 11;
 	int gap3_size = 0, gap4_size;
 	
 	if(media_type == MEDIA_TYPE_144 || media_type == MEDIA_TYPE_2HD) {
-		if(drive_mfm) {
+		if(track_mfm) {
 			if(data_size.sd ==  256 && sector_num.sd == 26) gap3_size =  54;
 			if(data_size.sd ==  512 && sector_num.sd == 15) gap3_size =  84;
 			if(data_size.sd == 1024 && sector_num.sd ==  8) gap3_size = 116;
@@ -454,7 +472,7 @@ bool DISK::get_track(int trk, int side)
 			if(data_size.sd ==  512 && sector_num.sd ==  8) gap3_size =  58;
 		}
 	} else {
-		if(drive_mfm) {
+		if(track_mfm) {
 			if(data_size.sd ==  256 && sector_num.sd == 16) gap3_size =  51;
 			if(data_size.sd ==  512 && sector_num.sd ==  9) gap3_size =  80;
 			if(data_size.sd == 1024 && sector_num.sd ==  5) gap3_size = 116;
@@ -525,10 +543,10 @@ bool DISK::make_track(int trk, int side)
 	}
 	
 	// make track image
-	int sync_size  = drive_mfm ? 12 : 6;
-	int am_size = drive_mfm ? 3 : 0;
-	int gap2_size = drive_mfm ? 22 : 11;
-	uint8 gap_data = drive_mfm ? 0x4e : 0xff;
+	int sync_size  = track_mfm ? 12 : 6;
+	int am_size = track_mfm ? 3 : 0;
+	int gap2_size = track_mfm ? 22 : 11;
+	uint8 gap_data = track_mfm ? 0x4e : 0xff;
 	
 	// preamble
 	memset(track, gap_data, track_size);
@@ -755,6 +773,7 @@ bool DISK::format_track(int trk, int side)
 	
 	trim_required = true;
 	sector_num.sd = 0;
+	track_mfm = drive_mfm;
 	return true;
 }
 
@@ -776,7 +795,7 @@ void DISK::insert_sector(uint8 c, uint8 h, uint8 r, uint8 n, bool deleted, bool 
 	t[3] = n;
 	t[4] = sector_num.b.l;
 	t[5] = sector_num.b.h;
-	t[6] = drive_mfm ? 0 : 0x40;
+	t[6] = track_mfm ? 0 : 0x40;
 	t[7] = deleted ? 0x10 : 0;
 	t[8] = crc_error ? 0xb0 : t[7]; // FIXME: always data crc error ?
 	t[14] = (length >> 0) & 0xff;
@@ -882,7 +901,7 @@ int DISK::get_max_tracks()
 int DISK::get_track_size()
 {
 	if(inserted) {
-		return media_type == MEDIA_TYPE_144 ? 12500 : media_type == MEDIA_TYPE_2HD ? 10410 : drive_mfm ? 6250 : 3100;
+		return media_type == MEDIA_TYPE_144 ? 12500 : media_type == MEDIA_TYPE_2HD ? 10410 : track_mfm ? 6250 : 3100;
 	} else {
 		return drive_type == DRIVE_TYPE_144 ? 12500 : drive_type == DRIVE_TYPE_2HD ? 10410 : drive_mfm ? 6250 : 3100;
 	}
@@ -1553,7 +1572,7 @@ bool DISK::standard_to_d88(int type, int ncyl, int nside, int nsec, int size)
 	return true;
 }
 
-#define STATE_VERSION	4
+#define STATE_VERSION	5
 
 void DISK::save_state(FILEIO* state_fio)
 {
@@ -1578,6 +1597,7 @@ void DISK::save_state(FILEIO* state_fio)
 	state_fio->FputInt32(sector_num.sd);
 	state_fio->FputBool(invalid_format);
 	state_fio->FputBool(no_skew);
+	state_fio->FputBool(track_mfm);
 	state_fio->Fwrite(sync_position, sizeof(sync_position), 1);
 	state_fio->Fwrite(id_position, sizeof(id_position), 1);
 	state_fio->Fwrite(data_position, sizeof(data_position), 1);
@@ -1594,7 +1614,8 @@ void DISK::save_state(FILEIO* state_fio)
 
 bool DISK::load_state(FILEIO* state_fio)
 {
-	if(state_fio->FgetUint32() != STATE_VERSION) {
+	uint32 state_version = state_fio->FgetUint32();
+	if(state_version < 4 || state_version > STATE_VERSION) {
 		return false;
 	}
 	state_fio->Fread(buffer, sizeof(buffer), 1);
@@ -1616,6 +1637,11 @@ bool DISK::load_state(FILEIO* state_fio)
 	sector_num.sd = state_fio->FgetInt32();
 	invalid_format = state_fio->FgetBool();
 	no_skew = state_fio->FgetBool();
+	if(state_version >= 5) {
+		track_mfm = state_fio->FgetBool();
+	} else {
+		track_mfm = true;
+	}
 	state_fio->Fread(sync_position, sizeof(sync_position), 1);
 	state_fio->Fread(id_position, sizeof(id_position), 1);
 	state_fio->Fread(data_position, sizeof(data_position), 1);
@@ -1629,6 +1655,9 @@ bool DISK::load_state(FILEIO* state_fio)
 	drive_type = state_fio->FgetUint8();
 	drive_rpm = state_fio->FgetInt32();
 	drive_mfm = state_fio->FgetBool();
+	if(state_version < 5) {
+		track_mfm = drive_mfm;
+	}
 	return true;
 }
 
