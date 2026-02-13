@@ -45,3 +45,18 @@ The following should not be migrated unless explicitly required:
 - Tape play/rec works
 - Save/load state works
 - No UI source changes
+
+## Progress Notes
+
+- 2026-02-12:
+  - Added `DEVICE` compatibility aliases used by common-source style code:
+    `process_state()`, `initialize_output_signals()`, event/clock alias methods,
+    interrupt alias methods, and `set_device_name()/get_device_name()`.
+  - Added `DISK` compatibility wrappers:
+    `open(const _TCHAR*)`, `process_state()`, and utility aliases
+    (`set_data_crc_error()`, `get_usec_per_track()`, `get_bytes_per_usec()`).
+  - Added `UPD765A` compatibility wrappers:
+    `open_disk(const _TCHAR*)`, `process_state()`,
+    `is_disk_inserted()`, `is_disk_protected()`, `get_media_type()`,
+    and safer `get_disk_handler()` bounds check.
+  - Verified with `cmake --build build -j8` (success, warnings only).

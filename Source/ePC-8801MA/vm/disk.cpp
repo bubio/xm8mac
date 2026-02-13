@@ -104,6 +104,11 @@ static const fd_format_t fd_formats[] = {
 
 #define IS_VALID_TRACK(offset) ((offset) >= 0x20 && (offset) < sizeof(buffer))
 
+void DISK::open(const _TCHAR* path, int bank)
+{
+	open(const_cast<_TCHAR*>(path), bank);
+}
+
 void DISK::open(_TCHAR path[], int bank)
 {
 	// check current disk image
@@ -841,6 +846,15 @@ double DISK::get_usec_per_bytes(int bytes)
 	return 1000000.0 / (get_track_size() * (get_rpm() / 60.0)) * bytes;
 }
 
+int DISK::get_bytes_per_usec(double usec)
+{
+	double usec_per_byte = get_usec_per_bytes(1);
+	if(usec_per_byte <= 0.0) {
+		return 0;
+	}
+	return (int)(usec / usec_per_byte + 0.5);
+}
+
 bool DISK::check_media_type()
 {
 	switch(drive_type) {
@@ -1568,6 +1582,15 @@ bool DISK::load_state(FILEIO* state_fio)
 	drive_type = state_fio->FgetUint8();
 	drive_rpm = state_fio->FgetInt32();
 	drive_mfm = state_fio->FgetBool();
+	return true;
+}
+
+bool DISK::process_state(FILEIO* state_fio, bool loading)
+{
+	if(loading) {
+		return load_state(state_fio);
+	}
+	save_state(state_fio);
 	return true;
 }
 

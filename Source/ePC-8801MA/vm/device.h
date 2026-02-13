@@ -31,6 +31,7 @@ protected:
 public:
 	DEVICE(VM* parent_vm, EMU* parent_emu) : vm(parent_vm), emu(parent_emu)
 	{
+		_tcscpy_s(this_device_name, array_length(this_device_name), _T("Base Device"));
 		prev_device = vm->last_device;
 		next_device = NULL;
 		if(vm->first_device == NULL) {
@@ -56,6 +57,14 @@ public:
 	virtual void save_state(FILEIO* state_fio) {}
 	virtual bool load_state(FILEIO* state_fio)
 	{
+		return true;
+	}
+	virtual bool process_state(FILEIO* state_fio, bool loading)
+	{
+		if(loading) {
+			return load_state(state_fio);
+		}
+		save_state(state_fio);
 		return true;
 	}
 	
@@ -400,6 +409,10 @@ public:
 	{
 		items->count = 0;
 	}
+	virtual void initialize_output_signals(outputs_t *items)
+	{
+		init_output_signals(items);
+	}
 	virtual void register_output_signal(outputs_t *items, DEVICE *device, int id, uint32 mask, int shift)
 	{
 		int c = items->count++;
@@ -449,6 +462,19 @@ public:
 	}
 	virtual void intr_reti() {}
 	virtual void intr_ei() {}
+	virtual uint32 get_intr_ack()
+	{
+		return intr_ack();
+	}
+	virtual void update_intr() {}
+	virtual void notify_intr_reti()
+	{
+		intr_reti();
+	}
+	virtual void notify_intr_ei()
+	{
+		intr_ei();
+	}
 	
 	// dma
 	virtual void do_dma() {}
@@ -501,6 +527,10 @@ public:
 		}
 		return event_manager->this_device_id;
 	}
+	virtual int get_event_manager_id()
+	{
+		return event_manager_id();
+	}
 	virtual void register_event(DEVICE* device, int event_id, double usec, bool loop, int* register_id)
 	{
 		if(event_manager == NULL) {
@@ -547,6 +577,10 @@ public:
 		}
 		return event_manager->current_clock();
 	}
+	virtual uint32 get_current_clock()
+	{
+		return current_clock();
+	}
 	virtual uint32 passed_clock(uint32 prev)
 	{
 		if(event_manager == NULL) {
@@ -554,12 +588,20 @@ public:
 		}
 		return event_manager->passed_clock(prev);
 	}
+	virtual uint32 get_passed_clock(uint32 prev)
+	{
+		return passed_clock(prev);
+	}
 	virtual double passed_usec(uint32 prev)
 	{
 		if(event_manager == NULL) {
 			event_manager = vm->first_device->next_device;
 		}
 		return event_manager->passed_usec(prev);
+	}
+	virtual double get_passed_usec(uint32 prev)
+	{
+		return passed_usec(prev);
 	}
 	virtual uint32 get_cpu_pc(int index)
 	{
@@ -736,10 +778,41 @@ public:
 		return 0;
 	}
 #endif
+
+	// misc
+	virtual void out_debug_log(const _TCHAR* format, ...)
+	{
+		va_list ap;
+		_TCHAR buffer[1024];
+		
+		va_start(ap, format);
+		_vstprintf_s(buffer, 1024, format, ap);
+		va_end(ap);
+		
+		emu->out_debug_log(_T("%s"), buffer);
+	}
+	void set_device_name(const _TCHAR* format, ...)
+	{
+		if(format != NULL) {
+			va_list ap;
+			_TCHAR buffer[1024];
+			
+			va_start(ap, format);
+			_vstprintf_s(buffer, 1024, format, ap);
+			va_end(ap);
+			
+			_tcscpy_s(this_device_name, array_length(this_device_name), buffer);
+		}
+	}
+	const _TCHAR *get_device_name()
+	{
+		return (const _TCHAR *)this_device_name;
+	}
 	
 	DEVICE* prev_device;
 	DEVICE* next_device;
 	int this_device_id;
+	_TCHAR this_device_name[128];
 };
 
 #endif

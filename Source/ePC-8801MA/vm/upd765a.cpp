@@ -1513,7 +1513,7 @@ double UPD765A::get_usec_to_exec_phase()
 // user interface
 // ----------------------------------------------------------------------------
 
-void UPD765A::open_disk(int drv, _TCHAR path[], int bank)
+void UPD765A::open_disk(int drv, const _TCHAR* path, int bank)
 {
 	if(drv < MAX_DRIVE) {
 		disk[drv]->open(path, bank);
@@ -1527,6 +1527,11 @@ void UPD765A::open_disk(int drv, _TCHAR path[], int bank)
 			}
 		}
 	}
+}
+
+void UPD765A::open_disk(int drv, _TCHAR path[], int bank)
+{
+	open_disk(drv, (const _TCHAR*)path, bank);
 }
 
 void UPD765A::close_disk(int drv)
@@ -1569,6 +1574,21 @@ bool UPD765A::disk_ejected()
 {
 	int drv = hdu & DRIVE_MASK;
 	return disk_ejected(drv);
+}
+
+void UPD765A::is_disk_protected(int drv, bool value)
+{
+	if(drv < MAX_DRIVE) {
+		disk[drv]->write_protected = value;
+	}
+}
+
+bool UPD765A::is_disk_protected(int drv)
+{
+	if(drv < MAX_DRIVE) {
+		return disk[drv]->write_protected;
+	}
+	return false;
 }
 
 uint8 UPD765A::media_type(int drv)
@@ -1709,6 +1729,15 @@ bool UPD765A::load_state(FILEIO* state_fio)
 	reset_signal = state_fio->FgetBool();
 	prev_index = state_fio->FgetBool();
 	prev_drq_clock = state_fio->FgetUint32();
+	return true;
+}
+
+bool UPD765A::process_state(FILEIO* state_fio, bool loading)
+{
+	if(loading) {
+		return load_state(state_fio);
+	}
+	save_state(state_fio);
 	return true;
 }
 
