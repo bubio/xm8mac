@@ -1404,6 +1404,7 @@ uint32 UPD765A::write_id()
 		return ST0_AT | ST1_NW;
 	}
 	
+	disk[drv]->track_mfm = ((command & 0x40) != 0);
 	disk[drv]->format_track(trk, side);
 	for(int i = 0; i < eot && i < 256; i++) {
 		for(int j = 0; j < 4; j++) {

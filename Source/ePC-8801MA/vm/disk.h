@@ -154,6 +154,7 @@ public:
 		drive_type = DRIVE_TYPE_UNK;
 		drive_rpm = 0;
 		drive_mfm = true;
+		track_mfm = true;
 		static int num = 0;
 		drive_num = num++;
 	}
@@ -218,6 +219,7 @@ public:
 	bool invalid_format;
 	bool no_skew;
 	int cur_track, cur_side;
+	bool track_mfm;
 	
 	int sync_position[256];
 	int id_position[256];
