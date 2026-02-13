@@ -402,6 +402,9 @@ void DISK::close()
 	sector_size.sd = sector_num.sd = 0;
 	sector = NULL;
 	sector_mfm = drive_mfm;
+	addr_crc_error = false;
+	data_crc_error = false;
+	crc_error = false;
 	track_mfm = drive_mfm;
 }
 
@@ -721,10 +724,13 @@ void DISK::set_sector_info(uint8 *t)
 	sector_mfm = (density == 0x00);
 	deleted = (t[7] != 0);
 	if(config.ignore_crc) {
-		crc_error = false;
+		addr_crc_error = false;
+		data_crc_error = false;
 	} else {
-		crc_error = ((t[8] & 0xf0) != 0x00 && (t[8] & 0xf0) != 0x10);
+		addr_crc_error = ((t[8] & 0xf0) == 0xa0);
+		data_crc_error = ((t[8] & 0xf0) == 0xb0);
 	}
+	crc_error = addr_crc_error || data_crc_error;
 	sector = t + 0x10;
 	sector_size.read_2bytes_le_from(t + 14);
 }
@@ -745,8 +751,10 @@ void DISK::set_crc_error(bool value)
 {
 	if(sector != NULL) {
 		uint8 *t = sector - 0x10;
-		t[8] = (t[8] & 0x0f) | (value ? 0xb0 : t[7]); // FIXME: always data crc error ?
+		t[8] = (t[8] & 0x0f) | (value ? 0xb0 : t[7]);
 	}
+	addr_crc_error = false;
+	data_crc_error = value;
 	crc_error = value;
 }
 
@@ -757,6 +765,8 @@ void DISK::set_data_mark_missing()
 		t[8] = (t[8] & 0x0f) | 0xf0;
 		t[14] = t[15] = 0;
 	}
+	addr_crc_error = false;
+	data_crc_error = false;
 	crc_error = false;
 }
 
@@ -1665,6 +1675,8 @@ bool DISK::load_state(FILEIO* state_fio)
 	sector_mfm = (density == 0x00);
 	deleted = state_fio->FgetBool();
 	crc_error = state_fio->FgetBool();
+	addr_crc_error = false;
+	data_crc_error = crc_error;
 	drive_type = state_fio->FgetUint8();
 	drive_rpm = state_fio->FgetInt32();
 	drive_mfm = state_fio->FgetBool();

@@ -152,6 +152,9 @@ public:
 		sector_size.sd = sector_num.sd = 0;
 		sector = NULL;
 		sector_mfm = true;
+		addr_crc_error = false;
+		data_crc_error = false;
+		crc_error = false;
 		drive_type = DRIVE_TYPE_UNK;
 		drive_rpm = 0;
 		drive_mfm = true;
@@ -233,6 +236,8 @@ public:
 	uint8 density;
 	bool sector_mfm;
 	bool deleted;
+	bool addr_crc_error;
+	bool data_crc_error;
 	bool crc_error;
 	
 	// drive

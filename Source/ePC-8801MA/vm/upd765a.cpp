@@ -1158,8 +1158,8 @@ uint32 UPD765A::read_sector()
 		}
 		fdc[drv].next_trans_position = disk[drv]->data_position[i];
 		
-		if(disk[drv]->crc_error && !disk[drv]->ignore_crc()) {
-			return ST0_AT | ST1_DE | ST2_DD;
+		if((disk[drv]->addr_crc_error || disk[drv]->data_crc_error) && !disk[drv]->ignore_crc()) {
+			return ST0_AT | ST1_DE | (disk[drv]->data_crc_error ? ST2_DD : 0);
 		}
 		if(disk[drv]->deleted) {
 			return ST2_CM;
