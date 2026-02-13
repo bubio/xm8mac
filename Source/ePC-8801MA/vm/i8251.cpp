@@ -191,7 +191,7 @@ void I8251::event_callback(int event_id, int err)
 					status |= SYNDET;
 					write_signals(&outputs_syndet, 0xffffffff);
 				} else {
-					recv = (uint8_t)val;
+					recv = (uint8)val;
 					status |= RXRDY;
 					write_signals(&outputs_rxrdy, 0xffffffff);
 				}
@@ -205,7 +205,7 @@ void I8251::event_callback(int event_id, int err)
 		}
 	} else if(event_id == EVENT_SEND) {
 		if(txen && !send_buffer->empty()) {
-			uint8_t send = send_buffer->read();
+			uint8 send = send_buffer->read();
 			if(loopback) {
 				// send to this device
 				write_signal(SIG_I8251_RECV, send, 0xff);
