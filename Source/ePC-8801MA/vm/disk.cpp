@@ -414,6 +414,16 @@ bool DISK::get_track(int trk, int side)
 	sector_size.sd = sector_num.sd = 0;
 	invalid_format = false;
 	no_skew = true;
+	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
+		if(trk >= 0) {
+			if(trk & 1) {
+				return false; // unformat track on 2DD side mapping
+			}
+			trk >>= 1;
+		}
+	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
+		if(trk >= 0) trk <<= 1;
+	}
 	
 	// disk not inserted or invalid media type
 	if(!(inserted && check_media_type())) {
@@ -489,31 +499,44 @@ bool DISK::get_track(int trk, int side)
 	}
 	
 	uint8* t = sector;
-	int total = sync_size + (am_size + 1);
+	int total = 0, valid_sector_num = 0;
 	
 	for(int i = 0; i < sector_num.sd; i++) {
 		data_size.read_2bytes_le_from(t + 14);
-		total += sync_size + (am_size + 1) + (4 + 2) + gap2_size + sync_size + (am_size + 1);
-		total += data_size.sd + 2;
+		sync_position[i] = total; // for invalid format case
+		total += sync_size + (am_size + 1) + (4 + 2) + gap2_size;
+		if(data_size.sd > 0) {
+			total += sync_size + (am_size + 1);
+			total += data_size.sd + 2;
+			valid_sector_num++;
+		}
 		if(t[2] != i + 1) {
 			no_skew = false;
 		}
 		t += data_size.sd + 0x10;
 	}
+	total += sync_size + (am_size + 1); // sync in preamble
 	if(gap3_size == 0) {
-		gap3_size = (get_track_size() - total - gap0_size - gap1_size) / (sector_num.sd + 1);
+		gap3_size = (get_track_size() - total - gap0_size - gap1_size) / (valid_sector_num + 1);
 	}
-	gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * sector_num.sd;
+	gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * valid_sector_num;
 	
 	if(gap3_size < 8 || gap4_size < 8) {
-		gap0_size = gap1_size = gap3_size = (get_track_size() - total) / (2 + sector_num.sd + 1);
-		gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * sector_num.sd;
+		gap0_size = gap1_size = gap3_size = (get_track_size() - total) / (2 + valid_sector_num + 1);
+		gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * valid_sector_num;
 	}
 	if(gap3_size < 8 || gap4_size < 8) {
-		gap0_size = gap1_size = gap3_size = gap4_size = 32;
+		gap0_size = gap1_size = gap3_size = gap4_size = 8;
 		invalid_format = true;
 	}
 	int preamble_size = gap0_size + sync_size + (am_size + 1) + gap1_size;
+	if(invalid_format) {
+		total -= sync_size + (am_size + 1);
+		for(int i = 0; i < sector_num.sd; i++) {
+			sync_position[i] *= get_track_size() - preamble_size - gap4_size;
+			sync_position[i] /= total;
+		}
+	}
 	
 	t = sector;
 	total = preamble_size;
@@ -522,14 +545,21 @@ bool DISK::get_track(int trk, int side)
 	for(int i = 0; i < sector_num.sd; i++) {
 		data_size.read_2bytes_le_from(t + 14);
 		if(invalid_format) {
-			total = preamble_size + (get_track_size() - preamble_size - gap4_size) * i / sector_num.sd;
+			total = preamble_size + sync_position[i];
 		}
 		sync_position[i] = total;
-		total += sync_size + (am_size + 1);
+		total += sync_size;
+		total += am_size + 1;
 		id_position[i] = total;
-		total += (4 + 2) + gap2_size + sync_size + (am_size + 1);
-		data_position[i] = total;
-		total += data_size.sd + 2 + gap3_size;
+		total += (4 + 2) + gap2_size;
+		if(data_size.sd > 0) {
+			total += sync_size + (am_size + 1);
+			data_position[i] = total;
+			total += data_size.sd + 2;
+			total += gap3_size;
+		} else {
+			data_position[i] = total; // no data field
+		}
 		t += data_size.sd + 0x10;
 	}
 	return true;
@@ -537,6 +567,16 @@ bool DISK::get_track(int trk, int side)
 
 bool DISK::make_track(int trk, int side)
 {
+	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
+		if(trk >= 0) {
+			if(trk & 1) {
+				return false;
+			}
+			trk >>= 1;
+		}
+	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
+		if(trk >= 0) trk <<= 1;
+	}
 	int track_size = get_track_size();
 	
 	if(!get_track(trk, side)) {
@@ -602,26 +642,33 @@ bool DISK::make_track(int trk, int side)
 		for(int j = 0; j < gap2_size; j++) {
 			if(p < track_size) track[p++] = gap_data;
 		}
-		// sync
-		for(int j = 0; j < sync_size; j++) {
-			if(p < track_size) track[p++] = 0x00;
+		// data field (may be absent)
+		if(data_size.sd > 0) {
+			// sync
+			for(int j = 0; j < sync_size; j++) {
+				if(p < track_size) track[p++] = 0x00;
+			}
+			// am2
+			crc = 0xffff;
+			for(int j = 0; j < am_size; j++) {
+				if(p < track_size) track[p++] = 0xa1;
+				crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
+			}
+			uint8 am2 = (t[7] != 0) ? 0xf8 : 0xfb;
+			if(p < track_size) track[p++] = am2;
+			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ am2]);
+			// data
+			uint8* u = get_unstable_sector(sector, i);
+			for(int j = 0; j < data_size.sd; j++) {
+				if(p < track_size) {
+					uint8 mask = u ? u[j] : 0;
+					track[p++] = (t[0x10 + j] & ~mask) | (rand() & mask);
+				}
+				crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0x10 + j]]);
+			}
+			if(p < track_size) track[p++] = (crc >> 8) & 0xff;
+			if(p < track_size) track[p++] = (crc >> 0) & 0xff;
 		}
-		// am2
-		crc = 0xffff;
-		for(int j = 0; j < am_size; j++) {
-			if(p < track_size) track[p++] = 0xa1;
-			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
-		}
-		uint8 am2 = (t[7] != 0) ? 0xf8 : 0xfb;
-		if(p < track_size) track[p++] = am2;
-		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ am2]);
-		// data
-		for(int j = 0; j < data_size.sd; j++) {
-			if(p < track_size) track[p++] = t[0x10 + j];
-			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0x10 + j]]);
-		}
-		if(p < track_size) track[p++] = (crc >> 8) & 0xff;
-		if(p < track_size) track[p++] = (crc >> 0) & 0xff;
 		
 		t += data_size.sd + 0x10;
 	}
@@ -643,6 +690,16 @@ bool DISK::get_sector(int trk, int side, int index)
 	if(trk == -1 && side == -1) {
 		trk = cur_track;
 		side = cur_side;
+	}
+	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
+		if(trk >= 0) {
+			if(trk & 1) {
+				return false;
+			}
+			trk >>= 1;
+		}
+	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
+		if(trk >= 0) trk <<= 1;
 	}
 	int trkside = trk * 2 + (side & 1);
 	if(!(0 <= trkside && trkside < 164)) {
@@ -837,6 +894,16 @@ void DISK::set_data_mark_missing()
 
 bool DISK::format_track(int trk, int side)
 {
+	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
+		if(trk >= 0) {
+			if(trk & 1) {
+				return false;
+			}
+			trk >>= 1;
+		}
+	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
+		if(trk >= 0) trk <<= 1;
+	}
 	// disk not inserted or invalid media type
 	if(!(inserted && check_media_type())) {
 		return false;

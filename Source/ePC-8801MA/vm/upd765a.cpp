@@ -1095,7 +1095,26 @@ void UPD765A::read_diagnostic()
 		return;
 	}
 	if(!disk[drv]->make_track(trk, side)) {
-		result = ST1_ND;
+		result = ST0_AT | ST1_MA;
+		shift_to_result7();
+		return;
+	}
+	bool found = false;
+	for(int i = 0; i < disk[drv]->sector_num.sd; i++) {
+		if(!disk[drv]->get_sector(trk, side, i)) {
+			continue;
+		}
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
+			continue;
+		}
+		found = true;
+		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] || disk[drv]->id[3] != id[3]) {
+			result = ST1_ND;
+		}
+		break;
+	}
+	if(!found) {
+		result = ST0_AT | ST1_MA;
 		shift_to_result7();
 		return;
 	}
