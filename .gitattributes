@@ -1,0 +1,24 @@
+# Keep line endings stable across platforms without forcing mass conversion.
+* text=auto
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.flac binary
+*.zip binary
+*.7z binary
+*.rar binary
+*.gz binary
+*.bz2 binary
+*.xz binary
+*.pdf binary
+*.rom binary
+*.d88 binary
+*.n80 binary
