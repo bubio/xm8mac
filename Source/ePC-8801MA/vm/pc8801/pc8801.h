@@ -182,6 +182,10 @@ public:
 	void reset();
 	void run();
 	double frame_rate();
+	double get_frame_rate()
+	{
+		return frame_rate();
+	}
 	
 #ifdef USE_DEBUGGER
 	// debugger
@@ -196,6 +200,10 @@ public:
 	void initialize_sound(int rate, int samples);
 	uint16* create_sound(int* extra_frames);
 	int sound_buffer_ptr();
+	int get_sound_buffer_ptr()
+	{
+		return sound_buffer_ptr();
+	}
 	
 	// notify key
 	void key_down(int code, bool repeat);
@@ -203,13 +211,49 @@ public:
 	
 	// user interface
 	void open_disk(int drv, _TCHAR* file_path, int bank);
+	void open_floppy_disk(int drv, const _TCHAR* file_path, int bank)
+	{
+		open_disk(drv, const_cast<_TCHAR*>(file_path), bank);
+	}
 	void close_disk(int drv);
+	void close_floppy_disk(int drv)
+	{
+		close_disk(drv);
+	}
 	bool disk_inserted(int drv);
+	bool is_floppy_disk_inserted(int drv)
+	{
+		return disk_inserted(drv);
+	}
 	void play_tape(_TCHAR* file_path);
+	void play_tape(int drv, const _TCHAR* file_path)
+	{
+		(void)drv;
+		play_tape(const_cast<_TCHAR*>(file_path));
+	}
 	void rec_tape(_TCHAR* file_path);
+	void rec_tape(int drv, const _TCHAR* file_path)
+	{
+		(void)drv;
+		rec_tape(const_cast<_TCHAR*>(file_path));
+	}
 	void close_tape();
+	void close_tape(int drv)
+	{
+		(void)drv;
+		close_tape();
+	}
 	bool tape_inserted();
+	bool is_tape_inserted(int drv)
+	{
+		(void)drv;
+		return tape_inserted();
+	}
 	bool now_skip();
+	bool is_frame_skippable()
+	{
+		return now_skip();
+	}
 	
 	void update_config();
 	void save_state(FILEIO* state_fio);
