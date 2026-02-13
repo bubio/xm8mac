@@ -401,6 +401,7 @@ void DISK::close()
 	file_size.d = 0;
 	sector_size.sd = sector_num.sd = 0;
 	sector = NULL;
+	sector_mfm = drive_mfm;
 	track_mfm = drive_mfm;
 }
 
@@ -680,7 +681,7 @@ bool DISK::get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uin
 		*n = id[3];
 	}
 	if(mfm != NULL) {
-		*mfm = (density == 0x00);
+		*mfm = sector_mfm;
 	}
 	if(length != NULL) {
 		*length = sector_size.sd;
@@ -691,11 +692,16 @@ bool DISK::get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uin
 void DISK::set_sector_info(uint8 *t)
 {
 	// header info
+	int am_size = track_mfm ? 3 : 0;
+	uint16 crc = 0xffff;
+	for(int i = 0; i < am_size; i++) {
+		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
+	}
+	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xfe]);
 	id[0] = t[0];
 	id[1] = t[1];
 	id[2] = t[2];
 	id[3] = t[3];
-	uint16 crc = 0;
 	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0]]);
 	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[1]]);
 	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[2]]);
@@ -707,6 +713,7 @@ void DISK::set_sector_info(uint8 *t)
 	// t[7]: 0x00 = normal, 0x10 = deleted mark
 	// t[8]: 0x00 = valid, 0x10 = valid (deleted data), 0xa0 = id crc error, 0xb0 = data crc error, 0xe0 = address mark missing, 0xf0 = data mark missing
 	density = t[6];
+	sector_mfm = (density == 0x00);
 	deleted = (t[7] != 0);
 	if(config.ignore_crc) {
 		crc_error = false;
@@ -1650,6 +1657,7 @@ bool DISK::load_state(FILEIO* state_fio)
 	sector_size.sd = state_fio->FgetInt32();
 	state_fio->Fread(id, sizeof(id), 1);
 	density = state_fio->FgetUint8();
+	sector_mfm = (density == 0x00);
 	deleted = state_fio->FgetBool();
 	crc_error = state_fio->FgetBool();
 	drive_type = state_fio->FgetUint8();

@@ -1134,7 +1134,7 @@ uint32 UPD765A::read_sector()
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		cy = disk[drv]->id[0];
@@ -1204,7 +1204,7 @@ uint32 UPD765A::write_sector(bool deleted)
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		cy = disk[drv]->id[0];
@@ -1249,7 +1249,7 @@ uint32 UPD765A::find_id()
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		cy = disk[drv]->id[0];
@@ -1431,7 +1431,7 @@ uint32 UPD765A::read_id()
 		if(!disk[drv]->get_sector(trk, side, index)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		id[0] = disk[drv]->id[0];
@@ -1458,8 +1458,8 @@ uint32 UPD765A::write_id()
 		return ST0_AT | ST1_NW;
 	}
 	
-	disk[drv]->track_mfm = ((command & 0x40) != 0);
 	disk[drv]->format_track(trk, side);
+	disk[drv]->track_mfm = ((command & 0x40) != 0);
 	for(int i = 0; i < eot && i < 256; i++) {
 		for(int j = 0; j < 4; j++) {
 			id[j] = buffer[4 * i + j];

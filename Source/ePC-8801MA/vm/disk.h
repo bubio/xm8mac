@@ -151,6 +151,7 @@ public:
 		file_size.d = 0;
 		sector_size.sd = sector_num.sd = 0;
 		sector = NULL;
+		sector_mfm = true;
 		drive_type = DRIVE_TYPE_UNK;
 		drive_rpm = 0;
 		drive_mfm = true;
@@ -230,6 +231,7 @@ public:
 	pair sector_size;
 	uint8 id[6];
 	uint8 density;
+	bool sector_mfm;
 	bool deleted;
 	bool crc_error;
 	
