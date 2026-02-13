@@ -18,12 +18,7 @@ void UPD1990A::initialize()
 	emu->get_host_time(&cur_time);
 	
 	// register events
-#ifdef SDL
-	register_event(this, EVENT_1SEC, 100000.0, true, &register_id_1sec);
-	event_count = 0;
-#else
 	register_event(this, EVENT_1SEC, 1000000.0, true, &register_id_1sec);
-#endif // SDL
 	register_id_tp = -1;
 }
 
@@ -167,11 +162,7 @@ void UPD1990A::write_signal(int id, uint32 data, uint32 mask)
 				if(hold) {
 					// restart event
 					cancel_event(this, register_id_1sec);
-#ifdef SDL
-					register_event(this, EVENT_1SEC, 100000.0, true, &register_id_1sec);
-#else
 					register_event(this, EVENT_1SEC, 1000000.0, true, &register_id_1sec);
-#endif // SDL
 					hold = false;
 				}
 				break;
@@ -198,14 +189,6 @@ void UPD1990A::write_signal(int id, uint32 data, uint32 mask)
 void UPD1990A::event_callback(int event_id, int err)
 {
 	if(event_id == EVENT_1SEC) {
-#ifdef SDL
-		event_count++;
-		if (event_count < 10) {
-			return;
-		}
-		event_count = 0;
-#endif // SDL
-
 		if(cur_time.initialized) {
 			if(!hold) {
 				cur_time.increment();
@@ -281,7 +264,7 @@ bool UPD1990A::load_state(FILEIO* state_fio)
 #endif
 
 	// version 1.60
-	adjust_event(register_id_1sec, 100000.0);
+	adjust_event(register_id_1sec, 1000000.0);
 
 	return true;
 }
