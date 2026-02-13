@@ -341,6 +341,14 @@ int VM::sound_buffer_ptr()
 	return pc88event->sound_buffer_ptr();
 }
 
+void VM::set_sound_device_volume(int ch, int decibel_l, int decibel_r)
+{
+	// XM8 SDL core does not expose per-chip volume control in common format.
+	(void)ch;
+	(void)decibel_l;
+	(void)decibel_r;
+}
+
 // ----------------------------------------------------------------------------
 // notify key
 // ----------------------------------------------------------------------------
@@ -453,6 +461,28 @@ void VM::close_tape()
 bool VM::tape_inserted()
 {
 	return pc88->tape_inserted();
+}
+
+void VM::open_compact_disc(int drv, const _TCHAR* file_path)
+{
+	(void)drv;
+	(void)file_path;
+}
+
+void VM::close_compact_disc(int drv)
+{
+	(void)drv;
+}
+
+bool VM::is_compact_disc_inserted(int drv)
+{
+	(void)drv;
+	return false;
+}
+
+uint32 VM::is_compact_disc_accessed()
+{
+	return 0;
 }
 
 bool VM::now_skip()

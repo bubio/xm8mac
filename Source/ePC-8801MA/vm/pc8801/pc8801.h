@@ -208,6 +208,7 @@ public:
 	{
 		return sound_buffer_ptr();
 	}
+	void set_sound_device_volume(int ch, int decibel_l, int decibel_r);
 	
 	// notify key
 	void key_down(int code, bool repeat);
@@ -260,6 +261,10 @@ public:
 		(void)drv;
 		return tape_inserted();
 	}
+	void open_compact_disc(int drv, const _TCHAR* file_path);
+	void close_compact_disc(int drv);
+	bool is_compact_disc_inserted(int drv);
+	uint32 is_compact_disc_accessed();
 	bool now_skip();
 	bool is_frame_skippable()
 	{
