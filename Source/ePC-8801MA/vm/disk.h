@@ -60,6 +60,8 @@ private:
 	bool trim_required;
 	bool temporary;
 	uint8 fdi_header[4096];
+	int get_track_num(uint8* t);
+	uint8* get_unstable_sector(uint8* t, int index);
 	
 	void set_sector_info(uint8 *t);
 	void trim_buffer();
@@ -151,6 +153,7 @@ public:
 		file_size.d = 0;
 		sector_size.sd = sector_num.sd = 0;
 		sector = NULL;
+		unstable = NULL;
 		sector_mfm = true;
 		addr_crc_error = false;
 		data_crc_error = false;
@@ -231,6 +234,7 @@ public:
 	
 	// sector
 	uint8* sector;
+	uint8* unstable;
 	pair sector_size;
 	uint8 id[6];
 	uint8 density;

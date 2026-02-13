@@ -401,6 +401,7 @@ void DISK::close()
 	file_size.d = 0;
 	sector_size.sd = sector_num.sd = 0;
 	sector = NULL;
+	unstable = NULL;
 	sector_mfm = drive_mfm;
 	addr_crc_error = false;
 	data_crc_error = false;
@@ -631,6 +632,7 @@ bool DISK::get_sector(int trk, int side, int index)
 {
 	sector_size.sd = sector_num.sd = 0;
 	sector = NULL;
+	unstable = NULL;
 	
 	// disk not inserted or invalid media type
 	if(!(inserted && check_media_type())) {
@@ -660,6 +662,7 @@ bool DISK::get_sector(int trk, int side, int index)
 	if(index >= sector_num.sd) {
 		return false;
 	}
+	unstable = get_unstable_sector(t, index);
 	
 	// skip sector
 	for(int i = 0; i < index; i++) {
@@ -669,6 +672,68 @@ bool DISK::get_sector(int trk, int side, int index)
 	}
 	set_sector_info(t);
 	return true;
+}
+
+int DISK::get_track_num(uint8* t)
+{
+	int position = (int)(t - buffer);
+	int result = -1;
+	pair offset;
+	
+	offset.read_4bytes_le_from(buffer + 0x1c);
+	if(position < offset.sd) {
+		int max_tracks = 164;
+		for(int track = 0; track < 164; track++) {
+			offset.read_4bytes_le_from(buffer + 0x20 + track * 4);
+			if(offset.sd != 0) {
+				if(offset.sd < 0x2b0) {
+					max_tracks = min((offset.sd - 0x20) >> 2, 164);
+				}
+				break;
+			}
+		}
+		for(int track = 0; track < max_tracks; track++) {
+			offset.read_4bytes_le_from(buffer + 0x20 + track * 4);
+			if(offset.sd != 0 && position >= offset.sd) {
+				if(position == offset.sd) {
+					result = track;
+					break;
+				} else {
+					result = max(track, result);
+				}
+			}
+		}
+	}
+	return result;
+}
+
+uint8* DISK::get_unstable_sector(uint8* t, int index)
+{
+	int track = get_track_num(t);
+	if(track < 0) {
+		return NULL;
+	}
+	pair offset, num, idx, data_size;
+	offset.read_4bytes_le_from(buffer + 0x20 + track * 4);
+	t = buffer + offset.d;
+	num.read_2bytes_le_from(t + 4);
+	
+	for(int i = 0; i < num.sd; i++) {
+		data_size.read_2bytes_le_from(t + 14);
+		t += data_size.sd + 0x10;
+	}
+	if(track == get_track_num(t)) {
+		num.read_2bytes_le_from(t + 4);
+		for(int i = 0; i < num.sd; i++) {
+			idx.read_2bytes_le_from(t + 9);
+			if(idx.sd == index) {
+				return t + 0x10;
+			}
+			data_size.read_2bytes_le_from(t + 14);
+			t += data_size.sd + 0x10;
+		}
+	}
+	return NULL;
 }
 
 bool DISK::get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uint8* r, uint8* n, bool* mfm, int* length)
@@ -795,6 +860,8 @@ bool DISK::format_track(int trk, int side)
 	
 	trim_required = true;
 	sector_num.sd = 0;
+	sector = NULL;
+	unstable = NULL;
 	track_mfm = drive_mfm;
 	return true;
 }
@@ -1669,6 +1736,7 @@ bool DISK::load_state(FILEIO* state_fio)
 	state_fio->Fread(data_position, sizeof(data_position), 1);
 	int offset = state_fio->FgetInt32();
 	sector = (offset != -1) ? buffer + offset : NULL;
+	unstable = NULL;
 	sector_size.sd = state_fio->FgetInt32();
 	state_fio->Fread(id, sizeof(id), 1);
 	density = state_fio->FgetUint8();
