@@ -337,6 +337,16 @@ void VM::key_up(int code)
 {
 }
 
+bool VM::get_caps_locked()
+{
+	return pc88->get_caps_locked();
+}
+
+bool VM::get_kana_locked()
+{
+	return pc88->get_kana_locked();
+}
+
 // ----------------------------------------------------------------------------
 // user interface
 // ----------------------------------------------------------------------------
@@ -354,6 +364,41 @@ void VM::close_disk(int drv)
 bool VM::disk_inserted(int drv)
 {
 	return pc88fdc_sub->disk_inserted(drv);
+}
+
+bool VM::is_floppy_disk_connected(int drv)
+{
+	if(pc88fdc_sub == NULL) {
+		return false;
+	}
+	return (drv >= 0 && drv < 2 && pc88fdc_sub->get_disk_handler(drv) != NULL);
+}
+
+void VM::is_floppy_disk_protected(int drv, bool value)
+{
+	pc88fdc_sub->is_disk_protected(drv, value);
+}
+
+bool VM::is_floppy_disk_protected(int drv)
+{
+	return pc88fdc_sub->is_disk_protected(drv);
+}
+
+uint32 VM::is_floppy_disk_accessed()
+{
+	if(pc88fdc_sub == NULL) {
+		return 0;
+	}
+	return (uint32)(pc88fdc_sub->read_signal(0) & 0x03);
+}
+
+uint32 VM::floppy_disk_indicator_color()
+{
+	if(pc88fdc_sub == NULL) {
+		return 0;
+	}
+	return ((pc88fdc_sub->get_drive_type(0) == DRIVE_TYPE_2HD) ? 1 : 0) |
+		   ((pc88fdc_sub->get_drive_type(1) == DRIVE_TYPE_2HD) ? 2 : 0);
 }
 
 void VM::play_tape(_TCHAR* file_path)

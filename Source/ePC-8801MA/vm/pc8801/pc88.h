@@ -290,8 +290,24 @@ public:
 #endif // SDL
 	uint32 intr_ack();
 	void intr_ei();
+	uint32 get_intr_ack()
+	{
+		return intr_ack();
+	}
+	void notify_intr_ei()
+	{
+		intr_ei();
+	}
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading)
+	{
+		if(loading) {
+			return load_state(state_fio);
+		}
+		save_state(state_fio);
+		return true;
+	}
 	
 	// unique functions
 	void set_context_cpu(Z80* device)
@@ -348,6 +364,14 @@ public:
 	}
 #endif
 	void key_down(int code, bool repeat);
+	bool get_caps_locked()
+	{
+		return key_caps != 0;
+	}
+	bool get_kana_locked()
+	{
+		return key_kana != 0;
+	}
 	
 	void play_tape(_TCHAR* file_path);
 	void rec_tape(_TCHAR* file_path);
@@ -356,7 +380,15 @@ public:
 	{
 		return (cmt_play || cmt_rec);
 	}
+	bool is_tape_inserted()
+	{
+		return tape_inserted();
+	}
 	bool now_skip();
+	bool is_frame_skippable()
+	{
+		return now_skip();
+	}
 	
 	void draw_screen();
 

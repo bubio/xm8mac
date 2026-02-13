@@ -208,6 +208,8 @@ public:
 	// notify key
 	void key_down(int code, bool repeat);
 	void key_up(int code);
+	bool get_caps_locked();
+	bool get_kana_locked();
 	
 	// user interface
 	void open_disk(int drv, _TCHAR* file_path, int bank);
@@ -221,10 +223,15 @@ public:
 		close_disk(drv);
 	}
 	bool disk_inserted(int drv);
+	bool is_floppy_disk_connected(int drv);
 	bool is_floppy_disk_inserted(int drv)
 	{
 		return disk_inserted(drv);
 	}
+	void is_floppy_disk_protected(int drv, bool value);
+	bool is_floppy_disk_protected(int drv);
+	uint32 is_floppy_disk_accessed();
+	uint32 floppy_disk_indicator_color();
 	void play_tape(_TCHAR* file_path);
 	void play_tape(int drv, const _TCHAR* file_path)
 	{
@@ -258,6 +265,14 @@ public:
 	void update_config();
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	bool process_state(FILEIO* state_fio, bool loading)
+	{
+		if(loading) {
+			return load_state(state_fio);
+		}
+		save_state(state_fio);
+		return true;
+	}
 	
 	// ----------------------------------------
 	// for each device
