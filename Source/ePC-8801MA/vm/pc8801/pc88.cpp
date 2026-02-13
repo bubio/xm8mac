@@ -2487,6 +2487,12 @@ uint32 PC88::read_dma_data8(uint32 addr)
 #endif
 }
 
+void PC88::write_dma_data8(uint32 addr, uint32 data)
+{
+	// DMA memory write path used by common-source compatibility code.
+	ram[addr & 0xffff] = (uint8)data;
+}
+
 void PC88::write_dma_io8(uint32 addr, uint32 data)
 {
 	// to crtc

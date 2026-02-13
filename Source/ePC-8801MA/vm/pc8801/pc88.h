@@ -278,6 +278,7 @@ public:
 #endif
 	
 	uint32 read_dma_data8(uint32 addr);
+	void write_dma_data8(uint32 addr, uint32 data);
 	void write_dma_io8(uint32 addr, uint32 data);
 	
 	void write_signal(int id, uint32 data, uint32 mask);
@@ -422,6 +423,22 @@ public:
 	int get_m1_wait(int pattern, uint32 addr);
 	void create_pattern(int pattern, bool read);
 	void update_memmap(int pattern, bool read);
+	void update_low_read()
+	{
+		update_memmap(-1, true);
+	}
+	void update_low_read_sub()
+	{
+		update_memmap(-1, true);
+	}
+	void update_low_write()
+	{
+		update_memmap(-1, false);
+	}
+	void update_low_write_sub()
+	{
+		update_memmap(-1, false);
+	}
 	void insert_gvram_wait(int index, int *wait);
 	uint32 port30_in();
 	void port31_out(uint8 mod);
