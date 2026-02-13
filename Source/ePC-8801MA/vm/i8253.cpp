@@ -24,11 +24,9 @@ void I8253::initialize()
 		counter[ch].low_write = counter[ch].high_write = false;
 		counter[ch].delay = false;
 		counter[ch].start = false;
-#ifdef HAS_I8254
 		// 8254 read-back command
 		counter[ch].null_count = true;
 		counter[ch].status_latched = false;
-#endif
 	}
 }
 
@@ -69,9 +67,7 @@ void I8253::write_io8(uint32 addr, uint32 data)
 			}
 			counter[ch].high_write = false;
 		}
-#ifdef HAS_I8254
 		counter[ch].null_count = true;
-#endif
 		// set signal
 		if(counter[ch].mode == 0) {
 			set_signal(ch, false);
@@ -95,11 +91,9 @@ void I8253::write_io8(uint32 addr, uint32 data)
 		
 	case 3: // ctrl reg
 		if((data & 0xc0) == 0xc0) {
-#ifdef HAS_I8254
 			// i8254 read-back command
 			if(device_model == INTEL_8254) {
 				for(ch = 0; ch < 3; ch++) {
-					uint8 bit = 2 << ch;
 					if(!(data & 0x10) && !counter[ch].status_latched) {
 						counter[ch].status = counter[ch].ctrl_reg & 0x3f;
 						if(counter[ch].prev_out) {
@@ -115,7 +109,6 @@ void I8253::write_io8(uint32 addr, uint32 data)
 					}
 				}
 			}
-#endif
 			break;
 		}
 		ch = (data >> 6) & 3;
@@ -139,9 +132,7 @@ void I8253::write_io8(uint32 addr, uint32 data)
 				stop_count(ch);
 				counter[ch].count_reg = 0;
 //			}
-#ifdef HAS_I8254
 			counter[ch].null_count = true;
-#endif
 		} else if(!counter[ch].count_latched) {
 			latch_count(ch);
 		}
@@ -157,14 +148,12 @@ uint32 I8253::read_io8(uint32 addr)
 	case 0:
 	case 1:
 	case 2:
-#ifdef HAS_I8254
 		if(device_model == INTEL_8254) {
 			if(counter[ch].status_latched) {
 				counter[ch].status_latched = false;
 				return counter[ch].status;
 			}
 		}
-#endif
 		// if not latched, through current count
 		if(!counter[ch].count_latched) {
 			if(!counter[ch].low_read && !counter[ch].high_read) {
@@ -246,9 +235,7 @@ void I8253::input_clock(int ch, int clock)
 		clock -= 1;
 		counter[ch].delay = false;
 		counter[ch].count = COUNT_VALUE(ch);
-#ifdef HAS_I8254
 		counter[ch].null_count = false;
-#endif
 	}
 	
 	// update counter
@@ -271,9 +258,7 @@ loop:
 	if(counter[ch].count <= 0) {
 		if(counter[ch].mode == 0 || counter[ch].mode == 2 || counter[ch].mode == 3) {
 			counter[ch].count += tmp;
-#ifdef HAS_I8254
 			counter[ch].null_count = false;
-#endif
 			goto loop;
 		} else {
 			counter[ch].start = false;
@@ -410,7 +395,7 @@ int I8253::get_next_count(int ch)
 	return counter[ch].count;
 }
 
-#define STATE_VERSION	1
+#define STATE_VERSION	2
 
 void I8253::save_state(FILEIO* state_fio)
 {
@@ -433,11 +418,9 @@ void I8253::save_state(FILEIO* state_fio)
 		state_fio->FputInt32(counter[i].mode);
 		state_fio->FputBool(counter[i].delay);
 		state_fio->FputBool(counter[i].start);
-#ifdef HAS_I8254
 		state_fio->FputBool(counter[i].null_count);
 		state_fio->FputBool(counter[i].status_latched);
 		state_fio->FputUint8(counter[i].status);
-#endif
 		state_fio->FputUint64(counter[i].freq);
 		state_fio->FputInt32(counter[i].register_id);
 		state_fio->FputUint32(counter[i].input_clk);
@@ -449,7 +432,8 @@ void I8253::save_state(FILEIO* state_fio)
 
 bool I8253::load_state(FILEIO* state_fio)
 {
-	if(state_fio->FgetUint32() != STATE_VERSION) {
+	uint32 state_version = state_fio->FgetUint32();
+	if(state_version < 1 || state_version > STATE_VERSION) {
 		return false;
 	}
 	if(state_fio->FgetInt32() != this_device_id) {
@@ -471,11 +455,15 @@ bool I8253::load_state(FILEIO* state_fio)
 		counter[i].mode = state_fio->FgetInt32();
 		counter[i].delay = state_fio->FgetBool();
 		counter[i].start = state_fio->FgetBool();
-#ifdef HAS_I8254
-		counter[i].null_count = state_fio->FgetBool();
-		counter[i].status_latched = state_fio->FgetBool();
-		counter[i].status = state_fio->FgetUint8();
-#endif
+		if(state_version >= 2) {
+			counter[i].null_count = state_fio->FgetBool();
+			counter[i].status_latched = state_fio->FgetBool();
+			counter[i].status = state_fio->FgetUint8();
+		} else {
+			counter[i].null_count = true;
+			counter[i].status_latched = false;
+			counter[i].status = 0;
+		}
 		counter[i].freq = state_fio->FgetUint64();
 		counter[i].register_id = state_fio->FgetInt32();
 		counter[i].input_clk = state_fio->FgetUint32();
