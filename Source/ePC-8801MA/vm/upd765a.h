@@ -51,6 +51,7 @@ private:
 		int next_trans_position;
 		uint32 prev_clock;
 	} fdc[4];
+	uint8 cur_track[4];
 	bool head_load[4];
 	DISK* disk[4];
 	

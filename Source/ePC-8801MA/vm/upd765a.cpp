@@ -183,6 +183,7 @@ void UPD765A::initialize()
 	
 	// initialize fdc
 	memset(fdc, 0, sizeof(fdc));
+	memset(cur_track, 0, sizeof(cur_track));
 	memset(head_load, 0, sizeof(head_load));
 	memset(buffer, 0, sizeof(buffer));
 	
@@ -237,6 +238,10 @@ void UPD765A::reset()
 	seek_step_remain[0] = seek_step_remain[1] = seek_step_remain[2] = seek_step_remain[3] = 0;
 	head_unload_id[0] = head_unload_id[1] = head_unload_id[2] = head_unload_id[3] = -1;
 	head_load[0] = head_load[1] = head_load[2] = head_load[3] = false;
+	cur_track[0] = fdc[0].track;
+	cur_track[1] = fdc[1].track;
+	cur_track[2] = fdc[2].track;
+	cur_track[3] = fdc[3].track;
 	
 	set_irq(false);
 	set_drq(false);
@@ -527,13 +532,18 @@ void UPD765A::event_callback(int event_id, int err)
 		}
 	} else if(event_id >= EVENT_SEEK_STEP && event_id < EVENT_SEEK_STEP + 4) {
 		int drv = event_id - EVENT_SEEK_STEP;
+		if(cur_track[drv] < fdc[drv].track) {
+			cur_track[drv]++;
+		} else if(cur_track[drv] > fdc[drv].track) {
+			cur_track[drv]--;
+		}
 		if(seek_step_remain[drv] > 0) {
 			seek_step_remain[drv]--;
 			if(d_noise_seek != NULL) {
 				d_noise_seek->play();
 			}
 		}
-		if(seek_step_remain[drv] <= 0 && seek_step_id[drv] != -1) {
+		if((cur_track[drv] == fdc[drv].track || seek_step_remain[drv] <= 0) && seek_step_id[drv] != -1) {
 			cancel_event(this, seek_step_id[drv]);
 			seek_step_id[drv] = -1;
 		}
@@ -544,6 +554,7 @@ void UPD765A::event_callback(int event_id, int err)
 			seek_step_id[drv] = -1;
 		}
 		seek_step_remain[drv] = 0;
+		cur_track[drv] = fdc[drv].track;
 		seek_id[drv] = -1;
 		seek_event(drv);
 	} else if(event_id >= EVENT_UNLOAD && event_id < EVENT_UNLOAD + 4) {
@@ -722,9 +733,9 @@ uint8 UPD765A::get_devstat(int drv)
 		return ST3_FT | drv;
 	}
 	return drv |
-	       ((fdc[drv].track & 1) ? ST3_HD : 0) |
+	       ((cur_track[drv] & 1) ? ST3_HD : 0) |
 	       ST3_TS |
-	       (fdc[drv].track ? 0 : ST3_T0) |
+	       (cur_track[drv] ? 0 : ST3_T0) |
 	       ((force_ready || disk[drv]->inserted) ? ST3_RY : 0) |
 	       (disk[drv]->write_protected ? ST3_WP : 0);
 }
@@ -758,7 +769,7 @@ void UPD765A::cmd_recalib()
 void UPD765A::seek(int drv, int trk)
 {
 	// get distance
-	int distance = abs(trk - fdc[drv].track);
+	int distance = abs(trk - cur_track[drv]);
 	int steptime = 32 - 2 * step_rate_time;
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
 		steptime /= 2;
@@ -778,6 +789,7 @@ void UPD765A::seek(int drv, int trk)
 		if(distance > 0 && d_noise_seek != NULL) {
 			d_noise_seek->play();
 		}
+		cur_track[drv] = fdc[drv].track;
 		seek_event(drv);
 #else
 		if(seek_step_id[drv] != -1) {
@@ -797,6 +809,8 @@ void UPD765A::seek(int drv, int trk)
 		if(distance > 0) {
 			seek_step_remain[drv] = distance;
 			register_event(this, EVENT_SEEK_STEP + drv, steptime, true, &seek_step_id[drv]);
+		} else {
+			cur_track[drv] = fdc[drv].track;
 		}
 		register_event(this, EVENT_SEEK + drv, seektime, false, &seek_id[drv]);
 		seekstat |= 1 << drv;
@@ -1795,7 +1809,7 @@ void UPD765A::set_drive_mfm(int drv, bool mfm)
 	}
 }
 
-#define STATE_VERSION	3
+#define STATE_VERSION	4
 
 void UPD765A::save_state(FILEIO* state_fio)
 {
@@ -1841,6 +1855,7 @@ void UPD765A::save_state(FILEIO* state_fio)
 	state_fio->Fwrite(seek_id, sizeof(seek_id), 1);
 	state_fio->Fwrite(seek_step_id, sizeof(seek_step_id), 1);
 	state_fio->Fwrite(seek_step_remain, sizeof(seek_step_remain), 1);
+	state_fio->Fwrite(cur_track, sizeof(cur_track), 1);
 	state_fio->FputBool(force_ready);
 	state_fio->FputBool(reset_signal);
 	state_fio->FputBool(prev_index);
@@ -1901,9 +1916,21 @@ bool UPD765A::load_state(FILEIO* state_fio)
 	if(state_version >= 3) {
 		state_fio->Fread(seek_step_id, sizeof(seek_step_id), 1);
 		state_fio->Fread(seek_step_remain, sizeof(seek_step_remain), 1);
+		if(state_version >= 4) {
+			state_fio->Fread(cur_track, sizeof(cur_track), 1);
+		} else {
+			cur_track[0] = fdc[0].track;
+			cur_track[1] = fdc[1].track;
+			cur_track[2] = fdc[2].track;
+			cur_track[3] = fdc[3].track;
+		}
 	} else {
 		seek_step_id[0] = seek_step_id[1] = seek_step_id[2] = seek_step_id[3] = -1;
 		seek_step_remain[0] = seek_step_remain[1] = seek_step_remain[2] = seek_step_remain[3] = 0;
+		cur_track[0] = fdc[0].track;
+		cur_track[1] = fdc[1].track;
+		cur_track[2] = fdc[2].track;
+		cur_track[3] = fdc[3].track;
 	}
 	force_ready = state_fio->FgetBool();
 	reset_signal = state_fio->FgetBool();
