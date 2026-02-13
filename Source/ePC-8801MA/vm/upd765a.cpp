@@ -1044,6 +1044,9 @@ uint32 UPD765A::read_sector()
 #endif
 			continue;
 		}
+		if(disk[drv]->sector_size.sd == 0) {
+			continue;
+		}
 		// sector number is matched
 		if(disk[drv]->invalid_format) {
 			memset(buffer, disk[drv]->drive_mfm ? 0x4e : 0xff, sizeof(buffer));
@@ -1062,9 +1065,12 @@ uint32 UPD765A::read_sector()
 		}
 		return 0;
 	}
-#ifdef _FDC_DEBUG_LOG
+	#ifdef _FDC_DEBUG_LOG
 	emu->out_debug_log("FDC: SECTOR NOT FOUND (TRK=%d SIDE=%d ID=%2x,%2x,%2x,%2x)\n", trk, side, id[0], id[1], id[2], id[3]);
-#endif
+	#endif
+	if(cy == -1) {
+		return ST0_AT | ST1_MA;
+	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
 			return ST0_AT | ST1_ND | ST2_BC;
@@ -1104,8 +1110,11 @@ uint32 UPD765A::write_sector(bool deleted)
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] /*|| disk[drv]->id[3] != id[3]*/) {
 			continue;
 		}
+		if(disk[drv]->sector_size.sd == 0) {
+			continue;
+		}
 		// sector number is matched
-		int size = 0x80 << (id[3] & 7);
+		int size = 0x80 << min((int)id[3], 7);
 		memcpy(disk[drv]->sector, buffer, __min(size, disk[drv]->sector_size.sd));
 		disk[drv]->set_deleted(deleted);
 		return 0;
@@ -1146,9 +1155,15 @@ uint32 UPD765A::find_id()
 		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] /*|| disk[drv]->id[3] != id[3]*/) {
 			continue;
 		}
+		if(disk[drv]->sector_size.sd == 0) {
+			continue;
+		}
 		// sector number is matched
 		fdc[drv].next_trans_position = disk[drv]->data_position[i];
 		return 0;
+	}
+	if(cy == -1) {
+		return ST0_AT | ST1_MA;
 	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
