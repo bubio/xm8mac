@@ -576,16 +576,18 @@ bool DISK::make_track(int trk, int side)
 			if(p < track_size) track[p++] = 0x00;
 		}
 		// am1
+		uint16 crc = 0xffff;
 		for(int j = 0; j < am_size; j++) {
 			if(p < track_size) track[p++] = 0xa1;
+			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
 		}
 		if(p < track_size) track[p++] = 0xfe;
+		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xfe]);
 		// id
 		if(p < track_size) track[p++] = t[0];
 		if(p < track_size) track[p++] = t[1];
 		if(p < track_size) track[p++] = t[2];
 		if(p < track_size) track[p++] = t[3];
-		uint16 crc = 0;
 		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0]]);
 		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[1]]);
 		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[2]]);
@@ -601,12 +603,15 @@ bool DISK::make_track(int trk, int side)
 			if(p < track_size) track[p++] = 0x00;
 		}
 		// am2
+		crc = 0xffff;
 		for(int j = 0; j < am_size; j++) {
 			if(p < track_size) track[p++] = 0xa1;
+			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
 		}
-		if(p < track_size) track[p++] = (t[7] != 0) ? 0xf8 : 0xfb;
+		uint8 am2 = (t[7] != 0) ? 0xf8 : 0xfb;
+		if(p < track_size) track[p++] = am2;
+		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ am2]);
 		// data
-		crc = 0;
 		for(int j = 0; j < data_size.sd; j++) {
 			if(p < track_size) track[p++] = t[0x10 + j];
 			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0x10 + j]]);
