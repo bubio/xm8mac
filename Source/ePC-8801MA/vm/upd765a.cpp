@@ -10,6 +10,7 @@
 
 #include "upd765a.h"
 #include "disk.h"
+#include "noise.h"
 
 #define EVENT_PHASE	0
 #define EVENT_DRQ	1
@@ -146,6 +147,27 @@ void UPD765A::initialize()
 	// initialize d88 handler
 	for(int i = 0; i < 4; i++) {
 		disk[i] = new DISK(emu);
+	}
+	
+	// initialize optional drive noise players
+	if(d_noise_seek != NULL) {
+		d_noise_seek->set_device_name(_T("Noise Player (FDD Seek)"));
+		if(!d_noise_seek->load_wav_file(_T("FDDSEEK.WAV"))) {
+			if(!d_noise_seek->load_wav_file(_T("FDDSEEK1.WAV"))) {
+				d_noise_seek->load_wav_file(_T("SEEK.WAV"));
+			}
+		}
+		d_noise_seek->set_mute(false);
+	}
+	if(d_noise_head_down != NULL) {
+		d_noise_head_down->set_device_name(_T("Noise Player (FDD Head Load)"));
+		d_noise_head_down->load_wav_file(_T("HEADDOWN.WAV"));
+		d_noise_head_down->set_mute(false);
+	}
+	if(d_noise_head_up != NULL) {
+		d_noise_head_up->set_device_name(_T("Noise Player (FDD Head Unload)"));
+		d_noise_head_up->load_wav_file(_T("HEADUP.WAV"));
+		d_noise_head_up->set_mute(false);
 	}
 	
 	// initialize fdc
@@ -690,6 +712,7 @@ void UPD765A::cmd_recalib()
 void UPD765A::seek(int drv, int trk)
 {
 	// get distance
+	int prev_track = fdc[drv].track;
 	int seektime = 32 - 2 * step_rate_time;
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
 		seektime /= 2;
@@ -702,6 +725,9 @@ void UPD765A::seek(int drv, int trk)
 		set_irq(true);
 	} else {
 		fdc[drv].track = trk;
+		if(prev_track != trk && d_noise_seek != NULL) {
+			d_noise_seek->play();
+		}
 #ifdef UPD765A_DONT_WAIT_SEEK
 		seek_event(drv);
 #else
