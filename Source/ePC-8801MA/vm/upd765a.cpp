@@ -1338,7 +1338,7 @@ uint32 UPD765A::read_id()
 		fdc[drv].next_trans_position = disk[drv]->id_position[index] + 6;
 		return 0;
 	}
-	return ST0_AT | ST1_ND;
+	return ST0_AT | ST1_MA;
 }
 
 uint32 UPD765A::write_id()
@@ -1346,7 +1346,7 @@ uint32 UPD765A::write_id()
 	int drv = hdu & DRIVE_MASK;
 	int trk = fdc[drv].track;
 	int side = (hdu >> 2) & 1;
-	int length = 0x80 << (id[3] & 7);
+	int length = 0x80 << min((int)id[3], 7);
 	
 	if((result = check_cond(true)) != 0) {
 		return result;
