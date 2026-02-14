@@ -93,6 +93,8 @@ static bool g_fdc_tc_exec = true;
 static bool g_fdc_lost_usec_checked = false;
 static int g_fdc_lost_usec = 15000;
 
+static void fdc_trace(const char* fmt, ...);
+
 static bool fdc_trace_enabled()
 {
 	if(!g_fdc_trace_checked) {
@@ -146,7 +148,9 @@ static bool fdc_disable_unstable_mask()
 {
 	if(!g_fdc_disable_unstable_checked) {
 		const char* env = getenv("XM8_DISABLE_UNSTABLE_MASK");
-		g_fdc_disable_unstable = (env != NULL && env[0] != '\0' && env[0] != '0');
+		if(env != NULL && env[0] != '\0') {
+			g_fdc_disable_unstable = (env[0] != '0');
+		}
 		g_fdc_disable_unstable_checked = true;
 	}
 	return g_fdc_disable_unstable;
@@ -156,7 +160,9 @@ static bool fdc_const_exec_timing()
 {
 	if(!g_fdc_const_exec_checked) {
 		const char* env = getenv("XM8_FDC_CONST_EXEC_USEC");
-		g_fdc_const_exec = (env != NULL && env[0] != '\0' && env[0] != '0');
+		if(env != NULL && env[0] != '\0') {
+			g_fdc_const_exec = (env[0] != '0');
+		}
 		g_fdc_const_exec_checked = true;
 	}
 	return g_fdc_const_exec;
@@ -201,6 +207,25 @@ static int fdc_lost_event_usec()
 		g_fdc_lost_usec_checked = true;
 	}
 	return g_fdc_lost_usec;
+}
+
+static bool g_fdc_runtime_dumped = false;
+
+static void fdc_dump_runtime_params()
+{
+	if(g_fdc_runtime_dumped) {
+		return;
+	}
+	g_fdc_runtime_dumped = true;
+	int seek_scale = fdc_seek_scale();
+	int lost_usec = fdc_lost_event_usec();
+	bool disable_unstable = fdc_disable_unstable_mask();
+	bool const_exec = fdc_const_exec_timing();
+	fdc_trace("runtime_params: seek_scale=%d disable_unstable=%d lost_usec=%d const_exec=%d",
+	          seek_scale,
+	          disable_unstable ? 1 : 0,
+	          lost_usec,
+	          const_exec ? 1 : 0);
 }
 
 static void fdc_trace(const char* fmt, ...)
@@ -316,6 +341,8 @@ static uint32 fdc_hash_bytes(const uint8* data, int len)
 void UPD765A::initialize()
 {
 	fdc_trace("=== FDC trace start ===");
+	g_fdc_runtime_dumped = false;
+	fdc_dump_runtime_params();
 	// initialize d88 handler
 	for(int i = 0; i < 4; i++) {
 		disk[i] = new DISK(emu);

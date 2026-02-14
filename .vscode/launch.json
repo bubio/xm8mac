@@ -7,7 +7,11 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/XM8.app/Contents/MacOS/xm8",
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "XM8_FDC_TRACE": "1",
+                "XM8_FDC_TRACE_FILE": "xm8_fdc_trace_normal.log"
+            }
         },
         {
             "name": "Linux: 通常起動 (gdb)",
@@ -28,6 +32,7 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {
+                "XM8_FDC_TRACE": "1",
                 "XM8_FDC_TRACE_MAX_LINES": "400000",
                 "XM8_FDC_SEEK_SCALE": "1000",
                 "XM8_DISABLE_UNSTABLE_MASK": "1",
