@@ -2,28 +2,55 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(lldb) Launch macOS",
-            "type": "cppdbg",
+            "name": "macOS: 通常起動 (lldb extension)",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/XM8.app/Contents/MacOS/xm8",
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": true,
-            "MIMode": "lldb"
+            "cwd": "${workspaceFolder}"
         },
         {
-            "name": "(gdb) Launch Linux",
+            "name": "Linux: 通常起動 (gdb)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/xm8",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [],
             "externalConsole": false,
             "MIMode": "gdb"
+        },
+        {
+            "name": "macOS: Wizardry 安定化 (LOST=15000 + CONST_EXEC=1)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/XM8.app/Contents/MacOS/xm8",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "XM8_FDC_TRACE_MAX_LINES": "400000",
+                "XM8_FDC_SEEK_SCALE": "1000",
+                "XM8_DISABLE_UNSTABLE_MASK": "1",
+                "XM8_FDC_LOST_USEC": "15000",
+                "XM8_FDC_CONST_EXEC_USEC": "1",
+                "XM8_FDC_TRACE_FILE": "xm8_fdc_trace_wiz_stable.log"
+            }
+        },
+        {
+            "name": "macOS: FDCトレース基準 (scale=1000, no-unstable)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/XM8.app/Contents/MacOS/xm8",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "XM8_FDC_TRACE": "1",
+                "XM8_FDC_TRACE_IO": "1",
+                "XM8_FDC_TRACE_MAX_LINES": "400000",
+                "XM8_FDC_SEEK_SCALE": "1000",
+                "XM8_DISABLE_UNSTABLE_MASK": "1",
+                "XM8_FDC_TRACE_FILE": "xm8_fdc_trace_s1000_nounstable.log"
+            }
         }
     ]
 }

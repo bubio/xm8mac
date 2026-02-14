@@ -11,6 +11,9 @@
 #include "upd765a.h"
 #include "disk.h"
 #include "noise.h"
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 
 #define EVENT_PHASE	0
 #define EVENT_DRQ	1
@@ -70,6 +73,163 @@
 #define ST3_FT	0x80
 
 #define DRIVE_MASK	3
+
+static FILE* g_fdc_trace_file = NULL;
+static bool g_fdc_trace_checked = false;
+static int g_fdc_trace_lines = 0;
+static int g_fdc_trace_max_lines = 200000;
+static bool g_fdc_trace_io_checked = false;
+static bool g_fdc_trace_io = false;
+static bool g_fdc_seek_scale_checked = false;
+static int g_fdc_seek_scale = 1000;
+static bool g_fdc_disable_unstable_checked = false;
+static bool g_fdc_disable_unstable = true;
+static bool g_fdc_const_exec_checked = false;
+static bool g_fdc_const_exec = true;
+static bool g_fdc_request_single_exec_checked = false;
+static bool g_fdc_request_single_exec = true;
+static bool g_fdc_tc_exec_checked = false;
+static bool g_fdc_tc_exec = true;
+static bool g_fdc_lost_usec_checked = false;
+static int g_fdc_lost_usec = 15000;
+
+static bool fdc_trace_enabled()
+{
+	if(!g_fdc_trace_checked) {
+		const char* env = getenv("XM8_FDC_TRACE");
+		if(env != NULL && env[0] != '\0' && env[0] != '0') {
+			const char* trace_path = getenv("XM8_FDC_TRACE_FILE");
+			if(trace_path != NULL && trace_path[0] != '\0') {
+				g_fdc_trace_file = fopen(trace_path, "w");
+			} else {
+				g_fdc_trace_file = fopen("xm8_fdc_trace.log", "w");
+			}
+		}
+		const char* max_lines = getenv("XM8_FDC_TRACE_MAX_LINES");
+		if(max_lines != NULL && max_lines[0] != '\0') {
+			long v = strtol(max_lines, NULL, 10);
+			if(v > 0 && v <= 2000000) {
+				g_fdc_trace_max_lines = (int)v;
+			}
+		}
+		g_fdc_trace_checked = true;
+	}
+	return g_fdc_trace_file != NULL;
+}
+
+static bool fdc_trace_io_enabled()
+{
+	if(!g_fdc_trace_io_checked) {
+		const char* env = getenv("XM8_FDC_TRACE_IO");
+		g_fdc_trace_io = (env != NULL && env[0] != '\0' && env[0] != '0');
+		g_fdc_trace_io_checked = true;
+	}
+	return g_fdc_trace_io;
+}
+
+static int fdc_seek_scale()
+{
+	if(!g_fdc_seek_scale_checked) {
+		const char* env = getenv("XM8_FDC_SEEK_SCALE");
+		if(env != NULL && env[0] != '\0') {
+			long v = strtol(env, NULL, 10);
+			if(v >= 1 && v <= 10000) {
+				g_fdc_seek_scale = (int)v;
+			}
+		}
+		g_fdc_seek_scale_checked = true;
+	}
+	return g_fdc_seek_scale;
+}
+
+static bool fdc_disable_unstable_mask()
+{
+	if(!g_fdc_disable_unstable_checked) {
+		const char* env = getenv("XM8_DISABLE_UNSTABLE_MASK");
+		g_fdc_disable_unstable = (env != NULL && env[0] != '\0' && env[0] != '0');
+		g_fdc_disable_unstable_checked = true;
+	}
+	return g_fdc_disable_unstable;
+}
+
+static bool fdc_const_exec_timing()
+{
+	if(!g_fdc_const_exec_checked) {
+		const char* env = getenv("XM8_FDC_CONST_EXEC_USEC");
+		g_fdc_const_exec = (env != NULL && env[0] != '\0' && env[0] != '0');
+		g_fdc_const_exec_checked = true;
+	}
+	return g_fdc_const_exec;
+}
+
+static bool fdc_request_single_exec_enabled()
+{
+	if(!g_fdc_request_single_exec_checked) {
+		const char* env = getenv("XM8_FDC_REQUEST_SINGLE_EXEC");
+		if(env != NULL && env[0] != '\0') {
+			g_fdc_request_single_exec = (env[0] != '0');
+		}
+		g_fdc_request_single_exec_checked = true;
+	}
+	return g_fdc_request_single_exec;
+}
+
+static bool fdc_tc_exec_enabled()
+{
+	if(!g_fdc_tc_exec_checked) {
+		const char* env = getenv("XM8_FDC_TC_EXEC");
+		if(env != NULL && env[0] != '\0') {
+			g_fdc_tc_exec = (env[0] != '0');
+		}
+		g_fdc_tc_exec_checked = true;
+	}
+	return g_fdc_tc_exec;
+}
+
+static int fdc_lost_event_usec()
+{
+	if(!g_fdc_lost_usec_checked) {
+		const char* env = getenv("XM8_FDC_LOST_USEC");
+		if(env != NULL && env[0] != '\0') {
+			long v = strtol(env, NULL, 10);
+			if(v >= 1 && v <= 10000000) {
+				g_fdc_lost_usec = (int)v;
+			} else if(v <= 0) {
+				g_fdc_lost_usec = 0;
+			}
+		}
+		g_fdc_lost_usec_checked = true;
+	}
+	return g_fdc_lost_usec;
+}
+
+static void fdc_trace(const char* fmt, ...)
+{
+	if(!fdc_trace_enabled()) {
+		return;
+	}
+	if(g_fdc_trace_lines > g_fdc_trace_max_lines) {
+		return;
+	}
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(g_fdc_trace_file, fmt, ap);
+	va_end(ap);
+	fputc('\n', g_fdc_trace_file);
+	fflush(g_fdc_trace_file);
+	g_fdc_trace_lines++;
+}
+
+static uint32 fdc_hash_bytes(const uint8* data, int len)
+{
+	// FNV-1a 32-bit for lightweight sector content tracing.
+	uint32 hash = 2166136261u;
+	for(int i = 0; i < len; i++) {
+		hash ^= data[i];
+		hash *= 16777619u;
+	}
+	return hash;
+}
 
 #define REGISTER_PHASE_EVENT(phs, usec) { \
 	if(phase_id != -1) { \
@@ -155,6 +315,7 @@
 
 void UPD765A::initialize()
 {
+	fdc_trace("=== FDC trace start ===");
 	// initialize d88 handler
 	for(int i = 0; i < 4; i++) {
 		disk[i] = new DISK(emu);
@@ -190,6 +351,13 @@ void UPD765A::initialize()
 	phase = prevphase = PHASE_IDLE;
 	status = S_RQM;
 	seekstat = 0;
+	command = 0;
+	result = 0;
+	hdue = 0;
+	id[0] = id[1] = id[2] = id[3] = 0;
+	eot = 0;
+	gpl = 0;
+	dtl = 0;
 	bufptr = buffer; // temporary
 	phase_id = drq_id = lost_id = result7_id = -1;
 	seek_id[0] = seek_id[1] = seek_id[2] = seek_id[3] = -1;
@@ -226,22 +394,75 @@ void UPD765A::release()
 			delete disk[i];
 		}
 	}
+	if(g_fdc_trace_file != NULL) {
+		fdc_trace("=== FDC trace end ===");
+		fclose(g_fdc_trace_file);
+		g_fdc_trace_file = NULL;
+		g_fdc_trace_checked = false;
+		g_fdc_trace_lines = 0;
+		g_fdc_trace_max_lines = 200000;
+		g_fdc_trace_io_checked = false;
+		g_fdc_trace_io = false;
+	}
+	g_fdc_disable_unstable_checked = false;
+	g_fdc_disable_unstable = true;
+	g_fdc_const_exec_checked = false;
+	g_fdc_const_exec = true;
+	g_fdc_request_single_exec_checked = false;
+	g_fdc_request_single_exec = true;
+	g_fdc_tc_exec_checked = false;
+	g_fdc_tc_exec = true;
+	g_fdc_lost_usec_checked = false;
+	g_fdc_lost_usec = 15000;
 }
 
 void UPD765A::reset()
 {
 	shift_to_idle();
-//	CANCEL_EVENT();
-	phase_id = drq_id = lost_id = result7_id = -1;
-	seek_id[0] = seek_id[1] = seek_id[2] = seek_id[3] = -1;
-	seek_step_id[0] = seek_step_id[1] = seek_step_id[2] = seek_step_id[3] = -1;
-	seek_step_remain[0] = seek_step_remain[1] = seek_step_remain[2] = seek_step_remain[3] = 0;
-	head_unload_id[0] = head_unload_id[1] = head_unload_id[2] = head_unload_id[3] = -1;
+	if(phase_id != -1) {
+		cancel_event(this, phase_id);
+		phase_id = -1;
+	}
+	if(drq_id != -1) {
+		cancel_event(this, drq_id);
+		drq_id = -1;
+	}
+	if(lost_id != -1) {
+		cancel_event(this, lost_id);
+		lost_id = -1;
+	}
+	if(result7_id != -1) {
+		cancel_event(this, result7_id);
+		result7_id = -1;
+	}
+	for(int i = 0; i < 4; i++) {
+		if(seek_id[i] != -1) {
+			cancel_event(this, seek_id[i]);
+		}
+		if(seek_step_id[i] != -1) {
+			// Loop events are not guaranteed to be canceled by EVENT::reset().
+			cancel_event(this, seek_step_id[i]);
+		}
+		if(head_unload_id[i] != -1) {
+			cancel_event(this, head_unload_id[i]);
+		}
+		seek_id[i] = -1;
+		seek_step_id[i] = -1;
+		seek_step_remain[i] = 0;
+		head_unload_id[i] = -1;
+	}
 	head_load[0] = head_load[1] = head_load[2] = head_load[3] = false;
 	cur_track[0] = fdc[0].track;
 	cur_track[1] = fdc[1].track;
 	cur_track[2] = fdc[2].track;
 	cur_track[3] = fdc[3].track;
+	command = 0;
+	result = 0;
+	hdue = hdu;
+	id[0] = id[1] = id[2] = id[3] = 0;
+	eot = 0;
+	gpl = 0;
+	dtl = 0;
 	
 	set_irq(false);
 	set_drq(false);
@@ -362,10 +583,15 @@ uint32 UPD765A::read_io8(uint32 addr)
 			
 			switch(phase) {
 			case PHASE_RESULT:
+			{
+				int idx = (int)(bufptr - buffer);
 				data = *bufptr++;
 #ifdef _FDC_DEBUG_LOG
 				emu->out_debug_log("FDC: RESULT=%2x\n", data);
 #endif
+				if(fdc_trace_io_enabled()) {
+					fdc_trace("result_byte: cmd=%02x idx=%d data=%02x", command, idx, data);
+				}
 				if(--count) {
 					status |= S_RQM;
 				} else {
@@ -385,6 +611,7 @@ uint32 UPD765A::read_io8(uint32 addr)
 					shift_to_idle();
 				}
 				return data;
+			}
 				
 			case PHASE_READ:
 				data = *bufptr++;
@@ -447,7 +674,7 @@ void UPD765A::write_signal(int id, uint32 data, uint32 mask)
 	} else if(id == SIG_UPD765A_TC) {
 #ifdef SDL
 		// phase==PHASE_EXEC support (for Xanadu Scenario II)
-		if(phase == PHASE_READ || phase == PHASE_WRITE || phase == PHASE_SCAN || (phase == PHASE_RESULT && count == 7) || (phase == PHASE_EXEC)) {
+		if(phase == PHASE_READ || phase == PHASE_WRITE || phase == PHASE_SCAN || (phase == PHASE_RESULT && count == 7) || (fdc_tc_exec_enabled() && phase == PHASE_EXEC)) {
 #else
 		if(phase == PHASE_READ || phase == PHASE_WRITE || phase == PHASE_SCAN || (phase == PHASE_RESULT && count == 7)) {
 #endif // SDL
@@ -496,7 +723,9 @@ uint32 UPD765A::read_signal(int ch)
 void UPD765A::event_callback(int event_id, int err)
 {
 #ifdef SDL
-	request_single_exec();
+	if(fdc_request_single_exec_enabled()) {
+		request_single_exec();
+	}
 #endif // SDL
 	if(event_id == EVENT_PHASE) {
 		phase_id = -1;
@@ -601,16 +830,21 @@ void UPD765A::set_drq(bool val)
 		// EPSON QC-10 CP/M Plus
 		dma_data_lost = true;
 #else
-		if((command & 0x1f) != 0x0d) {
+			if((command & 0x1f) != 0x0d) {
 #ifdef SDL
-			// for customized event manager + 2HD disk
-			register_event(this, EVENT_LOST, 30000, false, &lost_id);
+				// for customized event manager + 2HD disk
+				int usec = fdc_lost_event_usec();
+				if(usec > 0) {
+					register_event(this, EVENT_LOST, usec, false, &lost_id);
+				} else {
+					register_event(this, EVENT_LOST, disk[hdu & DRIVE_MASK]->get_usec_per_bytes(1), false, &lost_id);
+				}
 #else
-			register_event(this, EVENT_LOST, disk[hdu & DRIVE_MASK]->get_usec_per_bytes(1), false, &lost_id);
+				register_event(this, EVENT_LOST, disk[hdu & DRIVE_MASK]->get_usec_per_bytes(1), false, &lost_id);
 #endif // SDL
-		} else {
-			// FIXME: write id
-			register_event(this, EVENT_LOST, 30000, false, &lost_id);
+			} else {
+				// FIXME: write id
+				register_event(this, EVENT_LOST, 30000, false, &lost_id);
 		}
 #endif
 	}
@@ -648,6 +882,7 @@ void UPD765A::set_hdu(uint8 val)
 
 void UPD765A::process_cmd(int cmd)
 {
+	fdc_trace("cmd=%02x op=%02x phase=%d hdu=%d C=%02x H=%02x R=%02x N=%02x", command, cmd & 0x1f, phase, hdu & DRIVE_MASK, id[0], id[1], id[2], id[3]);
 	switch(cmd & 0x1f) {
 	case 0x02:
 		cmd_read_diagnostic();
@@ -701,6 +936,7 @@ void UPD765A::cmd_sence_devstat()
 	case PHASE_CMD:
 		set_hdu(buffer[0]);
 		buffer[0] = get_devstat(buffer[0] & DRIVE_MASK);
+		fdc_trace("sense_devstat: drv=%d st3=%02x cur=%d tgt=%d", buffer[0] & DRIVE_MASK, buffer[0], cur_track[buffer[0] & DRIVE_MASK], fdc[buffer[0] & DRIVE_MASK].track);
 		shift_to_result(1);
 		break;
 	}
@@ -713,6 +949,7 @@ void UPD765A::cmd_sence_intstat()
 			buffer[0] = (uint8)fdc[i].result;
 			buffer[1] = (uint8)fdc[i].track;
 			fdc[i].result = 0;
+			fdc_trace("sense_intstat: drv=%d st0=%02x pcn=%02x", i, buffer[0], buffer[1]);
 			shift_to_result(2);
 			return;
 		}
@@ -723,6 +960,7 @@ void UPD765A::cmd_sence_intstat()
 #else
 	buffer[0] = (uint8)ST0_IC;
 #endif
+	fdc_trace("sense_intstat: no_pending st0=%02x", buffer[0]);
 	shift_to_result(1);
 //	status &= ~S_CB;
 }
@@ -732,10 +970,14 @@ uint8 UPD765A::get_devstat(int drv)
 	if(drv >= MAX_DRIVE) {
 		return ST3_FT | drv;
 	}
+	// Keep ST3 track-side bit based on commanded track like common_source_project.
+	// Using cur_track here can introduce host-timing dependent behavior while seek
+	// step events are in flight.
+	int track_for_st3 = fdc[drv].track;
 	return drv |
-	       ((cur_track[drv] & 1) ? ST3_HD : 0) |
+	       ((track_for_st3 & 1) ? ST3_HD : 0) |
 	       ST3_TS |
-	       (cur_track[drv] ? 0 : ST3_T0) |
+	       (track_for_st3 ? 0 : ST3_T0) |
 	       ((force_ready || disk[drv]->inserted) ? ST3_RY : 0) |
 	       (disk[drv]->write_protected ? ST3_WP : 0);
 }
@@ -768,8 +1010,6 @@ void UPD765A::cmd_recalib()
 
 void UPD765A::seek(int drv, int trk)
 {
-	// get distance
-	int distance = abs(trk - cur_track[drv]);
 	int steptime = 32 - 2 * step_rate_time;
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
 		steptime /= 2;
@@ -777,13 +1017,24 @@ void UPD765A::seek(int drv, int trk)
 	if(steptime <= 0) {
 		steptime = 1;
 	}
-	int seektime = (distance == 0) ? 120 : steptime * distance + 500; // usec
+	int seek_scale = fdc_seek_scale();
+	int steptime_usec = steptime * seek_scale;
+	if(steptime_usec <= 0) {
+		steptime_usec = 1;
+	}
 	
 	if(drv >= MAX_DRIVE) {
 		// invalid drive number
 		fdc[drv].result = (drv & DRIVE_MASK) | ST0_SE | ST0_NR | ST0_AT;
 		set_irq(true);
 	} else {
+		// Match common_source_project: SEEK timing is based on previous
+		// commanded track, not current stepped track.
+		int prev_track = fdc[drv].track;
+		int distance = abs(trk - prev_track);
+		int seektime = (distance == 0) ? 120 : steptime_usec * distance + 500; // usec
+		fdc_trace("seek: drv=%d from=%d to=%d dist=%d steptime=%d steptime_us=%d scale=%d seektime=%d", drv, prev_track, trk, distance, steptime, steptime_usec, seek_scale, seektime);
+		cur_track[drv] = prev_track;
 		fdc[drv].track = trk;
 #ifdef UPD765A_DONT_WAIT_SEEK
 		if(distance > 0 && d_noise_seek != NULL) {
@@ -803,12 +1054,11 @@ void UPD765A::seek(int drv, int trk)
 #ifdef SDL
 		if (config.ignore_crc) {
 			seektime = 100;
-			distance = 0;
 		}
 #endif // SDL
 		if(distance > 0) {
 			seek_step_remain[drv] = distance;
-			register_event(this, EVENT_SEEK_STEP + drv, steptime, true, &seek_step_id[drv]);
+			register_event(this, EVENT_SEEK_STEP + drv, steptime_usec, true, &seek_step_id[drv]);
 		} else {
 			cur_track[drv] = fdc[drv].track;
 		}
@@ -834,6 +1084,7 @@ void UPD765A::seek_event(int drv)
 	}
 	set_irq(true);
 	seekstat &= ~(1 << drv);
+	fdc_trace("seek_end: drv=%d cur=%d target=%d result=%02x", drv, cur_track[drv], fdc[drv].track, fdc[drv].result);
 	
 	// reset dsch flag
 	disk[drv]->changed = false;
@@ -1095,7 +1346,26 @@ void UPD765A::read_diagnostic()
 		return;
 	}
 	if(!disk[drv]->make_track(trk, side)) {
-		result = ST1_ND;
+		result = ST0_AT | ST1_MA;
+		shift_to_result7();
+		return;
+	}
+	bool found = false;
+	for(int i = 0; i < disk[drv]->sector_num.sd; i++) {
+		if(!disk[drv]->get_sector(trk, side, i)) {
+			continue;
+		}
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
+			continue;
+		}
+		found = true;
+		if(disk[drv]->id[0] != id[0] || disk[drv]->id[1] != id[1] || disk[drv]->id[2] != id[2] || disk[drv]->id[3] != id[3]) {
+			result = ST1_ND;
+		}
+		break;
+	}
+	if(!found) {
+		result = ST0_AT | ST1_MA;
 		shift_to_result7();
 		return;
 	}
@@ -1120,6 +1390,7 @@ uint32 UPD765A::read_sector()
 #ifdef _FDC_DEBUG_LOG
 		emu->out_debug_log("FDC: TRACK NOT FOUND (TRK=%d SIDE=%d)\n", trk, side);
 #endif
+		fdc_trace("read_sector: track not found drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int secnum = disk[drv]->sector_num.sd;
@@ -1127,6 +1398,7 @@ uint32 UPD765A::read_sector()
 #ifdef _FDC_DEBUG_LOG
 		emu->out_debug_log("FDC: NO SECTORS IN TRACK (TRK=%d SIDE=%d)\n", trk, side);
 #endif
+		fdc_trace("read_sector: no sectors drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int cy = -1;
@@ -1134,7 +1406,7 @@ uint32 UPD765A::read_sector()
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		cy = disk[drv]->id[0];
@@ -1146,39 +1418,62 @@ uint32 UPD765A::read_sector()
 			continue;
 		}
 		if(disk[drv]->sector_size.sd == 0) {
+			fdc_trace("read_sector: zero size drv=%d trk=%d side=%d idx=%d", drv, trk, side, i);
 			continue;
+		}
+		if(disk[drv]->invalid_format) {
+			fdc_trace("read_sector: invalid_format drv=%d trk=%d side=%d idx=%d unstable=%d", drv, trk, side, i, (disk[drv]->unstable != NULL) ? 1 : 0);
 		}
 		// sector number is matched
 		if(disk[drv]->invalid_format) {
-			memset(buffer, disk[drv]->drive_mfm ? 0x4e : 0xff, sizeof(buffer));
-			memcpy(buffer, disk[drv]->sector, disk[drv]->sector_size.sd);
+			for(int j = 0; j < disk[drv]->sector_size.sd; j++) {
+				uint8 mask = (disk[drv]->unstable != NULL && !fdc_disable_unstable_mask()) ? disk[drv]->unstable[j] : 0;
+				buffer[j] = (disk[drv]->sector[j] & ~mask) | (rand() & mask);
+			}
+			memset(buffer + disk[drv]->sector_size.sd, disk[drv]->drive_mfm ? 0x4e : 0xff, sizeof(buffer) - disk[drv]->sector_size.sd);
 		} else {
 			memcpy(buffer, disk[drv]->track + disk[drv]->data_position[i], disk[drv]->get_track_size() - disk[drv]->data_position[i]);
 			memcpy(buffer + disk[drv]->get_track_size() - disk[drv]->data_position[i], disk[drv]->track, disk[drv]->data_position[i]);
 		}
 		fdc[drv].next_trans_position = disk[drv]->data_position[i];
 		
-		if(disk[drv]->crc_error && !disk[drv]->ignore_crc()) {
-			return ST0_AT | ST1_DE | ST2_DD;
+		if((disk[drv]->addr_crc_error || disk[drv]->data_crc_error) && !disk[drv]->ignore_crc()) {
+			fdc_trace("read_sector: crc err drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x addr=%d data=%d", drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3], disk[drv]->addr_crc_error ? 1 : 0, disk[drv]->data_crc_error ? 1 : 0);
+			return ST0_AT | ST1_DE | (disk[drv]->data_crc_error ? ST2_DD : 0);
 		}
 		if(disk[drv]->deleted) {
+			fdc_trace("read_sector: deleted mark drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x", drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3]);
 			return ST2_CM;
 		}
+		int transfer_len = (id[3] != 0) ? (0x80 << min((int)id[3], 7)) : min((int)dtl, 0x80);
+		transfer_len = min(transfer_len, disk[drv]->sector_size.sd);
+		uint32 data_hash = fdc_hash_bytes(buffer, transfer_len);
+		uint8 b0 = (transfer_len > 0) ? buffer[0] : 0;
+		uint8 b1 = (transfer_len > 1) ? buffer[1] : 0;
+		uint8 b2 = (transfer_len > 2) ? buffer[2] : 0;
+		uint8 b3 = (transfer_len > 3) ? buffer[3] : 0;
+		fdc_trace("read_sector: ok drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x seclen=%d xfer=%d hash=%08x b0=%02x b1=%02x b2=%02x b3=%02x",
+		          drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3],
+		          disk[drv]->sector_size.sd, transfer_len, data_hash, b0, b1, b2, b3);
 		return 0;
 	}
 	#ifdef _FDC_DEBUG_LOG
 	emu->out_debug_log("FDC: SECTOR NOT FOUND (TRK=%d SIDE=%d ID=%2x,%2x,%2x,%2x)\n", trk, side, id[0], id[1], id[2], id[3]);
 	#endif
 	if(cy == -1) {
+		fdc_trace("read_sector: no density/id match drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 		return ST0_AT | ST1_MA;
 	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
+			fdc_trace("read_sector: bad cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_BC;
 		} else {
+			fdc_trace("read_sector: no cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_NC;
 		}
 	}
+	fdc_trace("read_sector: not found drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 	return ST0_AT | ST1_ND;
 }
 
@@ -1193,10 +1488,12 @@ uint32 UPD765A::write_sector(bool deleted)
 	}
 	// get sector counts in the current track
 	if(!disk[drv]->get_track(trk, side)) {
+		fdc_trace("find_id: track not found drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int secnum = disk[drv]->sector_num.sd;
 	if(!secnum) {
+		fdc_trace("find_id: no sectors drv=%d trk=%d side=%d", drv, trk, side);
 		return ST0_AT | ST1_MA;
 	}
 	int cy = -1;
@@ -1204,7 +1501,7 @@ uint32 UPD765A::write_sector(bool deleted)
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		cy = disk[drv]->id[0];
@@ -1249,7 +1546,7 @@ uint32 UPD765A::find_id()
 		if(!disk[drv]->get_sector(trk, side, i)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		cy = disk[drv]->id[0];
@@ -1259,20 +1556,25 @@ uint32 UPD765A::find_id()
 		if(disk[drv]->sector_size.sd == 0) {
 			continue;
 		}
-		// sector number is matched
-		fdc[drv].next_trans_position = disk[drv]->data_position[i];
-		return 0;
-	}
+			// sector number is matched
+			fdc[drv].next_trans_position = disk[drv]->data_position[i];
+			fdc_trace("find_id: ok drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x", drv, trk, side, i, disk[drv]->id[0], disk[drv]->id[1], disk[drv]->id[2], disk[drv]->id[3]);
+			return 0;
+		}
 	if(cy == -1) {
+		fdc_trace("find_id: no density/id match drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 		return ST0_AT | ST1_MA;
 	}
 	if(cy != id[0] && cy != -1) {
 		if(cy == 0xff) {
+			fdc_trace("find_id: bad cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_BC;
 		} else {
+			fdc_trace("find_id: no cylinder drv=%d trk=%d side=%d reqC=%02x gotC=%02x", drv, trk, side, id[0], cy);
 			return ST0_AT | ST1_ND | ST2_NC;
 		}
 	}
+	fdc_trace("find_id: not found drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 	return ST0_AT | ST1_ND;
 }
 
@@ -1431,7 +1733,7 @@ uint32 UPD765A::read_id()
 		if(!disk[drv]->get_sector(trk, side, index)) {
 			continue;
 		}
-		if((command & 0x40) != (disk[drv]->density == 0x00 ? 0x40 : 0)) {
+		if((command & 0x40) != (disk[drv]->sector_mfm ? 0x40 : 0)) {
 			continue;
 		}
 		id[0] = disk[drv]->id[0];
@@ -1439,8 +1741,10 @@ uint32 UPD765A::read_id()
 		id[2] = disk[drv]->id[2];
 		id[3] = disk[drv]->id[3];
 		fdc[drv].next_trans_position = disk[drv]->id_position[index] + 6;
+		fdc_trace("read_id: ok drv=%d trk=%d side=%d idx=%d C=%02x H=%02x R=%02x N=%02x", drv, trk, side, index, id[0], id[1], id[2], id[3]);
 		return 0;
 	}
+	fdc_trace("read_id: not found drv=%d trk=%d side=%d req=%02x,%02x,%02x,%02x", drv, trk, side, id[0], id[1], id[2], id[3]);
 	return ST0_AT | ST1_MA;
 }
 
@@ -1458,8 +1762,8 @@ uint32 UPD765A::write_id()
 		return ST0_AT | ST1_NW;
 	}
 	
-	disk[drv]->track_mfm = ((command & 0x40) != 0);
 	disk[drv]->format_track(trk, side);
+	disk[drv]->track_mfm = ((command & 0x40) != 0);
 	for(int i = 0; i < eot && i < 256; i++) {
 		for(int j = 0; j < 4; j++) {
 			id[j] = buffer[4 * i + j];
@@ -1479,6 +1783,7 @@ void UPD765A::cmd_specify()
 		step_rate_time = buffer[0] >> 4;
 		head_unload_time = buffer[1] >> 1;
 		no_dma_mode = ((buffer[1] & 1) != 0);
+		fdc_trace("specify: srt=%d hut=%d ndma=%d", step_rate_time, head_unload_time, no_dma_mode ? 1 : 0);
 		shift_to_idle();
 		status = 0x80;//0xff;
 		break;
@@ -1557,6 +1862,9 @@ void UPD765A::shift_to_result(int length)
 	status = S_RQM | S_CB | S_DIO;
 	bufptr = buffer;
 	count = length;
+	if(fdc_trace_io_enabled()) {
+		fdc_trace("shift_result: cmd=%02x len=%d status=%02x", command, length, status);
+	}
 }
 
 void UPD765A::shift_to_result7()
@@ -1587,6 +1895,7 @@ void UPD765A::shift_to_result7_event()
 	buffer[4] = id[1];
 	buffer[5] = id[2];
 	buffer[6] = id[3];
+	fdc_trace("result7: cmd=%02x st0=%02x st1=%02x st2=%02x C=%02x H=%02x R=%02x N=%02x", command, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6]);
 	set_irq(true);
 	shift_to_result(7);
 }
@@ -1637,6 +1946,12 @@ double UPD765A::get_usec_to_exec_phase()
 	int drv = hdu & DRIVE_MASK;
 	int trk = fdc[drv].track;
 	int side = (hdu >> 2) & 1;
+
+	// Optional timing stabilization for troublesome titles:
+	// keep EXEC transition delay deterministic and independent of rotational position.
+	if(fdc_const_exec_timing()) {
+		return 100;
+	}
 	
 	// XXX: this image may have incorrect skew, so use constant period.
 	if(!disk[drv]->correct_timing()) {

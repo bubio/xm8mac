@@ -8,6 +8,7 @@
 */
 
 #include "disk.h"
+#include <cstdlib>
 
 // crc table
 static const uint16 crc_table[256] = {
@@ -71,6 +72,18 @@ static const int secsize[8] = {
 };
 
 static uint8 tmp_buffer[DISK_BUFFER_SIZE];
+static bool g_disable_unstable_checked = false;
+static bool g_disable_unstable = false;
+
+static bool disable_unstable_mask()
+{
+	if(!g_disable_unstable_checked) {
+		const char* env = getenv("XM8_DISABLE_UNSTABLE_MASK");
+		g_disable_unstable = (env != NULL && env[0] != '\0' && env[0] != '0');
+		g_disable_unstable_checked = true;
+	}
+	return g_disable_unstable;
+}
 
 typedef struct {
 	int type;
@@ -401,6 +414,11 @@ void DISK::close()
 	file_size.d = 0;
 	sector_size.sd = sector_num.sd = 0;
 	sector = NULL;
+	unstable = NULL;
+	sector_mfm = drive_mfm;
+	addr_crc_error = false;
+	data_crc_error = false;
+	crc_error = false;
 	track_mfm = drive_mfm;
 }
 
@@ -409,6 +427,16 @@ bool DISK::get_track(int trk, int side)
 	sector_size.sd = sector_num.sd = 0;
 	invalid_format = false;
 	no_skew = true;
+	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
+		if(trk >= 0) {
+			if(trk & 1) {
+				return false; // unformat track on 2DD side mapping
+			}
+			trk >>= 1;
+		}
+	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
+		if(trk >= 0) trk <<= 1;
+	}
 	
 	// disk not inserted or invalid media type
 	if(!(inserted && check_media_type())) {
@@ -484,31 +512,44 @@ bool DISK::get_track(int trk, int side)
 	}
 	
 	uint8* t = sector;
-	int total = sync_size + (am_size + 1);
+	int total = 0, valid_sector_num = 0;
 	
 	for(int i = 0; i < sector_num.sd; i++) {
 		data_size.read_2bytes_le_from(t + 14);
-		total += sync_size + (am_size + 1) + (4 + 2) + gap2_size + sync_size + (am_size + 1);
-		total += data_size.sd + 2;
+		sync_position[i] = total; // for invalid format case
+		total += sync_size + (am_size + 1) + (4 + 2) + gap2_size;
+		if(data_size.sd > 0) {
+			total += sync_size + (am_size + 1);
+			total += data_size.sd + 2;
+			valid_sector_num++;
+		}
 		if(t[2] != i + 1) {
 			no_skew = false;
 		}
 		t += data_size.sd + 0x10;
 	}
+	total += sync_size + (am_size + 1); // sync in preamble
 	if(gap3_size == 0) {
-		gap3_size = (get_track_size() - total - gap0_size - gap1_size) / (sector_num.sd + 1);
+		gap3_size = (get_track_size() - total - gap0_size - gap1_size) / (valid_sector_num + 1);
 	}
-	gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * sector_num.sd;
+	gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * valid_sector_num;
 	
 	if(gap3_size < 8 || gap4_size < 8) {
-		gap0_size = gap1_size = gap3_size = (get_track_size() - total) / (2 + sector_num.sd + 1);
-		gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * sector_num.sd;
+		gap0_size = gap1_size = gap3_size = (get_track_size() - total) / (2 + valid_sector_num + 1);
+		gap4_size = get_track_size() - total - gap0_size - gap1_size - gap3_size * valid_sector_num;
 	}
 	if(gap3_size < 8 || gap4_size < 8) {
-		gap0_size = gap1_size = gap3_size = gap4_size = 32;
+		gap0_size = gap1_size = gap3_size = gap4_size = 8;
 		invalid_format = true;
 	}
 	int preamble_size = gap0_size + sync_size + (am_size + 1) + gap1_size;
+	if(invalid_format) {
+		total -= sync_size + (am_size + 1);
+		for(int i = 0; i < sector_num.sd; i++) {
+			sync_position[i] *= get_track_size() - preamble_size - gap4_size;
+			sync_position[i] /= total;
+		}
+	}
 	
 	t = sector;
 	total = preamble_size;
@@ -517,14 +558,21 @@ bool DISK::get_track(int trk, int side)
 	for(int i = 0; i < sector_num.sd; i++) {
 		data_size.read_2bytes_le_from(t + 14);
 		if(invalid_format) {
-			total = preamble_size + (get_track_size() - preamble_size - gap4_size) * i / sector_num.sd;
+			total = preamble_size + sync_position[i];
 		}
 		sync_position[i] = total;
-		total += sync_size + (am_size + 1);
+		total += sync_size;
+		total += am_size + 1;
 		id_position[i] = total;
-		total += (4 + 2) + gap2_size + sync_size + (am_size + 1);
-		data_position[i] = total;
-		total += data_size.sd + 2 + gap3_size;
+		total += (4 + 2) + gap2_size;
+		if(data_size.sd > 0) {
+			total += sync_size + (am_size + 1);
+			data_position[i] = total;
+			total += data_size.sd + 2;
+			total += gap3_size;
+		} else {
+			data_position[i] = total; // no data field
+		}
 		t += data_size.sd + 0x10;
 	}
 	return true;
@@ -532,6 +580,9 @@ bool DISK::get_track(int trk, int side)
 
 bool DISK::make_track(int trk, int side)
 {
+	// get_track() already applies 2D/2DD logical<->physical track conversion.
+	// Converting here as well causes a double-conversion mismatch between
+	// make_track() generated data positions and get_sector() lookups.
 	int track_size = get_track_size();
 	
 	if(!get_track(trk, side)) {
@@ -575,16 +626,18 @@ bool DISK::make_track(int trk, int side)
 			if(p < track_size) track[p++] = 0x00;
 		}
 		// am1
+		uint16 crc = 0xffff;
 		for(int j = 0; j < am_size; j++) {
 			if(p < track_size) track[p++] = 0xa1;
+			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
 		}
 		if(p < track_size) track[p++] = 0xfe;
+		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xfe]);
 		// id
 		if(p < track_size) track[p++] = t[0];
 		if(p < track_size) track[p++] = t[1];
 		if(p < track_size) track[p++] = t[2];
 		if(p < track_size) track[p++] = t[3];
-		uint16 crc = 0;
 		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0]]);
 		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[1]]);
 		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[2]]);
@@ -595,23 +648,33 @@ bool DISK::make_track(int trk, int side)
 		for(int j = 0; j < gap2_size; j++) {
 			if(p < track_size) track[p++] = gap_data;
 		}
-		// sync
-		for(int j = 0; j < sync_size; j++) {
-			if(p < track_size) track[p++] = 0x00;
+		// data field (may be absent)
+		if(data_size.sd > 0) {
+			// sync
+			for(int j = 0; j < sync_size; j++) {
+				if(p < track_size) track[p++] = 0x00;
+			}
+			// am2
+			crc = 0xffff;
+			for(int j = 0; j < am_size; j++) {
+				if(p < track_size) track[p++] = 0xa1;
+				crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
+			}
+			uint8 am2 = (t[7] != 0) ? 0xf8 : 0xfb;
+			if(p < track_size) track[p++] = am2;
+			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ am2]);
+			// data
+			uint8* u = get_unstable_sector(sector, i, t[0], t[1], t[2], t[3], data_size.sd);
+			for(int j = 0; j < data_size.sd; j++) {
+				if(p < track_size) {
+					uint8 mask = (u != NULL && !disable_unstable_mask()) ? u[j] : 0;
+					track[p++] = (t[0x10 + j] & ~mask) | (rand() & mask);
+				}
+				crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0x10 + j]]);
+			}
+			if(p < track_size) track[p++] = (crc >> 8) & 0xff;
+			if(p < track_size) track[p++] = (crc >> 0) & 0xff;
 		}
-		// am2
-		for(int j = 0; j < am_size; j++) {
-			if(p < track_size) track[p++] = 0xa1;
-		}
-		if(p < track_size) track[p++] = (t[7] != 0) ? 0xf8 : 0xfb;
-		// data
-		crc = 0;
-		for(int j = 0; j < data_size.sd; j++) {
-			if(p < track_size) track[p++] = t[0x10 + j];
-			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0x10 + j]]);
-		}
-		if(p < track_size) track[p++] = (crc >> 8) & 0xff;
-		if(p < track_size) track[p++] = (crc >> 0) & 0xff;
 		
 		t += data_size.sd + 0x10;
 	}
@@ -622,6 +685,7 @@ bool DISK::get_sector(int trk, int side, int index)
 {
 	sector_size.sd = sector_num.sd = 0;
 	sector = NULL;
+	unstable = NULL;
 	
 	// disk not inserted or invalid media type
 	if(!(inserted && check_media_type())) {
@@ -632,6 +696,16 @@ bool DISK::get_sector(int trk, int side, int index)
 	if(trk == -1 && side == -1) {
 		trk = cur_track;
 		side = cur_side;
+	}
+	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
+		if(trk >= 0) {
+			if(trk & 1) {
+				return false;
+			}
+			trk >>= 1;
+		}
+	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
+		if(trk >= 0) trk <<= 1;
 	}
 	int trkside = trk * 2 + (side & 1);
 	if(!(0 <= trkside && trkside < 164)) {
@@ -658,8 +732,101 @@ bool DISK::get_sector(int trk, int side, int index)
 		data_size.read_2bytes_le_from(t + 14);
 		t += data_size.sd + 0x10;
 	}
+	pair target_size;
+	target_size.read_2bytes_le_from(t + 14);
+	unstable = get_unstable_sector(buffer + offset.d, index, t[0], t[1], t[2], t[3], target_size.sd);
 	set_sector_info(t);
 	return true;
+}
+
+int DISK::get_track_num(uint8* t)
+{
+	int position = (int)(t - buffer);
+	int result = -1;
+	pair offset;
+	
+	offset.read_4bytes_le_from(buffer + 0x1c);
+	if(position < offset.sd) {
+		int max_tracks = 164;
+		for(int track = 0; track < 164; track++) {
+			offset.read_4bytes_le_from(buffer + 0x20 + track * 4);
+			if(offset.sd != 0) {
+				if(offset.sd < 0x2b0) {
+					max_tracks = min((offset.sd - 0x20) >> 2, 164);
+				}
+				break;
+			}
+		}
+		for(int track = 0; track < max_tracks; track++) {
+			offset.read_4bytes_le_from(buffer + 0x20 + track * 4);
+			if(offset.sd != 0 && position >= offset.sd) {
+				if(position == offset.sd) {
+					result = track;
+					break;
+				} else {
+					result = max(track, result);
+				}
+			}
+		}
+	}
+	return result;
+}
+
+uint8* DISK::get_unstable_sector(uint8* t, int index, uint8 c, uint8 h, uint8 r, uint8 n, int size)
+{
+	int track = get_track_num(t);
+	if(track < 0) {
+		return NULL;
+	}
+	uint8* end = buffer + sizeof(buffer);
+	pair offset, num, idx, data_size;
+	offset.read_4bytes_le_from(buffer + 0x20 + track * 4);
+	t = buffer + offset.d;
+	if(t < buffer || t + 0x10 > end) {
+		return NULL;
+	}
+	num.read_2bytes_le_from(t + 4);
+	if(num.sd <= 0 || num.sd > 256) {
+		return NULL;
+	}
+	
+	for(int i = 0; i < num.sd; i++) {
+		if(t + 0x10 > end) {
+			return NULL;
+		}
+		data_size.read_2bytes_le_from(t + 14);
+		if(data_size.sd < 0 || data_size.sd > 16384 || t + data_size.sd + 0x10 > end) {
+			return NULL;
+		}
+		t += data_size.sd + 0x10;
+	}
+	if(track == get_track_num(t)) {
+		if(t < buffer || t + 0x10 > end) {
+			return NULL;
+		}
+		num.read_2bytes_le_from(t + 4);
+		if(num.sd <= 0 || num.sd > 256) {
+			return NULL;
+		}
+		for(int i = 0; i < num.sd; i++) {
+			if(t + 0x10 > end) {
+				return NULL;
+			}
+			idx.read_2bytes_le_from(t + 9);
+			data_size.read_2bytes_le_from(t + 14);
+			if(data_size.sd < 0 || data_size.sd > 16384 || t + data_size.sd + 0x10 > end) {
+				return NULL;
+			}
+			if(idx.sd == index) {
+				if(t[0] == c && t[1] == h && t[2] == r && t[3] == n && data_size.sd == size) {
+					return t + 0x10;
+				}
+				return NULL;
+			}
+			t += data_size.sd + 0x10;
+		}
+	}
+	return NULL;
 }
 
 bool DISK::get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uint8* r, uint8* n, bool* mfm, int* length)
@@ -680,7 +847,7 @@ bool DISK::get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uin
 		*n = id[3];
 	}
 	if(mfm != NULL) {
-		*mfm = (density == 0x00);
+		*mfm = sector_mfm;
 	}
 	if(length != NULL) {
 		*length = sector_size.sd;
@@ -691,11 +858,16 @@ bool DISK::get_sector_info(int trk, int side, int index, uint8* c, uint8* h, uin
 void DISK::set_sector_info(uint8 *t)
 {
 	// header info
+	int am_size = track_mfm ? 3 : 0;
+	uint16 crc = 0xffff;
+	for(int i = 0; i < am_size; i++) {
+		crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xa1]);
+	}
+	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ 0xfe]);
 	id[0] = t[0];
 	id[1] = t[1];
 	id[2] = t[2];
 	id[3] = t[3];
-	uint16 crc = 0;
 	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0]]);
 	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[1]]);
 	crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[2]]);
@@ -707,12 +879,16 @@ void DISK::set_sector_info(uint8 *t)
 	// t[7]: 0x00 = normal, 0x10 = deleted mark
 	// t[8]: 0x00 = valid, 0x10 = valid (deleted data), 0xa0 = id crc error, 0xb0 = data crc error, 0xe0 = address mark missing, 0xf0 = data mark missing
 	density = t[6];
+	sector_mfm = (density == 0x00);
 	deleted = (t[7] != 0);
 	if(config.ignore_crc) {
-		crc_error = false;
+		addr_crc_error = false;
+		data_crc_error = false;
 	} else {
-		crc_error = ((t[8] & 0xf0) != 0x00 && (t[8] & 0xf0) != 0x10);
+		addr_crc_error = ((t[8] & 0xf0) == 0xa0);
+		data_crc_error = ((t[8] & 0xf0) == 0xb0);
 	}
+	crc_error = addr_crc_error || data_crc_error;
 	sector = t + 0x10;
 	sector_size.read_2bytes_le_from(t + 14);
 }
@@ -733,8 +909,10 @@ void DISK::set_crc_error(bool value)
 {
 	if(sector != NULL) {
 		uint8 *t = sector - 0x10;
-		t[8] = (t[8] & 0x0f) | (value ? 0xb0 : t[7]); // FIXME: always data crc error ?
+		t[8] = (t[8] & 0x0f) | (value ? 0xb0 : t[7]);
 	}
+	addr_crc_error = false;
+	data_crc_error = value;
 	crc_error = value;
 }
 
@@ -745,11 +923,23 @@ void DISK::set_data_mark_missing()
 		t[8] = (t[8] & 0x0f) | 0xf0;
 		t[14] = t[15] = 0;
 	}
+	addr_crc_error = false;
+	data_crc_error = false;
 	crc_error = false;
 }
 
 bool DISK::format_track(int trk, int side)
 {
+	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
+		if(trk >= 0) {
+			if(trk & 1) {
+				return false;
+			}
+			trk >>= 1;
+		}
+	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
+		if(trk >= 0) trk <<= 1;
+	}
 	// disk not inserted or invalid media type
 	if(!(inserted && check_media_type())) {
 		return false;
@@ -773,6 +963,8 @@ bool DISK::format_track(int trk, int side)
 	
 	trim_required = true;
 	sector_num.sd = 0;
+	sector = NULL;
+	unstable = NULL;
 	track_mfm = drive_mfm;
 	return true;
 }
@@ -1647,11 +1839,15 @@ bool DISK::load_state(FILEIO* state_fio)
 	state_fio->Fread(data_position, sizeof(data_position), 1);
 	int offset = state_fio->FgetInt32();
 	sector = (offset != -1) ? buffer + offset : NULL;
+	unstable = NULL;
 	sector_size.sd = state_fio->FgetInt32();
 	state_fio->Fread(id, sizeof(id), 1);
 	density = state_fio->FgetUint8();
+	sector_mfm = (density == 0x00);
 	deleted = state_fio->FgetBool();
 	crc_error = state_fio->FgetBool();
+	addr_crc_error = false;
+	data_crc_error = crc_error;
 	drive_type = state_fio->FgetUint8();
 	drive_rpm = state_fio->FgetInt32();
 	drive_mfm = state_fio->FgetBool();
