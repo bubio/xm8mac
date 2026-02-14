@@ -249,11 +249,11 @@ void EVENT::drive()
 			if (main_cpu_exec > 0) {
 				// single execution ?
 				if (single_exec == true) {
-					if (main_cpu_exec > 4) {
-						main_cpu_exec = 4;
+						if (main_cpu_exec > 4) {
+							main_cpu_exec = 4;
+						}
 					}
-				}
-				cpu_done = d_cpu[0].device->run(main_cpu_exec);
+					cpu_done = d_cpu[0].device->run(main_cpu_exec);
 			}
 
 			// if registered new event during main cpu execution, recalc min_event_clock
@@ -268,10 +268,10 @@ void EVENT::drive()
 				if (cpu_remain > 0) {
 					sub_cpu_exec = cpu_remain;
 					if (single_exec == true) {
-						if (sub_cpu_exec > 4) {
-							sub_cpu_exec = 4;
+							if (sub_cpu_exec > 4) {
+								sub_cpu_exec = 4;
+							}
 						}
-					}
 
 					sub_cpu_done = d_cpu[1].device->run(sub_cpu_exec);
 					cpu_remain -= sub_cpu_done;
@@ -282,10 +282,10 @@ void EVENT::drive()
 				if (cpu_remain > 2) {
 					sub_cpu_exec = cpu_remain / 2;
 					if (single_exec == true) {
-						if (sub_cpu_exec > 4) {
-							sub_cpu_exec = 4;
+							if (sub_cpu_exec > 4) {
+								sub_cpu_exec = 4;
+							}
 						}
-					}
 					
 					sub_cpu_done = d_cpu[1].device->run(sub_cpu_exec);
 					cpu_remain -= (sub_cpu_done * 2);

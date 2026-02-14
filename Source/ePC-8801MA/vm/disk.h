@@ -61,7 +61,7 @@ private:
 	bool temporary;
 	uint8 fdi_header[4096];
 	int get_track_num(uint8* t);
-	uint8* get_unstable_sector(uint8* t, int index);
+	uint8* get_unstable_sector(uint8* t, int index, uint8 c, uint8 h, uint8 r, uint8 n, int size);
 	
 	void set_sector_info(uint8 *t);
 	void trim_buffer();

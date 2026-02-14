@@ -8,6 +8,7 @@
 */
 
 #include "disk.h"
+#include <cstdlib>
 
 // crc table
 static const uint16 crc_table[256] = {
@@ -71,6 +72,18 @@ static const int secsize[8] = {
 };
 
 static uint8 tmp_buffer[DISK_BUFFER_SIZE];
+static bool g_disable_unstable_checked = false;
+static bool g_disable_unstable = false;
+
+static bool disable_unstable_mask()
+{
+	if(!g_disable_unstable_checked) {
+		const char* env = getenv("XM8_DISABLE_UNSTABLE_MASK");
+		g_disable_unstable = (env != NULL && env[0] != '\0' && env[0] != '0');
+		g_disable_unstable_checked = true;
+	}
+	return g_disable_unstable;
+}
 
 typedef struct {
 	int type;
@@ -567,16 +580,9 @@ bool DISK::get_track(int trk, int side)
 
 bool DISK::make_track(int trk, int side)
 {
-	if(media_type == MEDIA_TYPE_2D && drive_type == DRIVE_TYPE_2DD) {
-		if(trk >= 0) {
-			if(trk & 1) {
-				return false;
-			}
-			trk >>= 1;
-		}
-	} else if(media_type == MEDIA_TYPE_2DD && drive_type == DRIVE_TYPE_2D) {
-		if(trk >= 0) trk <<= 1;
-	}
+	// get_track() already applies 2D/2DD logical<->physical track conversion.
+	// Converting here as well causes a double-conversion mismatch between
+	// make_track() generated data positions and get_sector() lookups.
 	int track_size = get_track_size();
 	
 	if(!get_track(trk, side)) {
@@ -658,10 +664,10 @@ bool DISK::make_track(int trk, int side)
 			if(p < track_size) track[p++] = am2;
 			crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ am2]);
 			// data
-			uint8* u = get_unstable_sector(sector, i);
+			uint8* u = get_unstable_sector(sector, i, t[0], t[1], t[2], t[3], data_size.sd);
 			for(int j = 0; j < data_size.sd; j++) {
 				if(p < track_size) {
-					uint8 mask = u ? u[j] : 0;
+					uint8 mask = (u != NULL && !disable_unstable_mask()) ? u[j] : 0;
 					track[p++] = (t[0x10 + j] & ~mask) | (rand() & mask);
 				}
 				crc = (uint16)((crc << 8) ^ crc_table[(uint8)(crc >> 8) ^ t[0x10 + j]]);
@@ -719,7 +725,6 @@ bool DISK::get_sector(int trk, int side, int index)
 	if(index >= sector_num.sd) {
 		return false;
 	}
-	unstable = get_unstable_sector(t, index);
 	
 	// skip sector
 	for(int i = 0; i < index; i++) {
@@ -727,6 +732,9 @@ bool DISK::get_sector(int trk, int side, int index)
 		data_size.read_2bytes_le_from(t + 14);
 		t += data_size.sd + 0x10;
 	}
+	pair target_size;
+	target_size.read_2bytes_le_from(t + 14);
+	unstable = get_unstable_sector(buffer + offset.d, index, t[0], t[1], t[2], t[3], target_size.sd);
 	set_sector_info(t);
 	return true;
 }
@@ -764,29 +772,57 @@ int DISK::get_track_num(uint8* t)
 	return result;
 }
 
-uint8* DISK::get_unstable_sector(uint8* t, int index)
+uint8* DISK::get_unstable_sector(uint8* t, int index, uint8 c, uint8 h, uint8 r, uint8 n, int size)
 {
 	int track = get_track_num(t);
 	if(track < 0) {
 		return NULL;
 	}
+	uint8* end = buffer + sizeof(buffer);
 	pair offset, num, idx, data_size;
 	offset.read_4bytes_le_from(buffer + 0x20 + track * 4);
 	t = buffer + offset.d;
+	if(t < buffer || t + 0x10 > end) {
+		return NULL;
+	}
 	num.read_2bytes_le_from(t + 4);
+	if(num.sd <= 0 || num.sd > 256) {
+		return NULL;
+	}
 	
 	for(int i = 0; i < num.sd; i++) {
+		if(t + 0x10 > end) {
+			return NULL;
+		}
 		data_size.read_2bytes_le_from(t + 14);
+		if(data_size.sd < 0 || data_size.sd > 16384 || t + data_size.sd + 0x10 > end) {
+			return NULL;
+		}
 		t += data_size.sd + 0x10;
 	}
 	if(track == get_track_num(t)) {
+		if(t < buffer || t + 0x10 > end) {
+			return NULL;
+		}
 		num.read_2bytes_le_from(t + 4);
+		if(num.sd <= 0 || num.sd > 256) {
+			return NULL;
+		}
 		for(int i = 0; i < num.sd; i++) {
-			idx.read_2bytes_le_from(t + 9);
-			if(idx.sd == index) {
-				return t + 0x10;
+			if(t + 0x10 > end) {
+				return NULL;
 			}
+			idx.read_2bytes_le_from(t + 9);
 			data_size.read_2bytes_le_from(t + 14);
+			if(data_size.sd < 0 || data_size.sd > 16384 || t + data_size.sd + 0x10 > end) {
+				return NULL;
+			}
+			if(idx.sd == index) {
+				if(t[0] == c && t[1] == h && t[2] == r && t[3] == n && data_size.sd == size) {
+					return t + 0x10;
+				}
+				return NULL;
+			}
 			t += data_size.sd + 0x10;
 		}
 	}
