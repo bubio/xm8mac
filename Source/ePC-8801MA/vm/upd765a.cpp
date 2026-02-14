@@ -95,6 +95,17 @@ static int g_fdc_lost_usec = 15000;
 
 static void fdc_trace(const char* fmt, ...);
 
+static bool fdc_is_8mhz_mode()
+{
+	// PC-8801MA core uses cpu_type==0 as 8MHz path.
+	return (config.cpu_type == 0);
+}
+
+static const char* fdc_pick_env_name(const char* base_name, const char* mode_name)
+{
+	return fdc_is_8mhz_mode() ? mode_name : base_name;
+}
+
 static bool fdc_trace_enabled()
 {
 	if(!g_fdc_trace_checked) {
@@ -132,7 +143,11 @@ static bool fdc_trace_io_enabled()
 static int fdc_seek_scale()
 {
 	if(!g_fdc_seek_scale_checked) {
-		const char* env = getenv("XM8_FDC_SEEK_SCALE");
+		const char* env_name = fdc_pick_env_name("XM8_FDC_SEEK_SCALE", "XM8_FDC_SEEK_SCALE_8MHZ");
+		const char* env = getenv(env_name);
+		if((env == NULL || env[0] == '\0') && fdc_is_8mhz_mode()) {
+			env = getenv("XM8_FDC_SEEK_SCALE");
+		}
 		if(env != NULL && env[0] != '\0') {
 			long v = strtol(env, NULL, 10);
 			if(v >= 1 && v <= 10000) {
@@ -147,7 +162,11 @@ static int fdc_seek_scale()
 static bool fdc_disable_unstable_mask()
 {
 	if(!g_fdc_disable_unstable_checked) {
-		const char* env = getenv("XM8_DISABLE_UNSTABLE_MASK");
+		const char* env_name = fdc_pick_env_name("XM8_DISABLE_UNSTABLE_MASK", "XM8_DISABLE_UNSTABLE_MASK_8MHZ");
+		const char* env = getenv(env_name);
+		if((env == NULL || env[0] == '\0') && fdc_is_8mhz_mode()) {
+			env = getenv("XM8_DISABLE_UNSTABLE_MASK");
+		}
 		if(env != NULL && env[0] != '\0') {
 			g_fdc_disable_unstable = (env[0] != '0');
 		}
@@ -159,7 +178,11 @@ static bool fdc_disable_unstable_mask()
 static bool fdc_const_exec_timing()
 {
 	if(!g_fdc_const_exec_checked) {
-		const char* env = getenv("XM8_FDC_CONST_EXEC_USEC");
+		const char* env_name = fdc_pick_env_name("XM8_FDC_CONST_EXEC_USEC", "XM8_FDC_CONST_EXEC_USEC_8MHZ");
+		const char* env = getenv(env_name);
+		if((env == NULL || env[0] == '\0') && fdc_is_8mhz_mode()) {
+			env = getenv("XM8_FDC_CONST_EXEC_USEC");
+		}
 		if(env != NULL && env[0] != '\0') {
 			g_fdc_const_exec = (env[0] != '0');
 		}
@@ -195,7 +218,11 @@ static bool fdc_tc_exec_enabled()
 static int fdc_lost_event_usec()
 {
 	if(!g_fdc_lost_usec_checked) {
-		const char* env = getenv("XM8_FDC_LOST_USEC");
+		const char* env_name = fdc_pick_env_name("XM8_FDC_LOST_USEC", "XM8_FDC_LOST_USEC_8MHZ");
+		const char* env = getenv(env_name);
+		if((env == NULL || env[0] == '\0') && fdc_is_8mhz_mode()) {
+			env = getenv("XM8_FDC_LOST_USEC");
+		}
 		if(env != NULL && env[0] != '\0') {
 			long v = strtol(env, NULL, 10);
 			if(v >= 1 && v <= 10000000) {
@@ -221,7 +248,10 @@ static void fdc_dump_runtime_params()
 	int lost_usec = fdc_lost_event_usec();
 	bool disable_unstable = fdc_disable_unstable_mask();
 	bool const_exec = fdc_const_exec_timing();
-	fdc_trace("runtime_params: seek_scale=%d disable_unstable=%d lost_usec=%d const_exec=%d",
+	fdc_trace("runtime_params: cpu_type=%d cpu_power=%d mode=%s seek_scale=%d disable_unstable=%d lost_usec=%d const_exec=%d",
+	          config.cpu_type,
+	          config.cpu_power,
+	          fdc_is_8mhz_mode() ? "8mhz" : "4mhz",
 	          seek_scale,
 	          disable_unstable ? 1 : 0,
 	          lost_usec,
