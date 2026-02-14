@@ -10,6 +10,7 @@
 #include "event.h"
 #ifdef SDL
 #include "z80.h"
+#include <cstdlib>
 #endif // SDL
 
 #define EVENT_MIX	0
@@ -17,6 +18,39 @@
 #ifdef SDL
 #define SINGLE_EXEC_TIMEOUT		10000
 										// exit single exec mode (us)
+
+static bool g_single_exec_tuned = false;
+static int g_single_exec_timeout_usec = SINGLE_EXEC_TIMEOUT;
+static int g_single_exec_slice_clocks = 4;
+
+static void tune_single_exec_params()
+{
+	if(g_single_exec_tuned) {
+		return;
+	}
+	g_single_exec_tuned = true;
+
+	// PC-8801MA 8MHz mode needs a wider single-exec window for stable FDC boot timing.
+	if(config.cpu_type == 0) {
+		g_single_exec_timeout_usec = 20000;
+		g_single_exec_slice_clocks = 20;
+	}
+
+	const char* timeout_env = getenv("XM8_EVENT_SINGLE_EXEC_TIMEOUT_USEC");
+	if(timeout_env != NULL && timeout_env[0] != '\0') {
+		long v = strtol(timeout_env, NULL, 10);
+		if(v >= 1000 && v <= 1000000) {
+			g_single_exec_timeout_usec = (int)v;
+		}
+	}
+	const char* slice_env = getenv("XM8_EVENT_SINGLE_EXEC_SLICE_CLOCKS");
+	if(slice_env != NULL && slice_env[0] != '\0') {
+		long v = strtol(slice_env, NULL, 10);
+		if(v >= 1 && v <= 1024) {
+			g_single_exec_slice_clocks = (int)v;
+		}
+	}
+}
 #endif // SDL
 
 void EVENT::initialize()
@@ -146,9 +180,10 @@ void EVENT::request_single_exec()
 void EVENT::drive()
 {
 #ifdef SDL
+	tune_single_exec_params();
 	if (single_exec == true) {
 		// if passed 10ms, disable single_exec
-		if (passed_usec(single_exec_clock) > SINGLE_EXEC_TIMEOUT) {
+		if (passed_usec(single_exec_clock) > g_single_exec_timeout_usec) {
 			single_exec = false;
 		}
 	}
@@ -249,8 +284,8 @@ void EVENT::drive()
 			if (main_cpu_exec > 0) {
 				// single execution ?
 				if (single_exec == true) {
-						if (main_cpu_exec > 4) {
-							main_cpu_exec = 4;
+						if (main_cpu_exec > g_single_exec_slice_clocks) {
+							main_cpu_exec = g_single_exec_slice_clocks;
 						}
 					}
 					cpu_done = d_cpu[0].device->run(main_cpu_exec);
@@ -268,8 +303,8 @@ void EVENT::drive()
 				if (cpu_remain > 0) {
 					sub_cpu_exec = cpu_remain;
 					if (single_exec == true) {
-							if (sub_cpu_exec > 4) {
-								sub_cpu_exec = 4;
+							if (sub_cpu_exec > g_single_exec_slice_clocks) {
+								sub_cpu_exec = g_single_exec_slice_clocks;
 							}
 						}
 
@@ -282,8 +317,8 @@ void EVENT::drive()
 				if (cpu_remain > 2) {
 					sub_cpu_exec = cpu_remain / 2;
 					if (single_exec == true) {
-							if (sub_cpu_exec > 4) {
-								sub_cpu_exec = 4;
+							if (sub_cpu_exec > g_single_exec_slice_clocks) {
+								sub_cpu_exec = g_single_exec_slice_clocks;
 							}
 						}
 					

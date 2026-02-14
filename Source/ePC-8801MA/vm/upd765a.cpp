@@ -86,6 +86,8 @@ static bool g_fdc_disable_unstable_checked = false;
 static bool g_fdc_disable_unstable = true;
 static bool g_fdc_const_exec_checked = false;
 static bool g_fdc_const_exec = true;
+static bool g_fdc_const_exec_delay_usec_checked = false;
+static int g_fdc_const_exec_delay_usec = 100;
 static bool g_fdc_request_single_exec_checked = false;
 static bool g_fdc_request_single_exec = true;
 static bool g_fdc_tc_exec_checked = false;
@@ -191,10 +193,33 @@ static bool fdc_const_exec_timing()
 	return g_fdc_const_exec;
 }
 
+static int fdc_const_exec_delay_usec()
+{
+	if(!g_fdc_const_exec_delay_usec_checked) {
+		const char* env_name = fdc_pick_env_name("XM8_FDC_CONST_EXEC_DELAY_USEC", "XM8_FDC_CONST_EXEC_DELAY_USEC_8MHZ");
+		const char* env = getenv(env_name);
+		if((env == NULL || env[0] == '\0') && fdc_is_8mhz_mode()) {
+			env = getenv("XM8_FDC_CONST_EXEC_DELAY_USEC");
+		}
+		if(env != NULL && env[0] != '\0') {
+			long v = strtol(env, NULL, 10);
+			if(v >= 1 && v <= 1000000) {
+				g_fdc_const_exec_delay_usec = (int)v;
+			}
+		}
+		g_fdc_const_exec_delay_usec_checked = true;
+	}
+	return g_fdc_const_exec_delay_usec;
+}
+
 static bool fdc_request_single_exec_enabled()
 {
 	if(!g_fdc_request_single_exec_checked) {
-		const char* env = getenv("XM8_FDC_REQUEST_SINGLE_EXEC");
+		const char* env_name = fdc_pick_env_name("XM8_FDC_REQUEST_SINGLE_EXEC", "XM8_FDC_REQUEST_SINGLE_EXEC_8MHZ");
+		const char* env = getenv(env_name);
+		if((env == NULL || env[0] == '\0') && fdc_is_8mhz_mode()) {
+			env = getenv("XM8_FDC_REQUEST_SINGLE_EXEC");
+		}
 		if(env != NULL && env[0] != '\0') {
 			g_fdc_request_single_exec = (env[0] != '0');
 		}
@@ -206,7 +231,14 @@ static bool fdc_request_single_exec_enabled()
 static bool fdc_tc_exec_enabled()
 {
 	if(!g_fdc_tc_exec_checked) {
-		const char* env = getenv("XM8_FDC_TC_EXEC");
+		// 8MHz mode is more stable with legacy PHASE_EXEC->TC path disabled by default.
+		// 4MHz keeps the previous default behavior.
+		g_fdc_tc_exec = !fdc_is_8mhz_mode();
+		const char* env_name = fdc_pick_env_name("XM8_FDC_TC_EXEC", "XM8_FDC_TC_EXEC_8MHZ");
+		const char* env = getenv(env_name);
+		if((env == NULL || env[0] == '\0') && fdc_is_8mhz_mode()) {
+			env = getenv("XM8_FDC_TC_EXEC");
+		}
 		if(env != NULL && env[0] != '\0') {
 			g_fdc_tc_exec = (env[0] != '0');
 		}
@@ -248,14 +280,20 @@ static void fdc_dump_runtime_params()
 	int lost_usec = fdc_lost_event_usec();
 	bool disable_unstable = fdc_disable_unstable_mask();
 	bool const_exec = fdc_const_exec_timing();
-	fdc_trace("runtime_params: cpu_type=%d cpu_power=%d mode=%s seek_scale=%d disable_unstable=%d lost_usec=%d const_exec=%d",
+	int const_exec_delay_usec = fdc_const_exec_delay_usec();
+	bool req_single_exec = fdc_request_single_exec_enabled();
+	bool tc_exec = fdc_tc_exec_enabled();
+	fdc_trace("runtime_params: cpu_type=%d cpu_power=%d mode=%s seek_scale=%d disable_unstable=%d lost_usec=%d const_exec=%d const_exec_delay_usec=%d req_single_exec=%d tc_exec=%d",
 	          config.cpu_type,
 	          config.cpu_power,
 	          fdc_is_8mhz_mode() ? "8mhz" : "4mhz",
 	          seek_scale,
 	          disable_unstable ? 1 : 0,
 	          lost_usec,
-	          const_exec ? 1 : 0);
+	          const_exec ? 1 : 0,
+	          const_exec_delay_usec,
+	          req_single_exec ? 1 : 0,
+	          tc_exec ? 1 : 0);
 }
 
 static void fdc_trace(const char* fmt, ...)
@@ -465,6 +503,8 @@ void UPD765A::release()
 	g_fdc_disable_unstable = true;
 	g_fdc_const_exec_checked = false;
 	g_fdc_const_exec = true;
+	g_fdc_const_exec_delay_usec_checked = false;
+	g_fdc_const_exec_delay_usec = 100;
 	g_fdc_request_single_exec_checked = false;
 	g_fdc_request_single_exec = true;
 	g_fdc_tc_exec_checked = false;
@@ -2007,7 +2047,7 @@ double UPD765A::get_usec_to_exec_phase()
 	// Optional timing stabilization for troublesome titles:
 	// keep EXEC transition delay deterministic and independent of rotational position.
 	if(fdc_const_exec_timing()) {
-		return 100;
+		return fdc_const_exec_delay_usec();
 	}
 	
 	// XXX: this image may have incorrect skew, so use constant period.
