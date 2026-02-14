@@ -51,6 +51,24 @@
                 "XM8_DISABLE_UNSTABLE_MASK": "1",
                 "XM8_FDC_TRACE_FILE": "xm8_fdc_trace_s1000_nounstable.log"
             }
+        },
+        {
+            "name": "macOS: Wizardry 8MHz チューニング",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/XM8.app/Contents/MacOS/xm8",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "XM8_FDC_TRACE": "1",
+                "XM8_FDC_TRACE_IO": "1",
+                "XM8_FDC_TRACE_MAX_LINES": "400000",
+                "XM8_FDC_TRACE_FILE": "xm8_fdc_trace_8mhz_tuning.log",
+                "XM8_FDC_SEEK_SCALE_8MHZ": "1000",
+                "XM8_DISABLE_UNSTABLE_MASK_8MHZ": "1",
+                "XM8_FDC_LOST_USEC_8MHZ": "15000",
+                "XM8_FDC_CONST_EXEC_USEC_8MHZ": "1"
+            }
         }
     ]
 }
