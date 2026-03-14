@@ -1,0 +1,5 @@
+// Auto-generated from CMakeLists.txt — do not edit
+#define APP_VER_MAJOR @PROJECT_VERSION_MAJOR@
+#define APP_VER_MINOR @PROJECT_VERSION_MINOR@
+#define APP_VER_PATCH @PROJECT_VERSION_PATCH@
+#define APP_VER ((APP_VER_MAJOR << 8) | (APP_VER_MINOR << 4) | APP_VER_PATCH)
