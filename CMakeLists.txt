@@ -37,13 +37,6 @@ set(PROJECT_VERSION 1.7.7)
 # Project Name
 project(XM8 VERSION ${PROJECT_VERSION})
 
-configure_file(
-  ${CMAKE_SOURCE_DIR}/Source/ePC-8801MA/version.h.in
-  ${CMAKE_BINARY_DIR}/generated/version.h
-  @ONLY
-)
-include_directories(${CMAKE_BINARY_DIR}/generated)
-
 # Packaging options
 option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
 

@@ -41,7 +41,8 @@
 //
 #define APP_NAME				"XM8 (based on ePC-8801MA)";
 										// application name
-#include "version.h"
+#define APP_VER					0x0177
+										// version (BCD)
 #define APP_WIDTH				SCREEN_WIDTH
 										// window width
 #define APP_HEIGHT_TRANSPARENT	SCREEN_HEIGHT
