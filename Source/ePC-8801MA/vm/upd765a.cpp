@@ -400,7 +400,9 @@ void UPD765A::write_signal(int id, uint32 data, uint32 mask)
 	} else if(id == SIG_UPD765A_TC) {
 #ifdef SDL
 		// phase==PHASE_EXEC support (for Xanadu Scenario II)
-		if(phase == PHASE_READ || phase == PHASE_WRITE || phase == PHASE_SCAN || (phase == PHASE_RESULT && count == 7) || (phase == PHASE_EXEC)) {
+		// but disable for 8MHz mode where it destabilizes Wizardry boot
+		bool tc_accept_exec = (config.cpu_type != 0);
+		if(phase == PHASE_READ || phase == PHASE_WRITE || phase == PHASE_SCAN || (phase == PHASE_RESULT && count == 7) || (tc_accept_exec && phase == PHASE_EXEC)) {
 #else
 		if(phase == PHASE_READ || phase == PHASE_WRITE || phase == PHASE_SCAN || (phase == PHASE_RESULT && count == 7)) {
 #endif // SDL
@@ -518,7 +520,7 @@ void UPD765A::set_drq(bool val)
 		if((command & 0x1f) != 0x0d) {
 #ifdef SDL
 			// for customized event manager + 2HD disk
-			register_event(this, EVENT_LOST, 30000, false, &lost_id);
+			register_event(this, EVENT_LOST, 15000, false, &lost_id);
 #else
 			register_event(this, EVENT_LOST, disk[hdu & DRIVE_MASK]->get_usec_per_bytes(1), false, &lost_id);
 #endif // SDL
@@ -684,8 +686,8 @@ void UPD765A::cmd_recalib()
 
 void UPD765A::seek(int drv, int trk)
 {
-	// get distance
-	int seektime = 32 - 2 * step_rate_time;
+	// get distance (step rate is in msec units, convert to usec)
+	int seektime = (32 - 2 * step_rate_time) * 1000; // msec -> usec
 	if(disk[drv]->drive_type == DRIVE_TYPE_2HD) {
 		seektime /= 2;
 	}
@@ -1466,7 +1468,15 @@ double UPD765A::get_usec_to_exec_phase()
 	int drv = hdu & DRIVE_MASK;
 	int trk = fdc[drv].track;
 	int side = (hdu >> 2) & 1;
-	
+
+#ifdef SDL
+	// Use constant exec-phase delay for SDL mode.
+	// The SDL event system's position tracking is not precise enough
+	// for rotational-position-based timing, which causes timing-sensitive
+	// titles (e.g. Wizardry) to fail during boot.
+	return 100;
+#endif
+
 	// XXX: this is a standard image and skew may be incorrect
 	if(disk[drv]->is_standard_image) {
 		return 100;

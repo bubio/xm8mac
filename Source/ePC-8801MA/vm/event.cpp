@@ -17,6 +17,12 @@
 #ifdef SDL
 #define SINGLE_EXEC_TIMEOUT		10000
 										// exit single exec mode (us)
+#define SINGLE_EXEC_TIMEOUT_8MHZ	20000
+										// 8MHz mode needs wider window for stable FDC timing
+#define SINGLE_EXEC_SLICE		4
+										// max clocks per single-exec step
+#define SINGLE_EXEC_SLICE_8MHZ		20
+										// 8MHz mode needs larger slice for CPU to keep up
 #endif // SDL
 
 void EVENT::initialize()
@@ -145,8 +151,9 @@ void EVENT::drive()
 {
 #ifdef SDL
 	if (single_exec == true) {
-		// if passed 10ms, disable single_exec
-		if (passed_usec(single_exec_clock) > SINGLE_EXEC_TIMEOUT) {
+		// if passed timeout, disable single_exec
+		int timeout = (config.cpu_type == 0) ? SINGLE_EXEC_TIMEOUT_8MHZ : SINGLE_EXEC_TIMEOUT;
+		if (passed_usec(single_exec_clock) > timeout) {
 			single_exec = false;
 		}
 	}
@@ -244,8 +251,9 @@ void EVENT::drive()
 			if (main_cpu_exec > 0) {
 				// single execution ?
 				if (single_exec == true) {
-					if (main_cpu_exec > 4) {
-						main_cpu_exec = 4;
+					int slice = (config.cpu_type == 0) ? SINGLE_EXEC_SLICE_8MHZ : SINGLE_EXEC_SLICE;
+					if (main_cpu_exec > slice) {
+						main_cpu_exec = slice;
 					}
 				}
 				cpu_done = d_cpu[0].device->run(main_cpu_exec);
@@ -263,8 +271,9 @@ void EVENT::drive()
 				if (cpu_remain > 0) {
 					sub_cpu_exec = cpu_remain;
 					if (single_exec == true) {
-						if (sub_cpu_exec > 4) {
-							sub_cpu_exec = 4;
+						int slice = (config.cpu_type == 0) ? SINGLE_EXEC_SLICE_8MHZ : SINGLE_EXEC_SLICE;
+						if (sub_cpu_exec > slice) {
+							sub_cpu_exec = slice;
 						}
 					}
 
@@ -277,8 +286,9 @@ void EVENT::drive()
 				if (cpu_remain > 2) {
 					sub_cpu_exec = cpu_remain / 2;
 					if (single_exec == true) {
-						if (sub_cpu_exec > 4) {
-							sub_cpu_exec = 4;
+						int slice = (config.cpu_type == 0) ? SINGLE_EXEC_SLICE_8MHZ : SINGLE_EXEC_SLICE;
+						if (sub_cpu_exec > slice) {
+							sub_cpu_exec = slice;
 						}
 					}
 					
