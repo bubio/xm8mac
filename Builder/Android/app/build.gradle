@@ -20,7 +20,7 @@ android {
         minSdk 19
         targetSdk 35
         versionCode 4
-        versionName "1.75"
+        versionName "1.77"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         externalNativeBuild {
             ndkBuild {
