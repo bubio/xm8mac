@@ -1,8 +1,28 @@
 #ifndef CLIDISK_H
 #define CLIDISK_H
 
+#ifdef min
+#pragma push_macro("min")
+#undef min
+#define CLIDISK_RESTORE_MIN_MACRO
+#endif
+#ifdef max
+#pragma push_macro("max")
+#undef max
+#define CLIDISK_RESTORE_MAX_MACRO
+#endif
+
 #include <string>
 #include <vector>
+
+#ifdef CLIDISK_RESTORE_MAX_MACRO
+#pragma pop_macro("max")
+#undef CLIDISK_RESTORE_MAX_MACRO
+#endif
+#ifdef CLIDISK_RESTORE_MIN_MACRO
+#pragma pop_macro("min")
+#undef CLIDISK_RESTORE_MIN_MACRO
+#endif
 
 enum class CliAction {
 	Run,

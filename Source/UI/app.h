@@ -16,9 +16,6 @@
 #include "classes.h"
 #include "clidisk.h"
 
-#include <string>
-#include <vector>
-
 const char* GetAppVersionString();
 
 //

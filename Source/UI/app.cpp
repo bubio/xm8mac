@@ -10,6 +10,11 @@
 
 #ifdef SDL
 
+#include <cctype>
+#include <sstream>
+#include <string>
+#include <vector>
+
 #include "os.h"
 #include "common.h"
 #include "classes.h"
@@ -36,10 +41,6 @@
 #include "xm8jni.h"
 #endif // __ANDROID__
 #include "app.h"
-
-#include <cctype>
-#include <sstream>
-#include <string>
 
 //
 // defines
