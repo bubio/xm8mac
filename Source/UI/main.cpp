@@ -15,6 +15,27 @@
 #include "app.h"
 #include "clidisk.h"
 
+namespace {
+
+void WriteCommandLineResponse(const char *message, bool error)
+{
+#ifdef _WIN32
+	DWORD written;
+	HANDLE handle;
+
+	AttachConsole(ATTACH_PARENT_PROCESS);
+	handle = GetStdHandle(error ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+	if (handle != NULL && handle != INVALID_HANDLE_VALUE) {
+		WriteFile(handle, message, static_cast<DWORD>(strlen(message)),
+			&written, NULL);
+	}
+#else
+	fputs(message, error ? stderr : stdout);
+#endif
+}
+
+} // namespace
+
 //
 // main()
 // program entry point
@@ -29,15 +50,21 @@ int main(int argc, char *argv[])
 #ifndef __ANDROID__
 	options = ParseCommandLine(argc, argv);
 	if (options.action == CliAction::ShowHelp) {
-		fputs(GetCommandLineHelp(), stdout);
+		WriteCommandLineResponse(GetCommandLineHelp(), false);
 		return 0;
 	}
 	if (options.action == CliAction::ShowVersion) {
-		fprintf(stdout, "XM8 %s\n", GetAppVersionString());
+		std::string version = "XM8 ";
+		version += GetAppVersionString();
+		version += "\n";
+		WriteCommandLineResponse(version.c_str(), false);
 		return 0;
 	}
 	if (options.action == CliAction::Error) {
-		fprintf(stderr, "XM8: %s\n", options.error.c_str());
+		std::string error = "XM8: ";
+		error += options.error;
+		error += "\n";
+		WriteCommandLineResponse(error.c_str(), true);
 		return 2;
 	}
 #endif
