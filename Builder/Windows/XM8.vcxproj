@@ -375,7 +375,9 @@
     <ClCompile Include="..\..\Source\Filter\xBRZ\xbrz.cpp" />
     <ClCompile Include="..\..\Source\UI\app.cpp" />
     <ClCompile Include="..\..\Source\UI\audio.cpp" />
+    <ClCompile Include="..\..\Source\UI\clidisk.cpp" />
     <ClCompile Include="..\..\Source\UI\converter.cpp" />
+    <ClCompile Include="..\..\Source\UI\d88probe.cpp" />
     <ClCompile Include="..\..\Source\UI\diskmgr.cpp" />
     <ClCompile Include="..\..\Source\UI\emu.cpp" />
     <ClCompile Include="..\..\Source\UI\emu_sdl.cpp" />
@@ -429,7 +431,9 @@
     <ClInclude Include="..\..\Source\UI\app.h" />
     <ClInclude Include="..\..\Source\UI\audio.h" />
     <ClInclude Include="..\..\Source\UI\classes.h" />
+    <ClInclude Include="..\..\Source\UI\clidisk.h" />
     <ClInclude Include="..\..\Source\UI\converter.h" />
+    <ClInclude Include="..\..\Source\UI\d88probe.h" />
     <ClInclude Include="..\..\Source\UI\diskmgr.h" />
     <ClInclude Include="..\..\Source\UI\emu_sdl.h" />
     <ClInclude Include="..\..\Source\UI\font.h" />

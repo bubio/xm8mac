@@ -14,6 +14,12 @@
 #define APP_H
 
 #include "classes.h"
+#include "clidisk.h"
+
+#include <string>
+#include <vector>
+
+const char* GetAppVersionString();
 
 //
 // XM8 application
@@ -25,7 +31,7 @@ public:
 										// constructor
 	~App();
 										// destructor
-	bool Init();
+	bool Init(const CliOptions& options);
 										// initialize
 	void Deinit();
 										// deinitialize
@@ -141,6 +147,18 @@ private:
 										// key up event
 	void OnDropFile(SDL_Event *e);
 										// drag & drop event
+	bool ApplyCommandLineSettings(const CliOptions& options);
+										// apply temporary CLI settings
+	void RestoreCommandLineSettings();
+										// restore persistent settings
+	bool ProbeDisk(const DiskSpec& spec, int *banks, std::string *error);
+										// validate disk specification
+	bool OpenDiskFromUser(const DiskSpec& spec, std::string *error);
+										// open one disk
+	bool OpenStartupDisks(const std::vector<DiskSpec>& disks, std::string *error);
+										// open CLI disks
+	bool OpenDroppedDisk(const char *path, std::string *error);
+										// open D&D disk
 
 	// mode
 	void CtrlAudio();
@@ -231,6 +249,20 @@ private:
 	// system
 	Uint32 system_info;
 										// system information
+	bool startup_disk_boot;
+										// boot from CLI disk
+	bool cli_system_override;
+										// CLI system override active
+	bool cli_clock_override;
+										// CLI clock override active
+	bool cli_settings_restored;
+										// CLI settings already restored
+	int cli_original_system;
+										// persistent system mode
+	int cli_original_clock;
+										// persistent CPU clock
+	bool cli_original_8h;
+										// persistent 8MHzH mode
 
 	// state path
 	char state_path[_MAX_PATH * 3];

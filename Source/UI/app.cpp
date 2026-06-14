@@ -31,10 +31,15 @@
 #include "menuid.h"
 #include "diskmgr.h"
 #include "tapemgr.h"
+#include "clidisk.h"
 #ifdef __ANDROID__
 #include "xm8jni.h"
 #endif // __ANDROID__
 #include "app.h"
+
+#include <cctype>
+#include <sstream>
+#include <string>
 
 //
 // defines
@@ -75,6 +80,53 @@
 										// state file name
 #define MOUSE_INFINITE_TIME		20000
 										// mouse infinite time (ms)
+
+namespace {
+
+int HexValue(char ch)
+{
+	if (ch >= '0' && ch <= '9') {
+		return ch - '0';
+	}
+	ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+	if (ch >= 'a' && ch <= 'f') {
+		return ch - 'a' + 10;
+	}
+	return -1;
+}
+
+bool DecodeDropPath(const char *source, char *destination, size_t capacity,
+	std::string *error)
+{
+	size_t output = 0;
+
+	if (source == NULL || destination == NULL || capacity == 0) {
+		*error = "invalid dropped file path";
+		return false;
+	}
+	while (*source != '\0') {
+		char value = *source++;
+		if (value == '%') {
+			const int high = HexValue(source[0]);
+			const int low = source[0] != '\0' ? HexValue(source[1]) : -1;
+			if (high < 0 || low < 0) {
+				*error = "invalid percent escape in dropped file path";
+				return false;
+			}
+			value = static_cast<char>((high << 4) | low);
+			source += 2;
+		}
+		if (output + 1 >= capacity) {
+			*error = "dropped file path is too long";
+			return false;
+		}
+		destination[output++] = value;
+	}
+	destination[output] = '\0';
+	return true;
+}
+
+} // namespace
 
 //
 // App()
@@ -131,6 +183,13 @@ App::App()
 
 	// system information
 	system_info = 0;
+	startup_disk_boot = false;
+	cli_system_override = false;
+	cli_clock_override = false;
+	cli_settings_restored = true;
+	cli_original_system = SETTING_V2_MODE;
+	cli_original_clock = 4;
+	cli_original_8h = false;
 
 	// state path
 	state_path[0] = '\0';
@@ -153,7 +212,7 @@ App::~App()
 // Init()
 // initialize
 //
-bool App::Init()
+bool App::Init(const CliOptions& options)
 {
 	Audio::OpenParam param;
 	int width;
@@ -191,6 +250,10 @@ bool App::Init()
 	// setting
 	setting = new Setting;
 	if (setting->Init() == false) {
+		Deinit();
+		return false;
+	}
+	if (ApplyCommandLineSettings(options) == false) {
 		Deinit();
 		return false;
 	}
@@ -339,6 +402,18 @@ bool App::Init()
 		return false;
 	}
 
+#ifndef __ANDROID__
+	std::string disk_error;
+	if (OpenStartupDisks(options.disks, &disk_error) == false) {
+		fprintf(stderr, "XM8: %s\n", disk_error.c_str());
+		platform->MsgBox(window, disk_error.c_str());
+		Deinit();
+		return false;
+	}
+	startup_disk_boot = !options.disks.empty() ||
+		cli_system_override || cli_clock_override;
+#endif
+
 	// set window size
 	SDL_GetWindowSize(window, &width, &height);
 	video->SetWindowSize(width, height);
@@ -370,6 +445,203 @@ bool App::Init()
 //	Android_PollJoystick();
 #endif // __ANDROID__
 
+	return true;
+}
+
+//
+// ApplyCommandLineSettings()
+// apply session-only system settings
+//
+bool App::ApplyCommandLineSettings(const CliOptions& options)
+{
+	SDL_assert(setting != NULL);
+
+	cli_system_override = options.system != CliSystemMode::Unspecified;
+	cli_clock_override = options.clock != CliClockMode::Unspecified;
+	cli_settings_restored = !(cli_system_override || cli_clock_override);
+	cli_original_system = setting->GetSystemMode();
+	cli_original_clock = setting->GetCPUClock();
+	cli_original_8h = setting->Is8HMode();
+
+	switch (options.system) {
+	case CliSystemMode::V1S:
+		setting->SetSystemMode(SETTING_V1S_MODE);
+		break;
+	case CliSystemMode::V1H:
+		setting->SetSystemMode(SETTING_V1H_MODE);
+		break;
+	case CliSystemMode::V2:
+		setting->SetSystemMode(SETTING_V2_MODE);
+		break;
+	case CliSystemMode::N:
+		setting->SetSystemMode(SETTING_N_MODE);
+		break;
+	case CliSystemMode::Unspecified:
+		break;
+	}
+
+	switch (options.clock) {
+	case CliClockMode::Clock4MHz:
+		setting->SetCPUClock(4);
+		setting->Set8HMode(false);
+		break;
+	case CliClockMode::Clock8MHz:
+		setting->SetCPUClock(8);
+		setting->Set8HMode(false);
+		break;
+	case CliClockMode::Clock8MHzH:
+		setting->SetCPUClock(8);
+		setting->Set8HMode(true);
+		break;
+	case CliClockMode::Unspecified:
+		break;
+	}
+	return true;
+}
+
+//
+// RestoreCommandLineSettings()
+// keep CLI overrides out of setting.bin
+//
+void App::RestoreCommandLineSettings()
+{
+	if (setting == NULL || cli_settings_restored == true) {
+		return;
+	}
+	if (cli_system_override == true) {
+		setting->SetSystemMode(cli_original_system);
+	}
+	if (cli_clock_override == true) {
+		setting->SetCPUClock(cli_original_clock);
+		setting->Set8HMode(cli_original_8h);
+	}
+	cli_settings_restored = true;
+}
+
+//
+// ProbeDisk()
+// validate a disk specification without changing a drive
+//
+bool App::ProbeDisk(const DiskSpec& spec, int *banks, std::string *error)
+{
+	if (spec.drive < 0 || spec.drive >= MAX_DRIVE) {
+		*error = "invalid target drive";
+		return false;
+	}
+	if (spec.path.size() >= (_MAX_PATH * 3)) {
+		std::ostringstream message;
+		message << "drive " << spec.drive << ": path is too long: " << spec.path;
+		*error = message.str();
+		return false;
+	}
+	if (DiskManager::Probe(spec.path.c_str(), banks) == false) {
+		std::ostringstream message;
+		message << "drive " << spec.drive << ": cannot open D88: " << spec.path;
+		*error = message.str();
+		return false;
+	}
+	if (spec.bank < 0 || spec.bank >= *banks) {
+		std::ostringstream message;
+		message << "drive " << spec.drive << ": bank " << spec.bank
+			<< " is out of range; image has " << *banks
+			<< " banks: " << spec.path;
+		*error = message.str();
+		return false;
+	}
+	return true;
+}
+
+//
+// OpenDiskFromUser()
+// validate and open one disk
+//
+bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
+{
+	int banks;
+	if (ProbeDisk(spec, &banks, error) == false) {
+		return false;
+	}
+	if (diskmgr[spec.drive]->Open(spec.path.c_str(), spec.bank) == false) {
+		std::ostringstream message;
+		message << "drive " << spec.drive << ": failed to insert D88: "
+			<< spec.path;
+		*error = message.str();
+		return false;
+	}
+	return true;
+}
+
+//
+// OpenStartupDisks()
+// validate all CLI disks before opening any drive
+//
+bool App::OpenStartupDisks(const std::vector<DiskSpec>& disks,
+	std::string *error)
+{
+	int banks;
+	for (const DiskSpec& spec : disks) {
+		if (ProbeDisk(spec, &banks, error) == false) {
+			return false;
+		}
+	}
+	for (const DiskSpec& spec : disks) {
+		if (OpenDiskFromUser(spec, error) == false) {
+			return false;
+		}
+	}
+	return true;
+}
+
+//
+// OpenDroppedDisk()
+// preserve the legacy bank 0/1 D&D behavior
+//
+bool App::OpenDroppedDisk(const char *path, std::string *error)
+{
+	struct Snapshot {
+		bool open;
+		std::string path;
+		int bank;
+	};
+	Snapshot snapshots[MAX_DRIVE];
+	DiskSpec first = {path, 0, 0};
+	int banks;
+
+	if (ProbeDisk(first, &banks, error) == false) {
+		return false;
+	}
+	for (int drive=0; drive<MAX_DRIVE; drive++) {
+		snapshots[drive].open = diskmgr[drive]->IsOpen();
+		if (snapshots[drive].open) {
+			snapshots[drive].path = diskmgr[drive]->GetPath();
+			snapshots[drive].bank = diskmgr[drive]->GetBank();
+		}
+	}
+
+	auto restore = [this, &snapshots]() {
+		for (int drive=0; drive<MAX_DRIVE; drive++) {
+			if (snapshots[drive].open) {
+				diskmgr[drive]->Open(snapshots[drive].path.c_str(),
+					snapshots[drive].bank);
+			} else {
+				diskmgr[drive]->Close();
+			}
+		}
+	};
+
+	if (OpenDiskFromUser(first, error) == false) {
+		restore();
+		return false;
+	}
+	if (banks > 1) {
+		DiskSpec second = {path, 1, 1};
+		if (OpenDiskFromUser(second, error) == false) {
+			restore();
+			return false;
+		}
+	} else {
+		diskmgr[1]->Close();
+	}
 	return true;
 }
 
@@ -490,6 +762,7 @@ void App::Deinit()
 
 	// setting
 	if (setting != NULL) {
+		RestoreCommandLineSettings();
 		setting->Deinit();
 		delete setting;
 		setting = NULL;
@@ -665,11 +938,13 @@ void App::Run()
 		EnterMenu(MENU_MAIN);
 	}
 #else
-	// load state 0 (auto)
-	Load(0);
+	if (startup_disk_boot == false) {
+		// load state 0 (auto)
+		Load(0);
 
-	// enter menu
-	EnterMenu(MENU_MAIN);
+		// enter menu
+		EnterMenu(MENU_MAIN);
+	}
 #endif // __ANDROID__
 
 	// main loop
@@ -931,8 +1206,10 @@ void App::Run()
 		}
 	}
 
-	// save state 0 (auto)
-	Save(0);
+	// Do not leak a command-line session into the automatic state.
+	if (startup_disk_boot == false) {
+		Save(0);
+	}
 }
 
 //
@@ -1564,72 +1841,12 @@ void App::OnKeyUp(SDL_Event *e)
 //
 void App::OnDropFile(SDL_Event *e)
 {
-	const char *src;
-	char *dest;
-	bool result;
-	Uint8 high;
-	Uint8 low;
-
-	// initialize
-	src = e->drop.file;
-	dest = state_path;
-
-	while (*src != '\0') {
-		// Linux encodes UTF-8 string into '%hex' style
-		if (*src == '%') {
-			// get high and low
-			high = (Uint8)src[1];
-			if (high == '\0') {
-				break;
-			}
-			low = (Uint8)src[2];
-			if (low == '\0') {
-				break;
-			}
-			src += 3;
-
-			// high
-			if ((high >= '0') && (high <= '9')) {
-				high -= '0';
-			}
-			else {
-				high |= 0x20;
-				high -= 0x57;
-			}
-			high <<= 4;
-
-			// low
-			if ((low >= '0') && (low <= '9')) {
-				low -= '0';
-			}
-			else {
-				low |= 0x20;
-				low -= 0x57;
-			}
-
-			*dest++ = (char)(high | low);
-		}
-		else {
-			*dest++ = (char)*src++;
-		}
-	}
-
-	// terminate
-	*dest = '\0';
-
-	// drive 1
-	diskmgr[0]->Close();
-	result = diskmgr[0]->Open(state_path, 0);
-
-	// drive 2
-	diskmgr[1]->Close();
+	std::string error;
+	bool result = DecodeDropPath(e->drop.file, state_path,
+		sizeof(state_path), &error);
 	if (result == true) {
-		if (diskmgr[0]->GetBanks() > 1) {
-			diskmgr[1]->Open(state_path, 1);
-		}
+		result = OpenDroppedDisk(state_path, &error);
 	}
-
-	// free memory
 	SDL_free(e->drop.file);
 
 	if (result == true) {
@@ -1638,6 +1855,8 @@ void App::OnDropFile(SDL_Event *e)
 
 		// reset
 		Reset();
+	} else {
+		platform->MsgBox(window, error.c_str());
 	}
 }
 
@@ -2261,6 +2480,21 @@ void App::UnlockVM()
 Uint32 App::GetAppVersion()
 {
 	return APP_VER;
+}
+
+//
+// GetAppVersionString()
+// get printable application version
+//
+const char* GetAppVersionString()
+{
+	static char version[8];
+	const unsigned int major = (APP_VER >> 8) & 0xff;
+	const unsigned int minor = (APP_VER >> 4) & 0x0f;
+	const unsigned int patch = APP_VER & 0x0f;
+
+	snprintf(version, sizeof(version), "%u.%u.%u", major, minor, patch);
+	return version;
 }
 
 //

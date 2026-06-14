@@ -16,6 +16,7 @@
 #include "disk.h"
 #include "upd765a.h"
 #include "vm.h"
+#include "d88probe.h"
 #include "diskmgr.h"
 
 //
@@ -99,6 +100,15 @@ void DiskManager::SetVM(VM *v)
 }
 
 //
+// Probe()
+// validate disk image without changing drive state
+//
+bool DiskManager::Probe(const char *filename, int *banks)
+{
+	return ProbeD88Image(filename, banks);
+}
+
+//
 // Open()
 // open disk
 //
@@ -147,12 +157,11 @@ bool DiskManager::Open(int bank)
 	}
 
 	// set bank
-	if (bank >= num_of_banks) {
-		current_bank = num_of_banks - 1;
+	if ((bank < 0) || (bank >= num_of_banks)) {
+		Close();
+		return false;
 	}
-	else {
-		current_bank = bank;
-	}
+	current_bank = bank;
 
 	// open
 	vm->open_disk(drive, (_TCHAR*)path, current_bank);
@@ -337,6 +346,18 @@ const char* DiskManager::GetFileName()
 }
 
 //
+// GetPath()
+// get full disk path
+//
+const char* DiskManager::GetPath()
+{
+	if (ready == false) {
+		return nullstr;
+	}
+	return path;
+}
+
+//
 // GetBank()
 // get current disk bank
 //
@@ -448,91 +469,15 @@ bool DiskManager::Analyze()
 	size_t len;
 	int bank;
 	char *ptr;
-	int track;
-	Uint32 trkofs;
 
-	// open
+	if (ProbeD88Image(path, &num_of_banks, &len) == false) {
+		return false;
+	}
+
 	if (fio.Fopen(path, FILEIO_READ_BINARY) == false) {
 		return false;
 	}
-
-	// version 1.70
 	readonly = fio.IsProtected(path);
-
-	// clear
-	num_of_banks = 0;
-	offset = 0;
-	len = 0;
-
-	// bank loop (1)
-	for (;;) {
-		// read D88 header
-		if (fio.Fread(header, 1, sizeof(header)) != sizeof(header)) {
-			// EOF
-			break;
-		}
-
-		// track0 offset in header must be 0x000002x0
-		if ((header[0x23] != 0x00) ||
-			(header[0x22] != 0x00) ||
-			(header[0x21] != 0x02) ||
-			((header[0x20] & 0x0f) != 0x00)) {
-			// illegal format
-			if (header[0x21] != 0x00) {
-				// Adopt up to the point where you can read.
-				// num_of_banks = 0;
-				break;
-			}
-		}
-
-		// bank++
-		num_of_banks++;
-
-		// add length of disk name
-		header[0x10] = 0x00;
-		len += strlen((const char*)header);
-		len++;
-
-		// size
-			add = (Uint32)header[0x1f];
-		add <<= 8;
-		add |= (Uint32)header[0x1e];
-		add <<= 8;
-		add |= (Uint32)header[0x1d];
-		add <<= 8;
-		add |= (Uint32)header[0x1c];
-
-		// check track offset
-		for (track=0; track<160; track++) {
-			trkofs = (Uint32)(header[0x20 + track * 4 + 3]);
-			trkofs <<= 8;
-			trkofs |= (Uint32)(header[0x20 + track * 4 + 2]);
-			trkofs <<= 8;
-			trkofs |= (Uint32)(header[0x20 + track * 4 + 1]);
-			trkofs <<= 8;
-			trkofs |= (Uint32)(header[0x20 + track * 4 + 0]);
-
-			// track offset must be 0x10 alignment
-			if ((trkofs & 0xf) != 0) {
-				// Adopt up to the point where you can read.
-				// num_of_banks = 0;
-				break;
-			}
-		}
-		if (num_of_banks == 0) {
-			break;
-		}
-
-		// seek
-		offset += add;
-		fio.Fseek((long)offset, FILEIO_SEEK_SET);
-	}
-
-	// num_of_banks > 0 ?
-	if (num_of_banks == 0) {
-		fio.Fclose();
-		return false;
-	}
 
 	// malloc
 	name_list = (char*)SDL_malloc(len);

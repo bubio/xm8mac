@@ -126,6 +126,12 @@
     <ClCompile Include="..\..\Source\UI\audio.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\UI\clidisk.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\UI\d88probe.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\UI\input.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
@@ -246,6 +252,12 @@
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\UI\app.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\UI\clidisk.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\UI\d88probe.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\UI\classes.h">

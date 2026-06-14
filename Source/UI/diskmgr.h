@@ -41,6 +41,8 @@ public:
 										// deinitialize
 	void SetVM(VM *v);
 										// re-set vm
+	static bool Probe(const char *filename, int *banks);
+										// validate image and get bank count
 
 	// operation
 	bool Open(const char *filename, int bank);
@@ -63,6 +65,8 @@ public:
 										// get disk dir
 	const char* GetFileName();
 										// get disk file name
+	const char* GetPath();
+										// get full disk path
 	int GetBank();
 										// get current bank
 	int GetBanks();

@@ -37,6 +37,8 @@ set(PROJECT_VERSION 1.7.8)
 # Project Name
 project(XM8 VERSION ${PROJECT_VERSION})
 
+include(CTest)
+
 # Packaging options
 option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
 
@@ -100,7 +102,9 @@ include_directories(
 set(SRCS
   Source/UI/app.cpp
   Source/UI/audio.cpp
+  Source/UI/clidisk.cpp
   Source/UI/converter.cpp
+  Source/UI/d88probe.cpp
   Source/UI/diskmgr.cpp
   Source/UI/emu.cpp
   Source/UI/emu_sdl.cpp
@@ -182,6 +186,28 @@ option(ENABLE_PACKAGING "Enable CPack packaging" ON)
 
 # Link SDL2 and xBRZ to xm8 target using interface target from Dependencies.cmake
 target_link_libraries(${BIN_TARGET} PRIVATE XM8::SDL xbrz)
+
+if(BUILD_TESTING)
+  add_executable(clidisk_test
+    Tests/clidisk_test.cpp
+    Source/UI/clidisk.cpp
+  )
+  target_include_directories(clidisk_test PRIVATE Source/UI)
+  add_test(NAME clidisk_test COMMAND clidisk_test)
+
+  add_executable(d88probe_test
+    Tests/d88probe_test.cpp
+    Source/UI/d88probe.cpp
+    Source/UI/fileio.cpp
+  )
+  target_include_directories(d88probe_test PRIVATE
+    Source/UI
+    Source/ePC-8801MA
+  )
+  target_compile_definitions(d88probe_test PRIVATE SDL _PC8801MA)
+  target_link_libraries(d88probe_test PRIVATE XM8::SDL)
+  add_test(NAME d88probe_test COMMAND d88probe_test)
+endif()
 
 # Packaging                      
 if(ENABLE_PACKAGING)

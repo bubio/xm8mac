@@ -13,6 +13,7 @@
 #include "os.h"
 #include "common.h"
 #include "app.h"
+#include "clidisk.h"
 
 //
 // main()
@@ -21,7 +22,25 @@
 int main(int argc, char *argv[])
 {
 	int ret;
+	int exit_code;
 	App *app;
+	CliOptions options;
+
+#ifndef __ANDROID__
+	options = ParseCommandLine(argc, argv);
+	if (options.action == CliAction::ShowHelp) {
+		fputs(GetCommandLineHelp(), stdout);
+		return 0;
+	}
+	if (options.action == CliAction::ShowVersion) {
+		fprintf(stdout, "XM8 %s\n", GetAppVersionString());
+		return 0;
+	}
+	if (options.action == CliAction::Error) {
+		fprintf(stderr, "XM8: %s\n", options.error.c_str());
+		return 2;
+	}
+#endif
 
 #if SDL_VERSION_ATLEAST(2, 0, 4)
 	SDL_SetHint(SDL_HINT_IME_INTERNAL_EDITING, "1");
@@ -63,9 +82,11 @@ int main(int argc, char *argv[])
 	app = new App;
 
 	// initialize application
-	if (app->Init() == true) {
+	exit_code = 1;
+	if (app->Init(options) == true) {
 		// run
 		app->Run();
+		exit_code = 0;
 	}
 
 	// deinitialize application
@@ -80,7 +101,7 @@ int main(int argc, char *argv[])
 	// quit SDL
 	SDL_Quit();
 
-	return 0;
+	return exit_code;
 }
 
 #endif // SDL
