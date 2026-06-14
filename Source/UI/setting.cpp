@@ -193,7 +193,16 @@ bool Setting::Init()
 {
 	// directory
 #ifdef __ANDROID__
-	strcpy(setting_dir, SDL_AndroidGetExternalStoragePath());
+	const char* storage_path = SDL_AndroidGetExternalStoragePath();
+	if (storage_path == NULL)
+	{
+		storage_path = SDL_AndroidGetInternalStoragePath();
+	}
+	if ((storage_path == NULL) || ((strlen(storage_path) + 2) > sizeof(setting_dir)))
+	{
+		return false;
+	}
+	strcpy(setting_dir, storage_path);
 	strcat(setting_dir, "/");
 #else
 	strcpy(setting_dir, SDL_GetPrefPath(SETTING_ORG, SETTING_APP));

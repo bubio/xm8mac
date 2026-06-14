@@ -1,5 +1,6 @@
 package org.libsdl.app;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -22,6 +23,8 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.UUID;
 
+// HIDDeviceManager verifies BLUETOOTH_CONNECT before creating this controller.
+@SuppressLint("MissingPermission")
 class HIDDeviceBLESteamController extends BluetoothGattCallback implements HIDDevice {
 
     private static final String TAG = "hidapi";

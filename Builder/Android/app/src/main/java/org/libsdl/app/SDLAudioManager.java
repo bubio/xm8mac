@@ -1,6 +1,8 @@
 package org.libsdl.app;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
@@ -77,6 +79,12 @@ public class SDLAudioManager {
         int frameSize;
 
         Log.v(TAG, "Opening " + (isCapture ? "capture" : "playback") + ", requested " + desiredFrames + " frames of " + desiredChannels + " channel " + getAudioFormatString(audioFormat) + " audio at " + sampleRate + " Hz");
+
+        if (isCapture && mContext != null &&
+                mContext.checkCallingOrSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Missing RECORD_AUDIO permission");
+            return null;
+        }
 
         /* On older devices let's use known good settings */
         if (Build.VERSION.SDK_INT < 21 /* Android 5.0 (LOLLIPOP) */) {

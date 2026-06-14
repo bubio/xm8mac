@@ -4,6 +4,7 @@ import android.hardware.usb.*;
 import android.os.Build;
 import android.util.Log;
 import java.util.Arrays;
+import java.util.Locale;
 
 class HIDDeviceUSB implements HIDDevice {
 
@@ -31,7 +32,7 @@ class HIDDeviceUSB implements HIDDevice {
     }
 
     public String getIdentifier() {
-        return String.format("%s/%x/%x/%d", mDevice.getDeviceName(), mDevice.getVendorId(), mDevice.getProductId(), mInterfaceIndex);
+        return String.format(Locale.ROOT, "%s/%x/%x/%d", mDevice.getDeviceName(), mDevice.getVendorId(), mDevice.getProductId(), mInterfaceIndex);
     }
 
     @Override
@@ -78,7 +79,7 @@ class HIDDeviceUSB implements HIDDevice {
             result = mDevice.getManufacturerName();
         }
         if (result == null) {
-            result = String.format("%x", getVendorId());
+            result = String.format(Locale.ROOT, "%x", getVendorId());
         }
         return result;
     }
@@ -90,7 +91,7 @@ class HIDDeviceUSB implements HIDDevice {
             result = mDevice.getProductName();
         }
         if (result == null) {
-            result = String.format("%x", getProductId());
+            result = String.format(Locale.ROOT, "%x", getProductId());
         }
         return result;
     }
@@ -101,7 +102,7 @@ class HIDDeviceUSB implements HIDDevice {
     }
 
     public String getDeviceName() {
-        return getManufacturerName() + " " + getProductName() + "(0x" + String.format("%x", getVendorId()) + "/0x" + String.format("%x", getProductId()) + ")";
+        return getManufacturerName() + " " + getProductName() + "(0x" + String.format(Locale.ROOT, "%x", getVendorId()) + "/0x" + String.format(Locale.ROOT, "%x", getProductId()) + ")";
     }
 
     @Override

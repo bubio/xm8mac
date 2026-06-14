@@ -81,7 +81,7 @@ LOCAL_CXXFLAGS += -std=gnu++11
 
 LOCAL_LDLIBS := -ldl -lGLESv1_CM -lGLESv2 -lOpenSLES -llog -landroid
 
-LOCAL_LDFLAGS := -Wl,--no-undefined
+LOCAL_LDFLAGS := -Wl,--no-undefined -Wl,-z,max-page-size=16384
 
 ifeq ($(NDK_DEBUG),1)
     cmd-strip :=

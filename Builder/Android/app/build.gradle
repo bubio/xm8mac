@@ -8,57 +8,55 @@ else {
 }
 
 android {
-    if (buildAsApplication) {
-        namespace "net.retropc.pi"
-    }
-    ndkVersion "23.2.8568313"
-    compileSdk 35
+    namespace = "net.retropc.pi"
+    ndkVersion = "23.2.8568313"
+    compileSdk = 36
+
     defaultConfig {
         if (buildAsApplication) {
-            applicationId "net.retropc.pi"
+            applicationId = "net.retropc.pi"
         }
-        minSdk 19
-        targetSdk 35
-        versionCode 4
-        versionName "1.78"
-        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        minSdk = 19
+        targetSdk = 35
+        versionCode = 4
+        versionName = "1.78"
+        testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         externalNativeBuild {
             ndkBuild {
-                arguments "APP_PLATFORM=android-16"
+                arguments "APP_PLATFORM=android-19"
                 abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             }
-            // cmake {
-            //     arguments "-DANDROID_APP_PLATFORM=android-16", "-DANDROID_STL=c++_static"
-            //     abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-            //     // abiFilters 'arm64-v8a'
-            //     cppFlags "-fexceptions"
-            // }
         }
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
     signingConfigs {
         release {
-            storeFile rootProject.file('release.keystore')
-            storePassword System.getenv('KEYSTORE_PASSWORD')
-            keyAlias System.getenv('KEY_ALIAS')
-            keyPassword System.getenv('KEY_PASSWORD')
+            storeFile = rootProject.file('release.keystore')
+            storePassword = System.getenv('KEYSTORE_PASSWORD')
+            keyAlias = System.getenv('KEY_ALIAS')
+            keyPassword = System.getenv('KEY_PASSWORD')
         }
     }
+
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled = false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (rootProject.file('release.keystore').exists()) {
-                signingConfig signingConfigs.release
-            }            
+                signingConfig = signingConfigs.release
+            }
         }
     }
-    applicationVariants.all { variant ->
-        tasks["merge${variant.name.capitalize()}Assets"]
-            .dependsOn("externalNativeBuild${variant.name.capitalize()}")
-    }
+
     lint {
-        abortOnError false
+        abortOnError = true
     }
+
     if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {
         sourceSets.main {
             jniLibs.srcDir 'libs'
@@ -67,28 +65,24 @@ android {
             ndkBuild {
                 path 'jni/Android.mk'
             }
-            // cmake {
-            //     path "CMakeLists.txt"
-            // }
-        }
-    }
-
-
-    if (buildAsLibrary) {
-        libraryVariants.all { variant ->
-            variant.outputs.each { output ->
-                def outputFile = output.outputFile
-                if (outputFile != null && outputFile.name.endsWith(".aar")) {
-                    def fileName = "net.retropc.pi.aar"
-                    output.outputFile = new File(outputFile.parent, fileName)
-                }
-            }
         }
     }
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation "androidx.documentfile:documentfile:1.0.1"
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.documentfile:documentfile:1.0.1'
+}
+
+if (buildAsLibrary) {
+    def copyDebugAar = tasks.register('copyDebugAar', Copy) {
+        dependsOn 'bundleDebugAar'
+        from layout.buildDirectory.file('outputs/aar/app-debug.aar')
+        into layout.buildDirectory.dir('outputs/aar')
+        rename { 'net.retropc.pi.aar' }
+    }
+    tasks.matching { it.name == 'assembleDebug' }.configureEach {
+        finalizedBy copyDebugAar
+    }
 }

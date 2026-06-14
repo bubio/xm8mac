@@ -14,6 +14,7 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import androidx.annotation.RequiresApi;
 
 
 public class SDLControllerManager
@@ -470,6 +471,7 @@ class SDLJoystickHandler_API19 extends SDLJoystickHandler_API16 {
     }
 }
 
+@RequiresApi(26)
 class SDLHapticHandler_API26 extends SDLHapticHandler {
     @Override
     public void run(int device_id, float intensity, int length) {
@@ -686,6 +688,7 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
 
 }
 
+@RequiresApi(24)
 class SDLGenericMotionListener_API24 extends SDLGenericMotionListener_API12 {
     // Generic Motion (mouse hover, joystick...) events go here
 
@@ -746,6 +749,7 @@ class SDLGenericMotionListener_API24 extends SDLGenericMotionListener_API12 {
     }
 }
 
+@RequiresApi(26)
 class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
     // Generic Motion (mouse hover, joystick...) events go here
     private boolean mRelativeModeEnabled;

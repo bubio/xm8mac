@@ -20,6 +20,8 @@ import android.hardware.usb.*;
 import android.os.Handler;
 import android.os.Looper;
 
+import androidx.core.content.ContextCompat;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -188,12 +190,18 @@ public class HIDDeviceManager {
         Log.i(TAG," No more devices connected.");
         */
 
-        // Register for USB broadcasts and permission completions
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
-        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
-        filter.addAction(HIDDeviceManager.ACTION_USB_PERMISSION);
-        mContext.registerReceiver(mUsbBroadcast, filter);
+        // System USB broadcasts are not exported to the app, while the permission
+        // completion is an app-private broadcast. Android 14 requires these to be
+        // registered separately with the appropriate exported state.
+        IntentFilter systemFilter = new IntentFilter();
+        systemFilter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        systemFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        ContextCompat.registerReceiver(mContext, mUsbBroadcast, systemFilter,
+                ContextCompat.RECEIVER_EXPORTED);
+
+        IntentFilter permissionFilter = new IntentFilter(HIDDeviceManager.ACTION_USB_PERMISSION);
+        ContextCompat.registerReceiver(mContext, mUsbBroadcast, permissionFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
 
         for (UsbDevice usbDevice : mUsbManager.getDeviceList().values()) {
             handleUsbDeviceAttached(usbDevice);
@@ -439,7 +447,13 @@ public class HIDDeviceManager {
         ArrayList<BluetoothDevice> disconnected = new ArrayList<BluetoothDevice>();
         ArrayList<BluetoothDevice> connected = new ArrayList<BluetoothDevice>();
 
-        List<BluetoothDevice> currentConnected = mBluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
+        List<BluetoothDevice> currentConnected;
+        try {
+            currentConnected = mBluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
+        } catch (SecurityException exception) {
+            Log.w(TAG, "Bluetooth permission was revoked while checking connected devices");
+            return;
+        }
 
         for (BluetoothDevice bluetoothDevice : currentConnected) {
             if (!mLastBluetoothDevices.contains(bluetoothDevice)) {
@@ -511,12 +525,17 @@ public class HIDDeviceManager {
             return false;
         }
 
-        // If the device has no local name, we really don't want to try an equality check against it.
-        if (bluetoothDevice.getName() == null) {
+        try {
+            // If the device has no local name, we really don't want to try an equality check against it.
+            if (bluetoothDevice.getName() == null) {
+                return false;
+            }
+
+            return bluetoothDevice.getName().equals("SteamController") && ((bluetoothDevice.getType() & BluetoothDevice.DEVICE_TYPE_LE) != 0);
+        } catch (SecurityException exception) {
+            Log.w(TAG, "Bluetooth permission was revoked while identifying a device");
             return false;
         }
-
-        return bluetoothDevice.getName().equals("SteamController") && ((bluetoothDevice.getType() & BluetoothDevice.DEVICE_TYPE_LE) != 0);
     }
 
     private void close() {
@@ -587,9 +606,9 @@ public class HIDDeviceManager {
                 final int FLAG_MUTABLE = 0x02000000; // PendingIntent.FLAG_MUTABLE, but don't require SDK 31
                 int flags;
                 if (Build.VERSION.SDK_INT >= 31 /* Android 12.0 (S) */) {
-                    flags = FLAG_MUTABLE;
+                    flags = FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
                 } else {
-                    flags = 0;
+                    flags = PendingIntent.FLAG_UPDATE_CURRENT;
                 }
                 if (Build.VERSION.SDK_INT >= 33 /* Android 14.0 (U) */) {
                    Intent intent = new Intent(HIDDeviceManager.ACTION_USB_PERMISSION);

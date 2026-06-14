@@ -30,6 +30,7 @@ import android.view.WindowInsetsController;
 import android.widget.Toast;
 import androidx.core.os.EnvironmentCompat;
 import androidx.documentfile.provider.DocumentFile;
+import androidx.annotation.RequiresApi;
 import android.os.ParcelFileDescriptor;
 
 public class XM8 extends SDLActivity {
@@ -91,9 +92,9 @@ public class XM8 extends SDLActivity {
         // immersive full-screen mode or dim status bar / navigation icon
         setupWindow();
 
-        // set Build.VERSION.SDK_INT and ExternalFilesDir
+        // set Build.VERSION.SDK_INT and app files directory
         nativeBuildVer(Build.VERSION.SDK_INT);
-        mAbsPath = getExternalFilesDir(null).getAbsolutePath();
+        mAbsPath = getAppFilesDirectory().getAbsolutePath();
         nativeAbsDir(mAbsPath);
 
         // process intent
@@ -172,8 +173,7 @@ public class XM8 extends SDLActivity {
             if (!mPermissionError) {
                 // get ROM directory in ExternalStorage
 //                String basepath = Environment.getExternalStorageDirectory() + ROM_DIRECTORY;
-                // Get the path to the app's external storage.
-                String basepath = getExternalFilesDir(null) + File.separator;
+                String basepath = mAbsPath + File.separator;
 
                 // check mandatory ROMs
                 mROMError = false;
@@ -296,6 +296,7 @@ public class XM8 extends SDLActivity {
     }
 
     // check start activity to grant to access storage
+    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
     private boolean checkStartActivity() {
         try {
             FileInputStream inputStream = this.openFileInput(REQUEST_FILENAME);
@@ -426,6 +427,16 @@ public class XM8 extends SDLActivity {
         return -1;
     }
 
+    private File getAppFilesDirectory() {
+        File externalFilesDir = getExternalFilesDir(null);
+        if (externalFilesDir != null) {
+            return externalFilesDir;
+        }
+
+        Log.w(LOG_TAG, "External files directory is unavailable; using internal storage");
+        return getFilesDir();
+    }
+
     // get external storage path
     // https://stackoverflow.com/questions/36766016/how-to-get-sd-card-path-in-android6-0-programmatically/40205116/#40205116
     private String[] getExternalStorageDirectories() {
@@ -435,6 +446,9 @@ public class XM8 extends SDLActivity {
             File[] externalDirs = getExternalFilesDirs(null);
 
             for (File file : externalDirs) {
+                if (file == null) {
+                    continue;
+                }
                 String path = file.getPath().split("/Android")[0];
 
                 boolean addPath = false;
