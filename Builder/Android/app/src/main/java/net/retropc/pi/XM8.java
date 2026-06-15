@@ -51,7 +51,6 @@ public class XM8 extends SDLActivity {
 
     // message text
     private static final String TOAST_ROM_MESSAGE = "The ROM file is not found: ";
-    private static final String TOAST_STORAGE_MESSAGE = "XM8 requires storage permission to access ROM/image files";
 
     // storage access framework
     private static final String REQUEST_FILENAME = "request.dat";
@@ -61,7 +60,6 @@ public class XM8 extends SDLActivity {
     private String mTreeUri;
 
     // control flag
-    private boolean mPermissionError;
     private boolean mROMError;
 
     // request id
@@ -83,7 +81,6 @@ public class XM8 extends SDLActivity {
         Log.i(LOG_TAG, "onCreate");
 
         // initialize flags
-        mPermissionError = false;
         mROMError = false;
 
         // super class
@@ -144,23 +141,10 @@ public class XM8 extends SDLActivity {
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // API level 23 or later requires self permission to access storage
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                mPermissionError = true;
-                Toast.makeText(this, TOAST_STORAGE_MESSAGE, Toast.LENGTH_LONG).show();
                 if (!ActivityCompat.shouldShowRequestPermissionRationale(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-                    // request permission
+                    // Optional legacy access for image files outside the app directory.
                     ActivityCompat.requestPermissions(this,  new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_PERMISSION);
                 }
-            }
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        Log.i(LOG_TAG, "onRequestPermissionResult");
-        if (requestCode == REQUEST_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // grant the permission by user operation
-                mPermissionError = false;
             }
         }
     }
@@ -170,46 +154,41 @@ public class XM8 extends SDLActivity {
         Log.i(LOG_TAG, "onWindowFocusChanged():" + hasFocus);
 
         if (hasFocus) {
-            if (!mPermissionError) {
-                // get ROM directory in ExternalStorage
-//                String basepath = Environment.getExternalStorageDirectory() + ROM_DIRECTORY;
-                String basepath = mAbsPath + File.separator;
+            // ROM files are in app-specific storage and do not require
+            // WRITE_EXTERNAL_STORAGE on Android 6.0 or later.
+            String basepath = mAbsPath + File.separator;
 
-                // check mandatory ROMs
+            // check mandatory ROMs
+            mROMError = false;
+            if (!checkROM(basepath, PC88_FILENAME, false)) {
+                // retry with M88 ROM sets
                 mROMError = false;
-                if (!checkROM(basepath, PC88_FILENAME, false)) {
-                    // retry with M88 ROM sets
-                    mROMError = false;
 
-                    checkROM(basepath, N80_FILENAME, true);
-                    checkROM(basepath, N88_FILENAME, true);
-                    checkROM(basepath, DISK_FILENAME, true);
-                    checkROM(basepath, N88EXT0_FILENAME, true);
-                    checkROM(basepath, N88EXT1_FILENAME, true);
-                    checkROM(basepath, N88EXT2_FILENAME, true);
-                    checkROM(basepath, N88EXT3_FILENAME, true);
-                }
-                checkROM(basepath, KANJI1_FILENAME, true);
-
-                // set result to native
-                if (mROMError) {
-                    nativeSkipMain(1);
-                } else {
-                    nativeSkipMain(0);
-                }
-
-                // get external storage path
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    String[] extDirs = getExternalStorageDirectories();
-                    if (extDirs.length == 1) {
-                        // only one path is found
-                        mExtDir = extDirs[0];
-                        nativeExtDir(mExtDir);
-                    }
-                }
+                checkROM(basepath, N80_FILENAME, true);
+                checkROM(basepath, N88_FILENAME, true);
+                checkROM(basepath, DISK_FILENAME, true);
+                checkROM(basepath, N88EXT0_FILENAME, true);
+                checkROM(basepath, N88EXT1_FILENAME, true);
+                checkROM(basepath, N88EXT2_FILENAME, true);
+                checkROM(basepath, N88EXT3_FILENAME, true);
             }
-            else {
+            checkROM(basepath, KANJI1_FILENAME, true);
+
+            // set result to native
+            if (mROMError) {
                 nativeSkipMain(1);
+            } else {
+                nativeSkipMain(0);
+            }
+
+            // get external storage path
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                String[] extDirs = getExternalStorageDirectories();
+                if (extDirs.length == 1) {
+                    // only one path is found
+                    mExtDir = extDirs[0];
+                    nativeExtDir(mExtDir);
+                }
             }
         }
 
