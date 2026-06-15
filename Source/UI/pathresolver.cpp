@@ -25,11 +25,11 @@ bool ResolvePathForIO(const char *path, char *resolved, size_t capacity)
 		return false;
 	}
 #else
-	const size_t length = std::strlen(path);
-	if (length >= sizeof(candidate)) {
+	const size_t input_length = std::strlen(path);
+	if (input_length >= sizeof(candidate)) {
 		return false;
 	}
-	std::memcpy(candidate, path, length + 1);
+	std::memcpy(candidate, path, input_length + 1);
 #endif
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__)
@@ -49,11 +49,11 @@ bool ResolvePathForIO(const char *path, char *resolved, size_t capacity)
 	}
 #endif
 
-	const size_t length = std::strlen(candidate);
-	if (length >= capacity) {
+	const size_t output_length = std::strlen(candidate);
+	if (output_length >= capacity) {
 		return false;
 	}
-	std::memcpy(resolved, candidate, length + 1);
+	std::memcpy(resolved, candidate, output_length + 1);
 	return true;
 }
 
