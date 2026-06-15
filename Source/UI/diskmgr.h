@@ -81,6 +81,8 @@ public:
 										// save state
 
 private:
+	bool ResolvePath();
+										// resolve path used for I/O
 	bool Analyze();
 										// analyze d88 header
 	int drive;
@@ -91,6 +93,8 @@ private:
 										// fdc
 	char path[_MAX_PATH * 3];
 										// disk path
+	char resolved_path[_MAX_PATH * 3];
+										// disk path used for I/O
 	char dir[_MAX_PATH * 3];
 										// disk dir
 	char state_path[_MAX_PATH * 3];

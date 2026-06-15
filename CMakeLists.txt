@@ -37,6 +37,10 @@ set(PROJECT_VERSION 1.7.8)
 # Project Name
 project(XM8 VERSION ${PROJECT_VERSION})
 
+if(APPLE)
+  enable_language(OBJC OBJCXX)
+endif()
+
 include(CTest)
 
 # Packaging options
@@ -116,6 +120,7 @@ set(SRCS
   Source/UI/menu.cpp
   Source/UI/menuitem.cpp
   Source/UI/menulist.cpp
+  Source/UI/pathresolver.cpp
   Source/UI/platform.cpp
   Source/UI/setting.cpp
   Source/UI/softkey.cpp
@@ -142,6 +147,10 @@ set(SRCS
   Source/ePC-8801MA/vm/pc8801/pc88.cpp
   Source/ePC-8801MA/vm/pc8801/pc8801.cpp
 )
+
+if(APPLE)
+  list(APPEND SRCS Source/UI/pathresolver_mac.mm)
+endif()
 
 set(BIN_TARGET "xm8")
 add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Builder/macOS/AppIcon.icns)
@@ -186,6 +195,9 @@ option(ENABLE_PACKAGING "Enable CPack packaging" ON)
 
 # Link SDL2 and xBRZ to xm8 target using interface target from Dependencies.cmake
 target_link_libraries(${BIN_TARGET} PRIVATE XM8::SDL xbrz)
+if(APPLE)
+  target_link_libraries(${BIN_TARGET} PRIVATE "-framework Foundation")
+endif()
 
 if(BUILD_TESTING)
   add_executable(clidisk_test
@@ -207,6 +219,28 @@ if(BUILD_TESTING)
   target_compile_definitions(d88probe_test PRIVATE SDL _PC8801MA)
   target_link_libraries(d88probe_test PRIVATE XM8::SDL)
   add_test(NAME d88probe_test COMMAND d88probe_test)
+
+  add_executable(pathresolver_test
+    Tests/pathresolver_test.cpp
+    Source/UI/pathresolver.cpp
+  )
+  if(APPLE)
+    target_sources(pathresolver_test PRIVATE Source/UI/pathresolver_mac.mm)
+    target_link_libraries(pathresolver_test PRIVATE "-framework Foundation")
+  endif()
+  target_include_directories(pathresolver_test PRIVATE Source/UI)
+  add_test(NAME pathresolver_test COMMAND pathresolver_test)
+
+  if(APPLE)
+    add_executable(pathresolver_mac_test
+      Tests/pathresolver_mac_test.mm
+      Source/UI/pathresolver.cpp
+      Source/UI/pathresolver_mac.mm
+    )
+    target_include_directories(pathresolver_mac_test PRIVATE Source/UI)
+    target_link_libraries(pathresolver_mac_test PRIVATE "-framework Foundation")
+    add_test(NAME pathresolver_mac_test COMMAND pathresolver_mac_test)
+  endif()
 endif()
 
 # Packaging                      

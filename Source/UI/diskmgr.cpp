@@ -17,6 +17,7 @@
 #include "upd765a.h"
 #include "vm.h"
 #include "d88probe.h"
+#include "pathresolver.h"
 #include "diskmgr.h"
 
 //
@@ -43,6 +44,7 @@ DiskManager::DiskManager()
 	wp_list = NULL;
 	signal = 0;
 	path[0] = '\0';
+	resolved_path[0] = '\0';
 	dir[0] = '\0';
 	state_path[0] = '\0';
 	next_bank = 0;
@@ -105,7 +107,9 @@ void DiskManager::SetVM(VM *v)
 //
 bool DiskManager::Probe(const char *filename, int *banks)
 {
-	return ProbeD88Image(filename, banks);
+	char resolved[_MAX_PATH * 3];
+	return ResolvePathForIO(filename, resolved, sizeof(resolved)) &&
+		ProbeD88Image(resolved, banks);
 }
 
 //
@@ -116,12 +120,15 @@ bool DiskManager::Open(const char *filename, int bank)
 {
 	char *ptr;
 	char *last;
+	char candidate[_MAX_PATH * 3];
 
 	// save path
-	if (strlen(filename) >= sizeof(path)) {
+	if (filename == NULL || strlen(filename) >= sizeof(path) ||
+		ResolvePathForIO(filename, candidate, sizeof(candidate)) == false) {
 		return false;
 	}
 	strcpy(path, filename);
+	strcpy(resolved_path, candidate);
 
 	// save directory
 	strcpy(dir, path);
@@ -148,6 +155,10 @@ bool DiskManager::Open(const char *filename, int bank)
 //
 bool DiskManager::Open(int bank)
 {
+	if (ResolvePath() == false) {
+		return false;
+	}
+
 	// close
 	Close();
 
@@ -164,7 +175,7 @@ bool DiskManager::Open(int bank)
 	current_bank = bank;
 
 	// open
-	vm->open_disk(drive, (_TCHAR*)path, current_bank);
+	vm->open_disk(drive, (_TCHAR*)resolved_path, current_bank);
 
 	// ready
 	ready = true;
@@ -382,9 +393,12 @@ int DiskManager::GetBanks()
 bool DiskManager::SetBank(int bank)
 {
 	if ((bank >= 0) && (bank < num_of_banks)) {
+		if (ResolvePath() == false) {
+			return false;
+		}
 		// open (dummy to access file)
 		vm->close_disk(drive);
-		vm->open_disk(drive, (_TCHAR*)path, bank);
+		vm->open_disk(drive, (_TCHAR*)resolved_path, bank);
 
 		// close
 		vm->close_disk(drive);
@@ -408,7 +422,12 @@ void DiskManager::ProcessMgr()
 		next_timer--;
 		if (next_timer == 0) {
 			current_bank = next_bank;
-			vm->open_disk(drive, (_TCHAR*)path, current_bank);
+			if (ResolvePath() == true) {
+				vm->open_disk(drive, (_TCHAR*)resolved_path, current_bank);
+			}
+			else {
+				Close();
+			}
 		}
 	}
 }
@@ -457,6 +476,15 @@ void DiskManager::Save(FILEIO *fio)
 }
 
 //
+// ResolvePath()
+// resolve logical disk path for I/O
+//
+bool DiskManager::ResolvePath()
+{
+	return ResolvePathForIO(path, resolved_path, sizeof(resolved_path));
+}
+
+//
 // Analyze()
 // analyze d88 header
 //
@@ -470,14 +498,14 @@ bool DiskManager::Analyze()
 	int bank;
 	char *ptr;
 
-	if (ProbeD88Image(path, &num_of_banks, &len) == false) {
+	if (ProbeD88Image(resolved_path, &num_of_banks, &len) == false) {
 		return false;
 	}
 
-	if (fio.Fopen(path, FILEIO_READ_BINARY) == false) {
+	if (fio.Fopen(resolved_path, FILEIO_READ_BINARY) == false) {
 		return false;
 	}
-	readonly = fio.IsProtected(path);
+	readonly = fio.IsProtected(resolved_path);
 
 	// malloc
 	name_list = (char*)SDL_malloc(len);

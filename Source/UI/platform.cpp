@@ -20,6 +20,7 @@
 #include "classes.h"
 #include "app.h"
 #include "converter.h"
+#include "pathresolver.h"
 #include "platform.h"
 
 #ifdef __ANDROID__
@@ -54,6 +55,19 @@
 #define LOCALE_UTF8				"UTF-8"
 										// UTF-8
 
+static bool IsSupportedFile(char *path)
+{
+	char d88[] = ".d88";
+	char cmt[] = ".cmt";
+	char t88[] = ".t88";
+	char n80[] = ".n80";
+
+	return check_file_extension(path, d88) ||
+		check_file_extension(path, cmt) ||
+		check_file_extension(path, t88) ||
+		check_file_extension(path, n80);
+}
+
 //
 // Platform()
 // constructor
@@ -79,6 +93,7 @@ Platform::Platform(App *a)
 	dir_handle = NULL;
 	dir_name[0] = '\0';
 	dir_name_utf8[0] = '\0';
+	find_dir[0] = '\0';
 	dir_up = false;
 #endif // __linux__ || __APPLE__
 }
@@ -298,6 +313,11 @@ const char* Platform::FindFirst(const char *dir, Uint32 *info)
 #if defined(__linux__) || defined(__APPLE__)
 	DIR *dir_ret;
 
+	if (strlen(dir) >= sizeof(find_dir)) {
+		return NULL;
+	}
+	strcpy(find_dir, dir);
+
 	// Find ..
 	dir_up = FindUp(dir);
 
@@ -418,10 +438,9 @@ const char* Platform::FindNext(Uint32 *info)
 
 #if defined(__linux__) || defined(__APPLE__)
 	struct dirent *entry;
-	Converter *converter;
-
-	// get converter
-	converter = app->GetConverter();
+	char entry_path[_MAX_PATH * 3];
+	char resolved_path[_MAX_PATH * 3];
+	PathKind kind;
 
 	// find
 	for (;;) {
@@ -432,36 +451,41 @@ const char* Platform::FindNext(Uint32 *info)
 			return NULL;
 		}
 
-		// check file extension
-		if (entry->d_type == DT_REG) {
-			// normal file
-			if (check_file_extension(entry->d_name, _T(".d88")) == false &&
-				check_file_extension(entry->d_name, _T(".cmt")) == false &&
-				check_file_extension(entry->d_name, _T(".t88")) == false &&
-				check_file_extension(entry->d_name, _T(".n80")) == false) {
-					// unsupported file
-				continue;
-			}
-		}		
-
 		// check .
-		if (entry->d_name[0] != '.') {
+		if (entry->d_name[0] == '.') {
+			continue;
+		}
+
+		if (strlen(find_dir) + strlen(entry->d_name) >= sizeof(entry_path)) {
+			continue;
+		}
+		strcpy(entry_path, find_dir);
+		strcat(entry_path, entry->d_name);
+		kind = InspectPath(entry_path, resolved_path, sizeof(resolved_path));
+		if (kind == PATH_KIND_DIRECTORY) {
 			break;
 		}
+		if (kind != PATH_KIND_FILE) {
+			continue;
+		}
+		if (IsSupportedFile(resolved_path) == false) {
+			continue;
+		}
+		break;
 	}
 
 	// name
 	strcpy(dir_name, entry->d_name);
 
 	// directory ?
-	if (entry->d_type == DT_DIR) {
+	if (kind == PATH_KIND_DIRECTORY) {
 		if (dir_name[strlen(dir_name) - 1] != '/') {
 			strcat(dir_name, "/");
 		}
 	}
 
 	// type
-	*info = (Uint32)entry->d_type;
+	*info = kind == PATH_KIND_DIRECTORY ? DT_DIR : DT_REG;
 
 	return dir_name;
 #endif // __liunx__ || __APPLE__
@@ -474,39 +498,20 @@ const char* Platform::FindNext(Uint32 *info)
 //
 bool Platform::FindUp(const char *dir)
 {
-	struct dirent *entry;
-	DIR *dir_ret;
+	char parent[_MAX_PATH * 3];
+	struct stat file_stat;
 
 	// root ?
 	if (strcmp(dir, "/") == 0) {
 		return false;
 	}
 
-	// open directory
-	dir_ret = opendir(dir);
-	if (dir_ret == NULL) {
+	if (strlen(dir) + 2 >= sizeof(parent)) {
 		return false;
 	}
-
-	// find loop
-	for (;;) {
-		entry = readdir(dir_ret);
-		if (entry == NULL) {
-			break;
-		}
-
-		// check '..'
-		if (strcmp(entry->d_name, "..") == 0) {
-			if (entry->d_type == DT_DIR) {
-				closedir(dir_ret);
-				return true;
-			}
-		}
-	}
-
-	// close and false
-	closedir(dir_ret);
-	return false;
+	strcpy(parent, dir);
+	strcat(parent, "..");
+	return stat(parent, &file_stat) == 0 && S_ISDIR(file_stat.st_mode);
 }
 #endif // __liunx__ || __APPLE__
 
@@ -545,7 +550,7 @@ bool Platform::IsDir(Uint32 info)
 // MakePath()
 // make path name from dir(UTF-8) and name(SHIFT-JIS)
 //
-bool Platform::MakePath(char *dir, const char *name)
+bool Platform::MakePath(char *dir, const char *name, bool directory)
 {
 #if defined(_WIN32) && defined(UNICODE)
 	wchar_t wide_dir[MAX_PATH];
@@ -585,6 +590,8 @@ bool Platform::MakePath(char *dir, const char *name)
 		wcscat_s(wide_dir, SDL_arraysize(wide_dir), wide_name);
 	}
 
+	(void)directory;
+
 	// GetFullPathName
 	GetFullPathName(wide_dir, SDL_arraysize(wide_name), wide_name, &part);
 
@@ -602,34 +609,40 @@ bool Platform::MakePath(char *dir, const char *name)
 #endif // _WIN32 && UNICODE
 
 #if defined(__linux__) || defined(__APPLE__)
-	Converter *converter;
 	struct stat filestat;
+	char joined[_MAX_PATH * 3];
+	char resolved[_MAX_PATH * 3];
+	size_t dir_length;
+	size_t name_length;
 
-	// get converter
-	converter = app->GetConverter();
-
-	// SHIFT-JIS to UTF-8
-	// converter->SjisToUtf(name, dir_name);
-	strcpy(dir_name, name);
-
-	// cat
-	strcat(dir, dir_name);
-
-	// realpath
-	if (realpath(dir, dir_name) == NULL) {
+	dir_length = strlen(dir);
+	name_length = strlen(name);
+	while (name_length > 0 &&
+		(name[name_length - 1] == '/' || name[name_length - 1] == '\\')) {
+		name_length--;
+	}
+	if (dir_length + name_length >= sizeof(joined)) {
 		return false;
 	}
+	memcpy(joined, dir, dir_length);
+	memcpy(joined + dir_length, name, name_length);
+	joined[dir_length + name_length] = '\0';
 
-	// directory ?
-	if (stat(dir_name, &filestat) == 0) {
-		if (S_ISDIR(filestat.st_mode)) {
-			if (dir_name[strlen(dir_name) - 1] != '/') {
-				strcat(dir_name, "/");
-			}
-		}
+	if (directory == false) {
+		strcpy(dir, joined);
+		return true;
 	}
 
-	// realpath to dir
+	if (!ResolvePathForIO(joined, resolved, sizeof(resolved)) ||
+		realpath(resolved, dir_name) == NULL ||
+		stat(dir_name, &filestat) != 0 ||
+		!S_ISDIR(filestat.st_mode)) {
+		return false;
+	}
+	if (dir_name[strlen(dir_name) - 1] != '/') {
+		strcat(dir_name, "/");
+	}
+
 	strcpy(dir, dir_name);
 
 	return true;

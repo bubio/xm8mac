@@ -3083,7 +3083,7 @@ void Menu::CmdFile(int id)
 		}
 #endif // __ANDROID__
 
-		if (platform->MakePath(file_target, name) == true) {
+		if (platform->MakePath(file_target, name, true) == true) {
 			MakeExpect(name);
 			strcpy(file_dir, file_target);
 			EnterFile();
@@ -3092,7 +3092,9 @@ void Menu::CmdFile(int id)
 	}
 
 	// normal file
-	platform->MakePath(file_target, name);
+	if (platform->MakePath(file_target, name, false) == false) {
+		return;
+	}
 
 	// tape ?
 	if ((file_id == MENU_CMT_PLAY) || (file_id == MENU_CMT_REC)) {

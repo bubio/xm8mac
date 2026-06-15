@@ -389,6 +389,7 @@
     <ClCompile Include="..\..\Source\UI\menu.cpp" />
     <ClCompile Include="..\..\Source\UI\menuitem.cpp" />
     <ClCompile Include="..\..\Source\UI\menulist.cpp" />
+    <ClCompile Include="..\..\Source\UI\pathresolver.cpp" />
     <ClCompile Include="..\..\Source\UI\platform.cpp" />
     <ClCompile Include="..\..\Source\UI\setting.cpp" />
     <ClCompile Include="..\..\Source\UI\softkey.cpp" />
@@ -442,6 +443,7 @@
     <ClInclude Include="..\..\Source\UI\menu.h" />
     <ClInclude Include="..\..\Source\UI\menuid.h" />
     <ClInclude Include="..\..\Source\UI\menuitem.h" />
+    <ClInclude Include="..\..\Source\UI\pathresolver.h" />
     <ClInclude Include="..\..\Source\UI\menulist.h" />
     <ClInclude Include="..\..\Source\UI\os.h" />
     <ClInclude Include="..\..\Source\UI\platform.h" />
