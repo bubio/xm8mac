@@ -1,5 +1,10 @@
 #ifndef CLIDISK_H
 #define CLIDISK_H
+#ifdef __min
+#pragma push_macro("__min")
+#undef __min
+#define CLIDISK_RESTORE_INTERNAL_MIN_MACRO
+#endif
 
 #ifdef min
 #pragma push_macro("min")
@@ -15,6 +20,10 @@
 #include <string>
 #include <vector>
 
+#ifdef CLIDISK_RESTORE_INTERNAL_MIN_MACRO
+#pragma pop_macro("__min")
+#undef CLIDISK_RESTORE_INTERNAL_MIN_MACRO
+#endif
 #ifdef CLIDISK_RESTORE_MAX_MACRO
 #pragma pop_macro("max")
 #undef CLIDISK_RESTORE_MAX_MACRO
