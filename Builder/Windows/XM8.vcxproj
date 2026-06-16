@@ -385,6 +385,7 @@
     <ClCompile Include="..\..\Source\UI\fileio.cpp" />
     <ClCompile Include="..\..\Source\UI\font.cpp" />
     <ClCompile Include="..\..\Source\UI\input.cpp" />
+    <ClCompile Include="..\..\Source\UI\m3u.cpp" />
     <ClCompile Include="..\..\Source\UI\main.cpp" />
     <ClCompile Include="..\..\Source\UI\menu.cpp" />
     <ClCompile Include="..\..\Source\UI\menuitem.cpp" />
@@ -440,6 +441,7 @@
     <ClInclude Include="..\..\Source\UI\font.h" />
     <ClInclude Include="..\..\Source\UI\headers.h" />
     <ClInclude Include="..\..\Source\UI\input.h" />
+    <ClInclude Include="..\..\Source\UI\m3u.h" />
     <ClInclude Include="..\..\Source\UI\menu.h" />
     <ClInclude Include="..\..\Source\UI\menuid.h" />
     <ClInclude Include="..\..\Source\UI\menuitem.h" />

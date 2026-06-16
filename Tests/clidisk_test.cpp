@@ -1,7 +1,9 @@
 #include "clidisk.h"
 
 #include <climits>
+#include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -35,6 +37,16 @@ void Check(bool condition, const char *message)
 void CheckError(std::initializer_list<const char*> arguments, const char *message)
 {
 	Check(Parse(arguments).action == CliAction::Error, message);
+}
+
+bool WriteTextFile(const std::string& path, const std::string& content)
+{
+	std::ofstream file(path);
+	if (!file.is_open()) {
+		return false;
+	}
+	file << content;
+	return file.good();
 }
 
 } // namespace
@@ -94,6 +106,29 @@ int main()
 		Check(options.disks.size() == 1 &&
 			options.disks[0].path == "-game.d88", "double dash");
 	}
+	{
+		const std::string playlist = "./clidisk_test_playlist.m3u";
+		Check(WriteTextFile(playlist,
+			"#EXTM3U\n"
+			"  disk1.d88#1  \n"
+			"\n"
+			"disk2.d88\n"
+			"disk3.d88\n"),
+			"write m3u playlist");
+
+		CliOptions options = Parse({"xm8", playlist.c_str()});
+		Check(options.action == CliAction::Run, "m3u action");
+		Check(options.disks.size() == 2, "m3u loads first two disks");
+		Check(options.disks[0].path == "./disk1.d88" &&
+			options.disks[0].drive == 0 &&
+			options.disks[0].bank == 1, "m3u first disk");
+		Check(options.disks[1].path == "./disk2.d88" &&
+			options.disks[1].drive == 1 &&
+			options.disks[1].bank == 0, "m3u second disk");
+
+		std::remove(playlist.c_str());
+	}
+	CheckError({"xm8", "./clidisk_test_missing.m3u"}, "missing m3u");
 	for (const char *value : {"V1S", "v1h", "V2", "n"}) {
 		Check(Parse({"xm8", "--system", value}).action == CliAction::Run,
 			"valid system");
