@@ -1,5 +1,5 @@
 # SDL2 version
-$version = "2.32.8"
+$version = "2.32.10"
 $zipName = "SDL2-devel-$version-VC.zip"
 $url = "https://github.com/libsdl-org/SDL/releases/download/release-$version/$zipName"
 
