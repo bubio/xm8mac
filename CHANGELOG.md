@@ -1,3 +1,36 @@
+# 1.7.9
+
+2026年6月16日 火曜日
+
+<br/>　
+
+## 動作環境
+| Platform | CPU | 最小OSバージョン |
+| ------------- | ------------------- | ------------- |
+| Mac | x86_64 | macOS 10.13 High Sierra |
+| Mac | Apple Silicon | macOS 11 Big Sur |
+| Windows | x86_64 | Windows 10 |
+| Windows | x86_32 | Windows 10 |
+| Linux | x86_64 | - |
+| Raspberry Pi OS | armhf | -|
+| Android | Arm | Android 4.4 |
+
+<br />　
+
+## 変更点
+- SDLを2.38.10にしました。
+- CLIによるD88,m3uファイルの指定に対応しました。
+- Androidのビルド環境を更新しました。
+- エイリアス、シンボリックリンクに対応しました。
+
+<br />　
+
+## 既知の問題
+- 特にありません。
+
+<br/>　
+<br/>　
+
 # 1.7.8
 
 2026年4月3日 金曜日
