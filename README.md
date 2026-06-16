@@ -87,7 +87,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 
 ### コマンドライン起動
 
-Windows、macOS、Linux では、最大2個の D88 イメージをコマンドラインで指定できます。指定順にドライブ1、ドライブ2へ挿入されます。
+Windows、macOS、Linux では、最大2個の D88 イメージをコマンドラインで指定できます。指定順にドライブ1、ドライブ2へ挿入されます。また、m3uファイルにも対応しています。
 
 ```shell
 xm8 [options] [--] [disk-spec ...]
@@ -95,6 +95,7 @@ xm8 [options] [--] [disk-spec ...]
 xm8 game.d88
 xm8 game.d88#1
 xm8 system.d88#0 data.d88#1
+xm8 game.m3u
 xm8 --system V1H --clock 4MHz game.d88
 ```
 
