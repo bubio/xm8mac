@@ -149,7 +149,10 @@ set(SRCS
 )
 
 if(APPLE)
-  list(APPEND SRCS Source/UI/pathresolver_mac.mm)
+  list(APPEND SRCS
+    Source/UI/converter_mac.mm
+    Source/UI/pathresolver_mac.mm
+  )
 endif()
 
 set(BIN_TARGET "xm8")
@@ -232,6 +235,14 @@ if(BUILD_TESTING)
   add_test(NAME pathresolver_test COMMAND pathresolver_test)
 
   if(APPLE)
+    add_executable(converter_mac_test
+      Tests/converter_mac_test.mm
+      Source/UI/converter_mac.mm
+    )
+    target_include_directories(converter_mac_test PRIVATE Source/UI)
+    target_link_libraries(converter_mac_test PRIVATE "-framework Foundation")
+    add_test(NAME converter_mac_test COMMAND converter_mac_test)
+
     add_executable(pathresolver_mac_test
       Tests/pathresolver_mac_test.mm
       Source/UI/pathresolver.cpp

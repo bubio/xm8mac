@@ -14,6 +14,9 @@
 #include "common.h"
 #include "converter.h"
 
+#if defined(__APPLE__)
+#include "converter_mac.h"
+#endif
 #if defined(__ANDROID__)
 #include "xm8jni.h"
 #endif
@@ -100,29 +103,7 @@ void Converter::Deinit()
 //
 int Converter::Utf8macToUtf8(const char *src, char *dst, size_t len)
 {
-    SDL_iconv_t conv; // conversion descriptor
-    char buf[_MAX_PATH];
-    const char *src_buf = buf;
-    char *dst_buf = dst;
-    size_t src_len = strlen(src);
-    size_t dst_len = len - 1;
-    int ret = 0;
-    strncpy(buf, src, sizeof(buf));
-    if ((conv = SDL_iconv_open("UTF-8", "UTF-8-MAC")) == (SDL_iconv_t) - 1) {
-        fprintf(stderr, "error: %s: %s\n", __FUNCTION__, SDL_GetError());
-        return -1;
-    }
-    if (SDL_iconv(conv, &src_buf, &src_len, &dst_buf, &dst_len) == (size_t) - 1) {
-        fprintf(stderr, "error: %s: %s\n", __FUNCTION__, SDL_GetError());
-        ret = -1;
-    }
-    *dst_buf = '\0';
-    if (SDL_iconv_close(conv) == -1) {
-        fprintf(stderr, "error: %s: %s\n", __FUNCTION__, SDL_GetError());
-        ret = -1;
-    }
-
-    return ret;
+	return NormalizeUtf8ToNfcMac(src, dst, len);
 }
 #endif
 
@@ -244,10 +225,16 @@ void Converter::SjisToUtf(const char *sjis, char *utf)
 //
 void Converter::UtfToSjis(const char *utf, char *sjis)
 {
-#if defined(__APPLE__)	
-	char* utf8_nfc = (char*)SDL_malloc(strlen(utf) * 3 + 1);
-	Utf8macToUtf8(utf, utf8_nfc, strlen(utf) + 1);
-	UtfNfcToSjis(utf8_nfc, sjis);
+#if defined(__APPLE__)
+	size_t utf8_nfc_len = strlen(utf) * 3 + 1;
+	char* utf8_nfc = (char*)SDL_malloc(utf8_nfc_len);
+	if (utf8_nfc != NULL && Utf8macToUtf8(utf, utf8_nfc,
+		utf8_nfc_len) == 0) {
+		UtfNfcToSjis(utf8_nfc, sjis);
+	}
+	else {
+		UtfNfcToSjis(utf, sjis);
+	}
 	SDL_free(utf8_nfc);
 #elif defined(__ANDROID__)
 	char* utf8_nfc = (char*)SDL_malloc(strlen(utf) * 3 + 1);

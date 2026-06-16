@@ -12,12 +12,6 @@ else()
 endif()
 set(SDL_TEST_ENABLED_BY_DEFAULT OFF)
 
-# Apple環境の場合、システムのiconvを使用する設定
-if(APPLE)
-  set(SDL_SYSTEM_ICONV ON CACHE BOOL "Use iconv() from system-installed libraries")
-  set(SDL_LIBICONV OFF CACHE BOOL "Prefer iconv() from libiconv, if available, over libc version")
-endif()
-
 include(functions/FetchContent_ExcludeFromAll_backport)
 include(FetchContent)
 FetchContent_Declare(SDL2
