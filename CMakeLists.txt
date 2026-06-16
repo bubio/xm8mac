@@ -116,6 +116,7 @@ set(SRCS
   Source/UI/fileio.cpp
   Source/UI/font.cpp
   Source/UI/input.cpp
+  Source/UI/m3u.cpp
   Source/UI/main.cpp
   Source/UI/menu.cpp
   Source/UI/menuitem.cpp
@@ -206,6 +207,7 @@ if(BUILD_TESTING)
   add_executable(clidisk_test
     Tests/clidisk_test.cpp
     Source/UI/clidisk.cpp
+    Source/UI/m3u.cpp
   )
   target_include_directories(clidisk_test PRIVATE Source/UI)
   add_test(NAME clidisk_test COMMAND clidisk_test)

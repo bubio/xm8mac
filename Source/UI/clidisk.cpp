@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include "m3u.h"
 
 namespace {
 
@@ -119,6 +120,16 @@ bool ParseClock(const std::string& value, CliClockMode *clock)
 	return true;
 }
 
+bool IsM3U(const std::string& path)
+{
+    if (path.length() < 4) {
+        return false;
+    }
+
+    std::string ext = ToUpper(path.substr(path.length() - 4));
+    return ext == ".M3U";
+}
+
 } // namespace
 
 CliOptions ParseCommandLine(int argc, char *argv[])
@@ -187,13 +198,47 @@ CliOptions ParseCommandLine(int argc, char *argv[])
 			return Error("too many disk images; maximum is 2");
 		}
 
-		DiskSpec spec;
-		std::string error;
-		if (!ParseDiskSpec(argument, static_cast<int>(options.disks.size()),
-			&spec, &error)) {
-			return Error(error);
+		if (IsM3U(argument)) {
+
+    		M3UResult playlist = LoadM3U(argument);
+
+    		if (!playlist.success) {
+        	return Error(playlist.error);
+    		}
+
+			for (const auto& entry : playlist.entries) {
+                
+                if (options.disks.size() >=2) {
+                    break;
+                }
+
+	        DiskSpec spec;
+	        std::string error;
+	
+	        if (!ParseDiskSpec(entry,
+	            static_cast<int>(options.disks.size()),
+	            &spec,
+	            &error)) {
+	            return Error(error);
+	        }
+	
+	        options.disks.push_back(spec);
+	    }
+	
+		} else {
+	
+	    DiskSpec spec;
+	    std::string error;
+	
+	    if (!ParseDiskSpec(argument,
+	        static_cast<int>(options.disks.size()),
+	        &spec,
+	        &error)) {
+	        return Error(error);
+	    }
+	
+	    options.disks.push_back(spec);
 		}
-		options.disks.push_back(spec);
 	}
 
 	if (action_seen && (system_seen || clock_seen || !options.disks.empty())) {
