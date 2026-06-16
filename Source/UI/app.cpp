@@ -47,7 +47,7 @@
 //
 #define APP_NAME				"XM8 (based on ePC-8801MA)";
 										// application name
-#define APP_VER					0x0178
+#define APP_VER					0x0179
 										// version (BCD)
 #define APP_WIDTH				SCREEN_WIDTH
 										// window width
