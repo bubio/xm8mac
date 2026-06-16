@@ -14,6 +14,7 @@
 #include "common.h"
 #include "vm.h"
 #include "app.h"
+#include "pathresolver.h"
 #include "tapemgr.h"
 
 //
@@ -31,6 +32,7 @@ TapeManager::TapeManager()
 
 	// path and dir
 	path[0] = '\0';
+	resolved_path[0] = '\0';
 	dir[0] = '\0';
 	state_path[0] = '\0';
 	nullstr[0] = '\0';
@@ -85,16 +87,16 @@ void TapeManager::SetVM(VM *v)
 //
 bool TapeManager::Play(const char *filename)
 {
-	// Eject
-	Eject();
-
 	// open
 	if (Open(filename, false) == false) {
 		return false;
 	}
 
+	// Eject
+	Eject();
+
 	// virtual machine
-	vm->play_tape((_TCHAR*)path);
+	vm->play_tape((_TCHAR*)resolved_path);
 
 	// mount ok
 	mount_play = true;
@@ -108,16 +110,16 @@ bool TapeManager::Play(const char *filename)
 //
 bool TapeManager::Rec(const char *filename)
 {
-	// Eject
-	Eject();
-
 	// open
 	if (Open(filename, true) == false) {
 		return false;
 	}
 
+	// Eject
+	Eject();
+
 	// virtual machine
-	vm->rec_tape((_TCHAR*)path);
+	vm->rec_tape((_TCHAR*)resolved_path);
 
 	// mount ok
 	mount_rec = true;
@@ -133,44 +135,49 @@ bool TapeManager::Open(const char *filename, bool rec)
 {
 	char *ptr;
 	char *last;
+	char candidate_path[_MAX_PATH * 3];
+	char candidate_dir[_MAX_PATH * 3];
+	char candidate_resolved[_MAX_PATH * 3];
 	FILEIO fileio;
 	bool ret;
 
-	// specify filename ?
-	if (filename != NULL) {
-		// save path
-		if (strlen(filename) >= sizeof(path)) {
-			return false;
+	const char *source = filename != NULL ? filename : path;
+	if (source[0] == '\0' || strlen(source) >= sizeof(candidate_path)) {
+		return false;
+	}
+	strcpy(candidate_path, source);
+	strcpy(candidate_dir, candidate_path);
+	ptr = candidate_dir;
+	last = candidate_dir;
+
+	// search last '\\' or '/'
+	while (*ptr != '\0') {
+		if ((*ptr == '\\') || (*ptr == '/')) {
+			last = ptr;
 		}
-		strcpy(path, filename);
+		ptr++;
+	}
+	last[1] = '\0';
 
-		// save directory
-		strcpy(dir, path);
-		ptr = dir;
-		last = dir;
-
-		// search last '\\' or '/'
-		while (*ptr != '\0') {
-			if ((*ptr == '\\') || (*ptr == '/')) {
-				last = ptr;
-			}
-			ptr++;
-		}
-
-		// end mark
-		last[1] = '\0';
+	if (ResolvePathForIO(candidate_path, candidate_resolved,
+		sizeof(candidate_resolved)) == false) {
+		return false;
 	}
 
 	// open test
 	if (rec == true) {
-		ret = fileio.Fopen(path, FILEIO_READ_WRITE_NEW_BINARY);
+		ret = fileio.Fopen(candidate_resolved,
+			FILEIO_READ_WRITE_NEW_BINARY);
 	}
 	else {
-		ret = fileio.Fopen(path, FILEIO_READ_BINARY);
+		ret = fileio.Fopen(candidate_resolved, FILEIO_READ_BINARY);
 	}
 	if (ret == true) {
 		// close immediately
 		fileio.Fclose();
+		strcpy(path, candidate_path);
+		strcpy(dir, candidate_dir);
+		strcpy(resolved_path, candidate_resolved);
 	}
 
 	return ret;
@@ -270,7 +277,7 @@ void TapeManager::Load(FILEIO *fio)
 //
 void TapeManager::Save(FILEIO *fio)
 {
-	fio->Fwrite(state_path, 1, sizeof(state_path));
+	fio->Fwrite(path, 1, sizeof(path));
 	fio->FputBool(mount_play);
 	fio->FputBool(mount_rec);
 }

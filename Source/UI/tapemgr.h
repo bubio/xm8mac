@@ -61,6 +61,8 @@ private:
 										// mount flag (rec)
 	char path[_MAX_PATH * 3];
 										// tape path
+	char resolved_path[_MAX_PATH * 3];
+										// tape path used for I/O
 	char dir[_MAX_PATH * 3];
 										// tape dir
 	char state_path[_MAX_PATH * 3];

@@ -39,6 +39,7 @@ jobs:
           deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-updates universe
           deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR} multiverse
           deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-updates multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-security main restricted universe multiverse
           deb [arch=armhf] http://ports.ubuntu.com/ ${FLAVOR}-backports main restricted universe multiverse
           LIST
             sudo sed -E -i 's/deb (http|file|mirror)/deb [arch=amd64,i386] \1/' /etc/apt/sources.list

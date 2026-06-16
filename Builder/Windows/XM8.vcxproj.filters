@@ -159,6 +159,9 @@
     <ClCompile Include="..\..\Source\UI\menulist.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\UI\pathresolver.cpp">
+      <Filter>ソース ファイル\UI</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\UI\converter.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
@@ -285,6 +288,9 @@
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\UI\menuitem.h">
+      <Filter>ヘッダー ファイル\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\UI\pathresolver.h">
       <Filter>ヘッダー ファイル\UI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\UI\menulist.h">

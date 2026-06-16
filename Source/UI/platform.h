@@ -35,7 +35,7 @@ public:
 										// find next file
 	bool IsDir(Uint32 info);
 										// check directory
-	bool MakePath(char *dir, const char *name);
+	bool MakePath(char *dir, const char *name, bool directory);
 										// make path from dir(UTF-8) and name(SHIFT-JIS)
 
 	// file date and time
@@ -75,6 +75,8 @@ private:
 										// file name (shift-jis)
 	char dir_name_utf8[_MAX_PATH * 3];
 										// file name (utf8-mac)
+	char find_dir[_MAX_PATH * 3];
+										// directory currently being enumerated
 	bool dir_up;
 										// FindUp() result
 #endif // __linux__ || __APPLE__
