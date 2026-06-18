@@ -65,7 +65,7 @@ jobs:
           mv "$deb_file" build/XM8_Linux_armhf.deb
 
       - name: Upload build artifact deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XM8_Linux_armhf.deb
           path: build/XM8_Linux_armhf.deb

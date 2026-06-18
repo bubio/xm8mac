@@ -35,7 +35,7 @@ jobs:
           ./AppImage.sh
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XM8_Linux_x86_64.appimage
           path: Builder/Linux/*.appimage
