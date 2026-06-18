@@ -79,19 +79,19 @@ jobs:
           Copy-Item Builder/Windows/ARM64/Release/SDL2.dll artifacts_ARM64/ -Force
 
       - name: Upload Artifacts (XM8_Windows_x86_64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XM8_Windows_x86_64
           path: artifacts_x64/
 
       - name: Upload Artifacts (XM8_Windows_x86_32)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XM8_Windows_x86_32
           path: artifacts_Win32/
 
       - name: Upload Artifacts (XM8_Windows_ARM64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XM8_Windows_ARM64
           path: artifacts_ARM64/

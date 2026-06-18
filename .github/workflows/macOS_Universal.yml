@@ -44,7 +44,7 @@ jobs:
           mv ../../build/xm8.dmg ../../build/XM8_macOS_Universal.dmg
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XM8_macOS_Universal.dmg
           path: build/*.dmg

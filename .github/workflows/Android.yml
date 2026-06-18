@@ -76,7 +76,7 @@ jobs:
           mv "$APK_PATH" Builder/Android/app/build/outputs/apk/release/XM8_Android.apk
 
       - name: Upload APKs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XM8_Android.apk
           path: Builder/Android/app/build/outputs/apk/release/XM8_Android.apk
