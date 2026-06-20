@@ -225,6 +225,46 @@ if(BUILD_TESTING)
   target_link_libraries(d88probe_test PRIVATE XM8::SDL)
   add_test(NAME d88probe_test COMMAND d88probe_test)
 
+  add_executable(generate_d88_fixtures
+    Tests/generate_d88_fixtures.cpp
+    Tests/Fixtures/d88_fixture.cpp
+  )
+  target_include_directories(generate_d88_fixtures PRIVATE Tests)
+
+  add_executable(d88fixture_test
+    Tests/d88fixture_test.cpp
+    Tests/Fixtures/d88_fixture.cpp
+    Source/UI/d88probe.cpp
+    Source/UI/fileio.cpp
+    Source/UI/m3u.cpp
+  )
+  target_include_directories(d88fixture_test PRIVATE
+    Tests
+    Source/UI
+    Source/ePC-8801MA
+  )
+  target_compile_definitions(d88fixture_test PRIVATE SDL _PC8801MA)
+  target_link_libraries(d88fixture_test PRIVATE XM8::SDL)
+  add_test(NAME d88fixture_test COMMAND d88fixture_test)
+
+  add_executable(d88write_test
+    Tests/d88write_test.cpp
+    Tests/Fixtures/d88_fixture.cpp
+    Source/UI/fileio.cpp
+    Source/ePC-8801MA/common.cpp
+    Source/ePC-8801MA/config.cpp
+    Source/ePC-8801MA/vm/disk.cpp
+  )
+  target_include_directories(d88write_test PRIVATE
+    Tests
+    Source/UI
+    Source/ePC-8801MA
+    Source/ePC-8801MA/vm
+  )
+  target_compile_definitions(d88write_test PRIVATE SDL _PC8801MA)
+  target_link_libraries(d88write_test PRIVATE XM8::SDL)
+  add_test(NAME d88write_test COMMAND d88write_test)
+
   add_executable(pathresolver_test
     Tests/pathresolver_test.cpp
     Source/UI/pathresolver.cpp
