@@ -43,6 +43,12 @@ endif()
 
 include(CTest)
 
+option(XM8_ENABLE_RETROACHIEVEMENTS "Enable RetroAchievements support" OFF)
+if(XM8_ENABLE_RETROACHIEVEMENTS AND NOT APPLE)
+  message(FATAL_ERROR
+    "RetroAchievements is implemented for macOS only through Phase 8")
+endif()
+
 # Packaging options
 option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
 
@@ -81,6 +87,10 @@ include(Dependencies)
 
 # xBRZ
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Source/Filter/xBRZ)
+
+if(XM8_ENABLE_RETROACHIEVEMENTS)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty)
+endif()
 
 # Set compile options
 add_compile_options(-Wall)
@@ -159,6 +169,25 @@ endif()
 set(BIN_TARGET "xm8")
 add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Builder/macOS/AppIcon.icns)
 target_compile_definitions(${BIN_TARGET} PRIVATE SDL _PC8801MA) 
+
+if(XM8_ENABLE_RETROACHIEVEMENTS)
+  xm8_enable_ra_for_target(${BIN_TARGET})
+
+  set(RA_LICENSE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/XM8-GPL-2.0.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/xBRZ-GPL-3.0.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/rcheevos-MIT.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/stb-MIT-or-Public-Domain.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/SQLite-Public-Domain.txt
+  )
+  set_source_files_properties(${RA_LICENSE_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources/Licenses")
+  set(RA_NOTICE_FILE
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/THIRD_PARTY_NOTICES.md)
+  set_source_files_properties(${RA_NOTICE_FILE} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources")
+  target_sources(${BIN_TARGET} PRIVATE ${RA_LICENSE_FILES} ${RA_NOTICE_FILE})
+endif()
 
 if(CMAKE_STRIP)
   add_custom_command(
@@ -293,6 +322,18 @@ if(BUILD_TESTING)
     target_include_directories(pathresolver_mac_test PRIVATE Source/UI)
     target_link_libraries(pathresolver_mac_test PRIVATE "-framework Foundation")
     add_test(NAME pathresolver_mac_test COMMAND pathresolver_mac_test)
+  endif()
+
+  if(XM8_ENABLE_RETROACHIEVEMENTS)
+    add_executable(ra_dependency_test
+      Tests/ra_dependency_test.cpp
+      $<TARGET_OBJECTS:xm8_ra_core>
+    )
+    target_link_libraries(ra_dependency_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_dependency_test PRIVATE Source/RA)
+    target_compile_definitions(ra_dependency_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_dependency_test COMMAND ra_dependency_test)
   endif()
 endif()
 

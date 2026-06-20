@@ -17,7 +17,7 @@ else
 fi
 
 # cmake -G Xcode -S . -B build -DCMAKE_BUILD_TYPE=Release -DMACOSX_STANDALONE_APP_BUNDLE=ON
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMACOSX_STANDALONE_APP_BUNDLE=ON -DCMAKE_OSX_ARCHITECTURES="${ARCHS}"
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMACOSX_STANDALONE_APP_BUNDLE=ON -DXM8_ENABLE_RETROACHIEVEMENTS=ON -DCMAKE_OSX_ARCHITECTURES="${ARCHS}"
 cmake --build build -j $(sysctl -n hw.physicalcpu) --target package
 
 popd .
