@@ -56,6 +56,7 @@ ePC-8801MAの旧版
 | [06_外部仕様と依存関係.md](06_外部仕様と依存関係.md) | 依存物、固定バージョン、ライセンス、更新手順、公式資料 |
 | [07_Phase0実施記録.md](07_Phase0実施記録.md) | macOS基準build/test、Normal実動作、fixture、後続OS build調査 |
 | [08_Phase1実施記録.md](08_Phase1実施記録.md) | macOS RA依存物、ON/OFF build、ライセンス監査、検証結果 |
+| [09_Phase2実施記録.md](09_Phase2実施記録.md) | macOS RAメモリ検査API、D88 hash/media probe、検証結果 |
 
 ## 3. 確定事項
 

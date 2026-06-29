@@ -366,6 +366,12 @@ bool VM::tape_inserted()
 	return pc88->tape_inserted();
 }
 
+size_t VM::read_ra_inspection_memory(uint32 addr, uint8 *buffer,
+	size_t count) const
+{
+	return pc88->read_ra_inspection_memory(addr, buffer, count);
+}
+
 bool VM::now_skip()
 {
 //	return event->now_skip();

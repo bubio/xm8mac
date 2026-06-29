@@ -79,6 +79,7 @@ target_link_libraries(xm8_ra_dependencies INTERFACE
 
 add_library(xm8_ra_core OBJECT
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_build_info.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_probe.cpp
 )
 target_include_directories(xm8_ra_core
   PUBLIC ${PROJECT_SOURCE_DIR}/Source/RA

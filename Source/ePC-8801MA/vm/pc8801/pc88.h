@@ -359,6 +359,8 @@ public:
 	bool now_skip();
 	
 	void draw_screen();
+	size_t read_ra_inspection_memory(uint32 addr, uint8 *buffer,
+		size_t count) const;
 
 #ifdef SDL
 	void get_key_status(uint8 *buf) { memcpy(buf, key_status, sizeof(key_status)); }

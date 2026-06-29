@@ -334,6 +334,32 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_dependency_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_dependency_test COMMAND ra_dependency_test)
+
+    add_executable(ra_media_probe_test
+      Tests/ra_media_probe_test.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      $<TARGET_OBJECTS:xm8_ra_core>
+    )
+    target_link_libraries(ra_media_probe_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_media_probe_test PRIVATE
+      Tests
+      Source/RA
+    )
+    target_compile_definitions(ra_media_probe_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_media_probe_test COMMAND ra_media_probe_test)
+
+    add_executable(ra_memory_map_test
+      Tests/ra_memory_map_test.cpp
+    )
+    target_include_directories(ra_memory_map_test PRIVATE
+      Source/ePC-8801MA
+      Source/ePC-8801MA/vm
+      Source/ePC-8801MA/vm/pc8801
+    )
+    target_compile_definitions(ra_memory_map_test PRIVATE
+      SDL _PC8801MA XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_memory_map_test COMMAND ra_memory_map_test)
   endif()
 endif()
 

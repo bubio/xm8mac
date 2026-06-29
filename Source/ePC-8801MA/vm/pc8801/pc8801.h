@@ -210,6 +210,8 @@ public:
 	void update_config();
 	void save_state(FILEIO* state_fio);
 	bool load_state(FILEIO* state_fio);
+	size_t read_ra_inspection_memory(uint32 addr, uint8 *buffer,
+		size_t count) const;
 	
 	// ----------------------------------------
 	// for each device

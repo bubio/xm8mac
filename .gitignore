@@ -18,6 +18,7 @@ Builder/Windows/ARM64
 Builder/Windows/XM8.vcxproj.user
 
 build/
+build-ra/
 Builder/Android/app/jni/SDL/include
 Builder/Android/app/jni/SDL/src
 Builder/Android/app/jni/src/ePC-8801MA
