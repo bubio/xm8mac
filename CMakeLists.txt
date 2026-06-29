@@ -360,6 +360,20 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_memory_map_test PRIVATE
       SDL _PC8801MA XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_memory_map_test COMMAND ra_memory_map_test)
+
+    add_executable(ra_library_store_test
+      Tests/ra_library_store_test.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      $<TARGET_OBJECTS:xm8_ra_core>
+    )
+    target_link_libraries(ra_library_store_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_library_store_test PRIVATE
+      Tests
+      Source/RA
+    )
+    target_compile_definitions(ra_library_store_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_library_store_test COMMAND ra_library_store_test)
   endif()
 endif()
 
