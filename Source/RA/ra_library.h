@@ -10,6 +10,19 @@ struct sqlite3;
 
 namespace Xm8Ra {
 
+constexpr int kRaModeSoftcore = 1;
+constexpr int kRaModeHardcore = 2;
+
+struct RaSettings {
+	bool enabled = false;
+	int last_mode = kRaModeSoftcore;
+	bool unofficial_enabled = false;
+	bool encore_enabled = false;
+	bool spectator_enabled = false;
+	int notification_seconds = 5;
+	int image_cache_limit_mib = 128;
+};
+
 struct MediaRecord {
 	std::string md5;
 	int64_t game_id = 0;
@@ -33,6 +46,8 @@ public:
 	std::string TempRoot() const;
 	std::string DatabasePath() const;
 
+	bool LoadSettings(RaSettings *settings, std::string *error);
+	bool SaveSettings(const RaSettings& settings, std::string *error);
 	bool RegisterDesktopMedia(const D88MediaInfo& media,
 		const std::string& source_path, const std::string& display_name,
 		int64_t source_mtime, MediaRecord *record, std::string *error);
@@ -41,9 +56,15 @@ public:
 
 private:
 	bool Exec(const char *sql, std::string *error);
+	bool SetupDatabase(std::string *error);
+	bool CheckIntegrity(std::string *error);
 	bool InitializeSchema(std::string *error);
 	bool EnsureSettingsRow(std::string *error);
+	bool IsDatabaseDamage() const;
+	bool QuarantineDatabase(std::string *error);
+	bool ValidateSettings(const RaSettings& settings, std::string *error) const;
 	int64_t NowUnixTime() const;
+	void CloseDatabaseOnly();
 
 	sqlite3 *db_;
 	std::string root_;

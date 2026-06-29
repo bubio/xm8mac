@@ -37,6 +37,26 @@ DBには計画書で定義した主要テーブルの初期形を作成する。
 
 `ra_settings` は初期状態でRA無効、前回モードはSoftcore相当として1行だけ作成する。
 
+RA設定のロード/保存APIを追加した。設定値は`setting.bin`には保存せず、`ra/library.sqlite3`
+内の`ra_settings`だけで保持する。
+
+現在保存する値は次のとおり。
+
+- RA有効/無効
+- 前回モード: SoftcoreまたはHardcore
+- Unofficial、Encore、Spectator
+- 通知表示秒数: 3、5、8秒
+- 画像キャッシュ上限: 64、128、256MiB
+
+不正なmode、通知秒数、画像キャッシュ上限はDBへ書き込む前に拒否する。
+
+DB open時に`PRAGMA integrity_check`を実行する。`SQLITE_CORRUPT`または`SQLITE_NOTADB`相当の
+破損を検出した場合は、`library.sqlite3`、`library.sqlite3-wal`、`library.sqlite3-shm`を
+`.corrupt.<unix_time>`付きのファイル名へ隔離してから新規DBを作成する。
+
+未知のschema versionは破損扱いにしない。仕様どおりRAライブラリopen失敗として扱い、
+自動隔離や自動downgradeは行わない。
+
 ### RaMediaStore
 
 `Source/RA/ra_media_store.*` を追加し、デスクトップ上のD88原本をRA管理媒体として取り込む処理を実装した。
@@ -69,6 +89,10 @@ macOS 10.13ターゲットを維持するため、本実装とテストでは `s
 このテストでは以下を検証する。
 
 - RA rootを開くと `library.sqlite3` が作成される。
+- RA設定の既定値がRA無効、Softcoreである。
+- RA設定を保存し、再open後も値が保持される。
+- 不正なRA modeは保存前に拒否される。
+- SQLiteではない`library.sqlite3`が隔離され、新規DBで復旧する。
 - D88単体を取り込むと既知のD88全体MD5でDB登録される。
 - 初回取り込みでは `ra/media/<md5>/working.d88` が作成される。
 - 作業コピー作成直後の内容は原本と一致する。

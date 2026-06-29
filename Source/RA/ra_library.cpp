@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <sstream>
 #include <sys/stat.h>
@@ -56,6 +57,27 @@ bool MakeDirectoryTree(const std::string& path, std::string *error)
 		index = slash + 1;
 	}
 	return true;
+}
+
+bool PathExists(const std::string& path)
+{
+	struct stat st;
+	return stat(path.c_str(), &st) == 0;
+}
+
+bool RenameIfExists(const std::string& source, const std::string& destination,
+	std::string *error)
+{
+	if (!PathExists(source)) {
+		return true;
+	}
+	if (std::rename(source.c_str(), destination.c_str()) == 0) {
+		return true;
+	}
+	if (error != nullptr) {
+		*error = std::strerror(errno);
+	}
+	return false;
 }
 
 bool Prepare(sqlite3 *db, const char *sql, sqlite3_stmt **stmt,
@@ -120,36 +142,61 @@ bool RaLibrary::Open(const std::string& ra_root, std::string *error)
 		return false;
 	}
 
-	const int rc = sqlite3_open_v2(DatabasePath().c_str(), &db_,
-		SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
-		nullptr);
-	if (rc != SQLITE_OK) {
-		if (error != nullptr) {
-			*error = db_ != nullptr ? sqlite3_errmsg(db_) : "cannot open DB";
+	for (int attempt = 0; attempt < 2; attempt++) {
+		const int rc = sqlite3_open_v2(DatabasePath().c_str(), &db_,
+			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
+			nullptr);
+		if (rc != SQLITE_OK) {
+			if (error != nullptr) {
+				*error = db_ != nullptr ? sqlite3_errmsg(db_) : "cannot open DB";
+			}
+			CloseDatabaseOnly();
+			return false;
 		}
-		Close();
-		return false;
+		sqlite3_extended_result_codes(db_, 1);
+
+		std::string setup_error;
+		if (SetupDatabase(&setup_error)) {
+			if (error != nullptr) {
+				error->clear();
+			}
+			return true;
+		}
+
+		const bool can_retry = attempt == 0 && IsDatabaseDamage();
+		CloseDatabaseOnly();
+		if (!can_retry) {
+			if (error != nullptr) {
+				*error = setup_error;
+			}
+			root_.clear();
+			return false;
+		}
+		if (!QuarantineDatabase(error)) {
+			root_.clear();
+			return false;
+		}
 	}
 
-	if (!Exec("PRAGMA foreign_keys = ON", error) ||
-		!Exec("PRAGMA journal_mode = WAL", error) ||
-		!Exec("PRAGMA synchronous = FULL", error) ||
-		!Exec("PRAGMA busy_timeout = 3000", error) ||
-		!InitializeSchema(error) ||
-		!EnsureSettingsRow(error)) {
-		Close();
-		return false;
+	if (error != nullptr) {
+		*error = "cannot initialize RA library database";
 	}
-	return true;
+	root_.clear();
+	return false;
 }
 
 void RaLibrary::Close()
+{
+	CloseDatabaseOnly();
+	root_.clear();
+}
+
+void RaLibrary::CloseDatabaseOnly()
 {
 	if (db_ != nullptr) {
 		sqlite3_close(db_);
 		db_ = nullptr;
 	}
-	root_.clear();
 }
 
 std::string RaLibrary::MediaRoot() const
@@ -179,6 +226,44 @@ bool RaLibrary::Exec(const char *sql, std::string *error)
 		return false;
 	}
 	return true;
+}
+
+bool RaLibrary::SetupDatabase(std::string *error)
+{
+	return Exec("PRAGMA foreign_keys = ON", error) &&
+		Exec("PRAGMA journal_mode = WAL", error) &&
+		Exec("PRAGMA synchronous = FULL", error) &&
+		Exec("PRAGMA busy_timeout = 3000", error) &&
+		CheckIntegrity(error) &&
+		InitializeSchema(error) &&
+		EnsureSettingsRow(error);
+}
+
+bool RaLibrary::CheckIntegrity(std::string *error)
+{
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "PRAGMA integrity_check", &stmt, error)) {
+		return false;
+	}
+	const int rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		return false;
+	}
+	const unsigned char *text = sqlite3_column_text(stmt, 0);
+	const std::string result = text != nullptr ?
+		reinterpret_cast<const char*>(text) : "";
+	sqlite3_finalize(stmt);
+	if (result == "ok") {
+		return true;
+	}
+	if (error != nullptr) {
+		*error = "RA library database integrity check failed: " + result;
+	}
+	return false;
 }
 
 bool RaLibrary::InitializeSchema(std::string *error)
@@ -366,10 +451,132 @@ bool RaLibrary::EnsureSettingsRow(std::string *error)
 	return StepDone(db_, stmt, error);
 }
 
+bool RaLibrary::IsDatabaseDamage() const
+{
+	if (db_ == nullptr) {
+		return false;
+	}
+	const int code = sqlite3_extended_errcode(db_);
+	return code == SQLITE_CORRUPT || code == SQLITE_NOTADB ||
+		(code & 0xff) == SQLITE_CORRUPT ||
+		(code & 0xff) == SQLITE_NOTADB;
+}
+
+bool RaLibrary::QuarantineDatabase(std::string *error)
+{
+	const std::string base = DatabasePath();
+	const std::string suffix = ".corrupt." + std::to_string(NowUnixTime());
+	if (!RenameIfExists(base, base + suffix, error) ||
+		!RenameIfExists(base + "-wal", base + "-wal" + suffix, error) ||
+		!RenameIfExists(base + "-shm", base + "-shm" + suffix, error)) {
+		return false;
+	}
+	return true;
+}
+
 int64_t RaLibrary::NowUnixTime() const
 {
 	return std::chrono::duration_cast<std::chrono::seconds>(
 		std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+bool RaLibrary::ValidateSettings(const RaSettings& settings,
+	std::string *error) const
+{
+	if (settings.last_mode != kRaModeSoftcore &&
+		settings.last_mode != kRaModeHardcore) {
+		if (error != nullptr) {
+			*error = "invalid RA mode";
+		}
+		return false;
+	}
+	if (settings.notification_seconds != 3 &&
+		settings.notification_seconds != 5 &&
+		settings.notification_seconds != 8) {
+		if (error != nullptr) {
+			*error = "invalid RA notification duration";
+		}
+		return false;
+	}
+	if (settings.image_cache_limit_mib != 64 &&
+		settings.image_cache_limit_mib != 128 &&
+		settings.image_cache_limit_mib != 256) {
+		if (error != nullptr) {
+			*error = "invalid RA image cache limit";
+		}
+		return false;
+	}
+	return true;
+}
+
+bool RaLibrary::LoadSettings(RaSettings *settings, std::string *error)
+{
+	if (settings == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT enabled, last_mode, unofficial_enabled, encore_enabled,"
+		" spectator_enabled, notification_seconds, image_cache_limit_mib"
+		" FROM ra_settings WHERE singleton = 1",
+		&stmt, error)) {
+		return false;
+	}
+	const int rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = rc == SQLITE_DONE ? "RA settings row is missing" :
+				sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		return false;
+	}
+
+	RaSettings loaded;
+	loaded.enabled = sqlite3_column_int(stmt, 0) != 0;
+	loaded.last_mode = sqlite3_column_int(stmt, 1);
+	loaded.unofficial_enabled = sqlite3_column_int(stmt, 2) != 0;
+	loaded.encore_enabled = sqlite3_column_int(stmt, 3) != 0;
+	loaded.spectator_enabled = sqlite3_column_int(stmt, 4) != 0;
+	loaded.notification_seconds = sqlite3_column_int(stmt, 5);
+	loaded.image_cache_limit_mib = sqlite3_column_int(stmt, 6);
+	sqlite3_finalize(stmt);
+
+	if (!ValidateSettings(loaded, error)) {
+		return false;
+	}
+	*settings = loaded;
+	return true;
+}
+
+bool RaLibrary::SaveSettings(const RaSettings& settings, std::string *error)
+{
+	if (!ValidateSettings(settings, error)) {
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"UPDATE ra_settings SET enabled = ?, last_mode = ?,"
+		" unofficial_enabled = ?, encore_enabled = ?, spectator_enabled = ?,"
+		" notification_seconds = ?, image_cache_limit_mib = ?, updated_at = ?"
+		" WHERE singleton = 1",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_int(stmt, 1, settings.enabled ? 1 : 0);
+	sqlite3_bind_int(stmt, 2, settings.last_mode);
+	sqlite3_bind_int(stmt, 3, settings.unofficial_enabled ? 1 : 0);
+	sqlite3_bind_int(stmt, 4, settings.encore_enabled ? 1 : 0);
+	sqlite3_bind_int(stmt, 5, settings.spectator_enabled ? 1 : 0);
+	sqlite3_bind_int(stmt, 6, settings.notification_seconds);
+	sqlite3_bind_int(stmt, 7, settings.image_cache_limit_mib);
+	sqlite3_bind_int64(stmt, 8, NowUnixTime());
+	return StepDone(db_, stmt, error);
 }
 
 bool RaLibrary::FindMedia(const std::string& md5, MediaRecord *record,

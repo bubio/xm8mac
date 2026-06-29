@@ -123,6 +123,35 @@ bool AppendByte(const std::string& path, char value)
 	return stream.good();
 }
 
+bool WriteTextFile(const std::string& path, const char *text)
+{
+	std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+	if (!stream.is_open()) {
+		return false;
+	}
+	stream << text;
+	return stream.good();
+}
+
+bool DirectoryHasPrefix(const std::string& path, const char *prefix)
+{
+	DIR *dir = opendir(path.c_str());
+	if (dir == nullptr) {
+		return false;
+	}
+	const std::string prefix_string = prefix;
+	bool found = false;
+	while (dirent *entry = readdir(dir)) {
+		const std::string name = entry->d_name;
+		if (name.compare(0, prefix_string.size(), prefix_string) == 0) {
+			found = true;
+			break;
+		}
+	}
+	closedir(dir);
+	return found;
+}
+
 } // namespace
 
 int main()
@@ -164,6 +193,18 @@ int main()
 	Check(PathExists(JoinPath(ra_root, "library.sqlite3")),
 		"library DB exists");
 
+	Xm8Ra::RaSettings settings;
+	Check(library.LoadSettings(&settings, &error), "load default RA settings");
+	Check(!settings.enabled, "RA settings default disabled");
+	Check(settings.last_mode == Xm8Ra::kRaModeSoftcore,
+		"RA settings default softcore");
+	settings.enabled = true;
+	settings.last_mode = Xm8Ra::kRaModeHardcore;
+	settings.unofficial_enabled = true;
+	settings.notification_seconds = 8;
+	settings.image_cache_limit_mib = 256;
+	Check(library.SaveSettings(settings, &error), "save RA settings");
+
 	Xm8Ra::RaMediaStore store(&library);
 	Xm8Ra::ImportedMedia first;
 	const std::string single = JoinPath(source_dir, "single.d88");
@@ -203,6 +244,41 @@ int main()
 		"existing working save is not overwritten");
 
 	library.Close();
+
+	Xm8Ra::RaLibrary reopened;
+	Check(reopened.Open(ra_root, &error), "reopen RA library");
+	Xm8Ra::RaSettings persisted;
+	Check(reopened.LoadSettings(&persisted, &error),
+		"load persisted RA settings");
+	Check(persisted.enabled, "RA enabled setting persisted");
+	Check(persisted.last_mode == Xm8Ra::kRaModeHardcore,
+		"RA hardcore setting persisted");
+	Check(persisted.unofficial_enabled,
+		"RA unofficial setting persisted");
+	Check(persisted.notification_seconds == 8,
+		"RA notification setting persisted");
+	Check(persisted.image_cache_limit_mib == 256,
+		"RA image cache setting persisted");
+	Xm8Ra::RaSettings invalid = persisted;
+	invalid.last_mode = 99;
+	Check(!reopened.SaveSettings(invalid, &error),
+		"reject invalid RA mode");
+	reopened.Close();
+
+	const std::string corrupt_root = JoinPath(base, "corrupt-ra");
+	Check(MakeDirectoryTree(corrupt_root, &error), "create corrupt DB root");
+	Check(WriteTextFile(JoinPath(corrupt_root, "library.sqlite3"),
+		"this is not a sqlite database"),
+		"write corrupt DB");
+	Xm8Ra::RaLibrary recovered;
+	Check(recovered.Open(corrupt_root, &error), "recover corrupt RA DB");
+	Check(DirectoryHasPrefix(corrupt_root, "library.sqlite3.corrupt."),
+		"corrupt DB quarantined");
+	Check(recovered.LoadSettings(&settings, &error),
+		"new settings exist after corrupt DB recovery");
+	Check(!settings.enabled, "recovered DB settings default disabled");
+	recovered.Close();
+
 	RemoveTree(base);
 
 	if (failures != 0) {
