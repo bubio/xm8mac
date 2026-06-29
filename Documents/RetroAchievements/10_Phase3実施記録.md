@@ -74,6 +74,14 @@ DB open時に`PRAGMA integrity_check`を実行する。`SQLITE_CORRUPT`または
 
 原本ファイルが更新されてMD5が変わった場合は別媒体として登録する。既存作業コピーは暗黙移行しない。
 
+M3U取り込みの基盤を追加した。既存`LoadM3U()`を使い、M3Uに記載された順にD88を登録する。
+
+- 先頭D88をRA識別基準媒体、ローカルゲーム、Drive 1の起動構成として扱う。
+- 2件目以降のD88は先頭D88と同じ`game_id`へ追加し、`ordinal`へM3U上の順序を保存する。
+- M3U行の`#0`などのbank接尾辞はD88ファイルパスから分離し、媒体ハッシュには含めない。
+- 先頭D88の登録に失敗した場合、後続D88へ自動フォールバックしない。
+- 既に別ゲームへ登録済みの媒体をM3Uで別ゲームへ暗黙移動しない。
+
 ### ビルド接続
 
 `ThirdParty/CMakeLists.txt` の `xm8_ra_core` に `ra_library.cpp` と `ra_media_store.cpp` を追加した。
@@ -98,6 +106,8 @@ macOS 10.13ターゲットを維持するため、本実装とテストでは `s
 - 作業コピー作成直後の内容は原本と一致する。
 - 原本D88は取り込み後も変更されない。
 - 同一D88の再取り込みでは既存DB行と既存作業コピーを再利用する。
+- M3U取り込みでは先頭D88をanchorとし、2枚目を同じローカルゲームへ登録する。
+- M3U内のbank接尾辞つきD88パスを媒体ファイルとして解決できる。
 - 原本を変更してMD5が変わった場合は別媒体として登録する。
 - 既存作業コピーは新しい媒体取り込みで上書きされない。
 
@@ -116,10 +126,10 @@ ctest --test-dir build-ra -R 'ra_dependency_test|ra_media_probe_test|ra_memory_m
 
 ```text
 cmake --build build --target xm8
-ctest --test-dir build -R 'd88fixture_test|d88probe_test' --output-on-failure
+ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-on-failure
 ```
 
-結果: 2件すべて成功。
+結果: 3件すべて成功。
 
 ## 未実装
 
@@ -127,7 +137,6 @@ ctest --test-dir build -R 'd88fixture_test|d88probe_test' --output-on-failure
 
 - アプリ設定ディレクトリから実際のRA rootを決定する `ra_settings`/設定層接続。
 - D88/M3U/フォルダ再帰走査のUIまたは起動経路からの登録。
-- M3Uの先頭D88をRA識別基準媒体にする処理。
 - 複数媒体を同一ゲームへ統合する編集処理。
 - 原本消失、原本更新、作業コピー破損をライブラリ画面へ表示する処理。
 - RAモードで未登録D88を直接開いた場合の自動登録から起動までの接続。

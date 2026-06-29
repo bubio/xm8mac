@@ -234,6 +234,27 @@ int main()
 	Check(ReadFile(duplicate.working_path) == original_single,
 		"duplicate working copy unchanged");
 
+	Xm8Ra::ImportedPlaylist playlist;
+	Check(store.ImportM3U(JoinPath(source_dir, "pair.m3u"), &playlist, &error),
+		"import M3U playlist");
+	Check(playlist.media.size() == 2, "M3U imports two media entries");
+	Check(playlist.game_id == first.record.game_id,
+		"M3U reuses first media game");
+	Check(playlist.anchor_md5 == first.record.md5,
+		"M3U anchor is first media");
+	if (playlist.media.size() == 2) {
+		Check(playlist.media[0].record.game_id == playlist.game_id,
+			"M3U first media game id");
+		Check(playlist.media[1].record.game_id == playlist.game_id,
+			"M3U second media game id");
+		Check(playlist.media[1].record.md5 ==
+			"ff400f51a2567419b3778691a905952e",
+			"M3U second media md5");
+		Check(playlist.media[1].working_path.find("/ra/media/") !=
+			std::string::npos,
+			"M3U second working copy is under RA media root");
+	}
+
 	Check(AppendByte(single, '\x55'), "modify source fixture");
 	Xm8Ra::ImportedMedia modified;
 	Check(store.ImportDesktopD88(single, &modified, &error),

@@ -85,7 +85,9 @@ add_library(xm8_ra_core OBJECT
 )
 target_include_directories(xm8_ra_core
   PUBLIC ${PROJECT_SOURCE_DIR}/Source/RA
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rcheevos/src
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/Source/UI
+    ${CMAKE_CURRENT_SOURCE_DIR}/rcheevos/src
 )
 target_link_libraries(xm8_ra_core PRIVATE xm8_ra_dependencies)
 target_compile_definitions(xm8_ra_core PUBLIC XM8_ENABLE_RETROACHIEVEMENTS=1)

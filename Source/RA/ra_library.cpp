@@ -616,6 +616,30 @@ bool RaLibrary::RegisterDesktopMedia(const D88MediaInfo& media,
 	const std::string& source_path, const std::string& display_name,
 	int64_t source_mtime, MediaRecord *record, std::string *error)
 {
+	return RegisterDesktopMediaInternal(media, source_path, display_name,
+		source_mtime, 0, 0, true, record, error);
+}
+
+bool RaLibrary::RegisterDesktopMediaInGame(const D88MediaInfo& media,
+	const std::string& source_path, const std::string& display_name,
+	int64_t source_mtime, int64_t game_id, int ordinal,
+	MediaRecord *record, std::string *error)
+{
+	if (game_id <= 0 || ordinal <= 0) {
+		if (error != nullptr) {
+			*error = "invalid grouped media target";
+		}
+		return false;
+	}
+	return RegisterDesktopMediaInternal(media, source_path, display_name,
+		source_mtime, game_id, ordinal, false, record, error);
+}
+
+bool RaLibrary::RegisterDesktopMediaInternal(const D88MediaInfo& media,
+	const std::string& source_path, const std::string& display_name,
+	int64_t source_mtime, int64_t game_id, int ordinal,
+	bool create_anchor_profile, MediaRecord *record, std::string *error)
+{
 	if (media.md5.size() != 32 || media.banks <= 0) {
 		if (error != nullptr) {
 			*error = "invalid media metadata";
@@ -625,6 +649,12 @@ bool RaLibrary::RegisterDesktopMedia(const D88MediaInfo& media,
 
 	MediaRecord existing;
 	if (FindMedia(media.md5, &existing, nullptr)) {
+		if (game_id > 0 && existing.game_id != game_id) {
+			if (error != nullptr) {
+				*error = "media is already registered to another game";
+			}
+			return false;
+		}
 		if (record != nullptr) {
 			*record = existing;
 		}
@@ -636,38 +666,42 @@ bool RaLibrary::RegisterDesktopMedia(const D88MediaInfo& media,
 	}
 
 	const int64_t now = NowUnixTime();
-	std::string title = !media.bank_names.empty() && !media.bank_names[0].empty() ?
-		media.bank_names[0] : display_name;
-	if (title.empty()) {
-		title = media.md5;
-	}
+	if (game_id == 0) {
+		std::string title =
+			!media.bank_names.empty() && !media.bank_names[0].empty() ?
+			media.bank_names[0] : display_name;
+		if (title.empty()) {
+			title = media.md5;
+		}
 
-	sqlite3_stmt *stmt = nullptr;
-	if (!Prepare(db_,
-		"INSERT INTO games(title, sort_title, title_source, identification_state,"
-		" created_at, updated_at) VALUES(?, ?, 0, 0, ?, ?)",
-		&stmt, error)) {
-		Exec("ROLLBACK", nullptr);
-		return false;
+		sqlite3_stmt *stmt = nullptr;
+		if (!Prepare(db_,
+			"INSERT INTO games(title, sort_title, title_source, identification_state,"
+			" created_at, updated_at) VALUES(?, ?, 0, 0, ?, ?)",
+			&stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+		sqlite3_bind_text(stmt, 1, title.c_str(), -1, SQLITE_TRANSIENT);
+		const std::string sort_title = SortTitle(title);
+		sqlite3_bind_text(stmt, 2, sort_title.c_str(), -1, SQLITE_TRANSIENT);
+		sqlite3_bind_int64(stmt, 3, now);
+		sqlite3_bind_int64(stmt, 4, now);
+		if (!StepDone(db_, stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+		game_id = sqlite3_last_insert_rowid(db_);
 	}
-	sqlite3_bind_text(stmt, 1, title.c_str(), -1, SQLITE_TRANSIENT);
-	const std::string sort_title = SortTitle(title);
-	sqlite3_bind_text(stmt, 2, sort_title.c_str(), -1, SQLITE_TRANSIENT);
-	sqlite3_bind_int64(stmt, 3, now);
-	sqlite3_bind_int64(stmt, 4, now);
-	if (!StepDone(db_, stmt, error)) {
-		Exec("ROLLBACK", nullptr);
-		return false;
-	}
-	const int64_t game_id = sqlite3_last_insert_rowid(db_);
 
 	const std::string working_relpath =
 		std::string("media/") + media.md5 + "/working.d88";
+	sqlite3_stmt *stmt = nullptr;
 	if (!Prepare(db_,
 		"INSERT INTO media(md5, game_id, identification_state, source_kind,"
 		" source_locator, source_display_name, source_size, source_mtime,"
 		" bank_count, working_relpath, ordinal, health_state, created_at, verified_at)"
-		" VALUES(?, ?, 0, 0, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)",
+		" VALUES(?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
 		&stmt, error)) {
 		Exec("ROLLBACK", nullptr);
 		return false;
@@ -685,8 +719,9 @@ bool RaLibrary::RegisterDesktopMedia(const D88MediaInfo& media,
 	}
 	sqlite3_bind_int(stmt, 7, media.banks);
 	sqlite3_bind_text(stmt, 8, working_relpath.c_str(), -1, SQLITE_TRANSIENT);
-	sqlite3_bind_int64(stmt, 9, now);
+	sqlite3_bind_int(stmt, 9, ordinal);
 	sqlite3_bind_int64(stmt, 10, now);
+	sqlite3_bind_int64(stmt, 11, now);
 	if (!StepDone(db_, stmt, error)) {
 		Exec("ROLLBACK", nullptr);
 		return false;
@@ -711,18 +746,20 @@ bool RaLibrary::RegisterDesktopMedia(const D88MediaInfo& media,
 		}
 	}
 
-	if (!Prepare(db_,
-		"INSERT INTO launch_profiles(game_id, drive, media_md5, bank_index, is_ra_anchor)"
-		" VALUES(?, 0, ?, 0, 1)",
-		&stmt, error)) {
-		Exec("ROLLBACK", nullptr);
-		return false;
-	}
-	sqlite3_bind_int64(stmt, 1, game_id);
-	sqlite3_bind_text(stmt, 2, media.md5.c_str(), -1, SQLITE_TRANSIENT);
-	if (!StepDone(db_, stmt, error)) {
-		Exec("ROLLBACK", nullptr);
-		return false;
+	if (create_anchor_profile) {
+		if (!Prepare(db_,
+			"INSERT INTO launch_profiles(game_id, drive, media_md5, bank_index, is_ra_anchor)"
+			" VALUES(?, 0, ?, 0, 1)",
+			&stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+		sqlite3_bind_int64(stmt, 1, game_id);
+		sqlite3_bind_text(stmt, 2, media.md5.c_str(), -1, SQLITE_TRANSIENT);
+		if (!StepDone(db_, stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
 	}
 
 	if (!Exec("COMMIT", error)) {

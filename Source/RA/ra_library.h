@@ -51,6 +51,10 @@ public:
 	bool RegisterDesktopMedia(const D88MediaInfo& media,
 		const std::string& source_path, const std::string& display_name,
 		int64_t source_mtime, MediaRecord *record, std::string *error);
+	bool RegisterDesktopMediaInGame(const D88MediaInfo& media,
+		const std::string& source_path, const std::string& display_name,
+		int64_t source_mtime, int64_t game_id, int ordinal,
+		MediaRecord *record, std::string *error);
 	bool FindMedia(const std::string& md5, MediaRecord *record,
 		std::string *error);
 
@@ -63,6 +67,11 @@ private:
 	bool IsDatabaseDamage() const;
 	bool QuarantineDatabase(std::string *error);
 	bool ValidateSettings(const RaSettings& settings, std::string *error) const;
+	bool RegisterDesktopMediaInternal(const D88MediaInfo& media,
+		const std::string& source_path, const std::string& display_name,
+		int64_t source_mtime, int64_t game_id, int ordinal,
+		bool create_anchor_profile, MediaRecord *record,
+		std::string *error);
 	int64_t NowUnixTime() const;
 	void CloseDatabaseOnly();
 

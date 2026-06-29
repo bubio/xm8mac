@@ -327,10 +327,11 @@ if(BUILD_TESTING)
   if(XM8_ENABLE_RETROACHIEVEMENTS)
     add_executable(ra_dependency_test
       Tests/ra_dependency_test.cpp
+      Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
     )
     target_link_libraries(ra_dependency_test PRIVATE xm8_ra_dependencies)
-    target_include_directories(ra_dependency_test PRIVATE Source/RA)
+    target_include_directories(ra_dependency_test PRIVATE Source/RA Source/UI)
     target_compile_definitions(ra_dependency_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_dependency_test COMMAND ra_dependency_test)
@@ -338,12 +339,14 @@ if(BUILD_TESTING)
     add_executable(ra_media_probe_test
       Tests/ra_media_probe_test.cpp
       Tests/Fixtures/d88_fixture.cpp
+      Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
     )
     target_link_libraries(ra_media_probe_test PRIVATE xm8_ra_dependencies)
     target_include_directories(ra_media_probe_test PRIVATE
       Tests
       Source/RA
+      Source/UI
     )
     target_compile_definitions(ra_media_probe_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
@@ -364,12 +367,14 @@ if(BUILD_TESTING)
     add_executable(ra_library_store_test
       Tests/ra_library_store_test.cpp
       Tests/Fixtures/d88_fixture.cpp
+      Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
     )
     target_link_libraries(ra_library_store_test PRIVATE xm8_ra_dependencies)
     target_include_directories(ra_library_store_test PRIVATE
       Tests
       Source/RA
+      Source/UI
     )
     target_compile_definitions(ra_library_store_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)

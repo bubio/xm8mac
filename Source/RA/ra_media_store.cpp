@@ -1,5 +1,7 @@
 #include "ra_media_store.h"
 
+#include "m3u.h"
+
 #include <chrono>
 #include <cerrno>
 #include <cstdio>
@@ -27,6 +29,20 @@ std::string JoinPath(const std::string& base, const std::string& child)
 		return base + child;
 	}
 	return base + "/" + child;
+}
+
+std::string StripM3UBankSuffix(const std::string& entry)
+{
+	const size_t hash = entry.find_last_of('#');
+	if (hash == std::string::npos || hash + 1 >= entry.size()) {
+		return entry;
+	}
+	for (size_t i = hash + 1; i < entry.size(); i++) {
+		if (entry[i] < '0' || entry[i] > '9') {
+			return entry;
+		}
+	}
+	return entry.substr(0, hash);
 }
 
 bool PathExists(const std::string& path)
@@ -109,6 +125,60 @@ RaMediaStore::RaMediaStore(RaLibrary *library) : library_(library)
 bool RaMediaStore::ImportDesktopD88(const std::string& source_path,
 	ImportedMedia *imported, std::string *error)
 {
+	return ImportD88IntoGame(source_path, 0, 0, imported, error);
+}
+
+bool RaMediaStore::ImportM3U(const std::string& playlist_path,
+	ImportedPlaylist *imported, std::string *error)
+{
+	if (imported == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+	imported->media.clear();
+	imported->game_id = 0;
+	imported->anchor_md5.clear();
+
+	M3UResult playlist = LoadM3U(playlist_path);
+	if (!playlist.success) {
+		if (error != nullptr) {
+			*error = playlist.error;
+		}
+		return false;
+	}
+	if (playlist.entries.empty()) {
+		if (error != nullptr) {
+			*error = "M3U contains no D88 entries";
+		}
+		return false;
+	}
+
+	ImportedMedia first;
+	if (!ImportD88IntoGame(StripM3UBankSuffix(playlist.entries[0]), 0, 0,
+		&first, error)) {
+		return false;
+	}
+	imported->game_id = first.record.game_id;
+	imported->anchor_md5 = first.record.md5;
+	imported->media.push_back(first);
+
+	for (size_t i = 1; i < playlist.entries.size(); i++) {
+		ImportedMedia next;
+		if (!ImportD88IntoGame(StripM3UBankSuffix(playlist.entries[i]),
+			imported->game_id, static_cast<int>(i), &next, error)) {
+			return false;
+		}
+		imported->media.push_back(next);
+	}
+
+	return true;
+}
+
+bool RaMediaStore::ImportD88IntoGame(const std::string& source_path,
+	int64_t game_id, int ordinal, ImportedMedia *imported, std::string *error)
+{
 	if (library_ == nullptr || imported == nullptr) {
 		if (error != nullptr) {
 			*error = "invalid argument";
@@ -128,8 +198,14 @@ bool RaMediaStore::ImportDesktopD88(const std::string& source_path,
 	}
 
 	MediaRecord record;
-	if (!library_->RegisterDesktopMedia(media, source_path,
-		DisplayNameForPath(source_path), FileMtime(source_path), &record, error)) {
+	const bool registered = game_id > 0 ?
+		library_->RegisterDesktopMediaInGame(media, source_path,
+			DisplayNameForPath(source_path), FileMtime(source_path),
+			game_id, ordinal, &record, error) :
+		library_->RegisterDesktopMedia(media, source_path,
+			DisplayNameForPath(source_path), FileMtime(source_path),
+			&record, error);
+	if (!registered) {
 		if (copied) {
 			RemoveFile(working_path, nullptr);
 		}
