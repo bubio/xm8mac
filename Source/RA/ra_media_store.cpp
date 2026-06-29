@@ -4,8 +4,10 @@
 
 #include <chrono>
 #include <cerrno>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <fstream>
 #include <random>
 #include <sys/stat.h>
@@ -13,6 +15,8 @@
 
 namespace Xm8Ra {
 namespace {
+
+constexpr int kMaxRecursiveCandidates = 10000;
 
 std::string DisplayNameForPath(const std::string& source_path)
 {
@@ -45,10 +49,36 @@ std::string StripM3UBankSuffix(const std::string& entry)
 	return entry.substr(0, hash);
 }
 
+std::string ToLowerAscii(const std::string& value)
+{
+	std::string result = value;
+	for (char& ch : result) {
+		if (ch >= 'A' && ch <= 'Z') {
+			ch = static_cast<char>(ch - 'A' + 'a');
+		}
+	}
+	return result;
+}
+
+bool HasExtension(const std::string& path, const char *extension)
+{
+	const size_t dot = path.find_last_of('.');
+	if (dot == std::string::npos) {
+		return false;
+	}
+	return ToLowerAscii(path.substr(dot)) == extension;
+}
+
 bool PathExists(const std::string& path)
 {
 	struct stat st;
 	return stat(path.c_str(), &st) == 0;
+}
+
+bool IsRegularFileNoFollow(const std::string& path)
+{
+	struct stat st;
+	return lstat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 
 bool MakeDirectoryTree(const std::string& path, std::string *error)
@@ -100,6 +130,82 @@ bool RemoveFile(const std::string& path, std::string *error)
 		*error = std::strerror(errno);
 	}
 	return false;
+}
+
+bool MoveFile(const std::string& source, const std::string& destination,
+	std::string *error)
+{
+	if (std::rename(source.c_str(), destination.c_str()) == 0) {
+		return true;
+	}
+	if (error != nullptr) {
+		*error = std::strerror(errno);
+	}
+	return false;
+}
+
+bool CollectRecursiveCandidates(const std::string& folder_path,
+	std::vector<std::string> *m3u_paths, std::vector<std::string> *d88_paths,
+	int *scanned_candidates, std::string *error)
+{
+	DIR *dir = opendir(folder_path.c_str());
+	if (dir == nullptr) {
+		if (error != nullptr) {
+			*error = std::strerror(errno);
+		}
+		return false;
+	}
+
+	std::vector<std::string> directories;
+	std::vector<std::string> files;
+	while (dirent *entry = readdir(dir)) {
+		const std::string name = entry->d_name;
+		if (name == "." || name == "..") {
+			continue;
+		}
+		const std::string path = JoinPath(folder_path, name);
+		struct stat st;
+		if (lstat(path.c_str(), &st) != 0) {
+			continue;
+		}
+		if (S_ISDIR(st.st_mode)) {
+			directories.push_back(path);
+		}
+		else if (S_ISREG(st.st_mode)) {
+			files.push_back(path);
+		}
+	}
+	closedir(dir);
+
+	std::sort(directories.begin(), directories.end());
+	std::sort(files.begin(), files.end());
+
+	for (const std::string& file : files) {
+		if (HasExtension(file, ".m3u") || HasExtension(file, ".d88")) {
+			if (*scanned_candidates >= kMaxRecursiveCandidates) {
+				if (error != nullptr) {
+					*error = "too many RA media candidates in folder";
+				}
+				return false;
+			}
+			(*scanned_candidates)++;
+			if (HasExtension(file, ".m3u")) {
+				m3u_paths->push_back(file);
+			}
+			else {
+				d88_paths->push_back(file);
+			}
+		}
+	}
+
+	for (const std::string& directory : directories) {
+		if (!CollectRecursiveCandidates(directory, m3u_paths, d88_paths,
+			scanned_candidates, error)) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 std::string RandomPartName()
@@ -176,6 +282,107 @@ bool RaMediaStore::ImportM3U(const std::string& playlist_path,
 	return true;
 }
 
+bool RaMediaStore::ImportFolderRecursive(const std::string& folder_path,
+	ImportedFolder *imported, std::string *error)
+{
+	if (imported == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+	imported->standalone_media.clear();
+	imported->playlists.clear();
+	imported->scanned_candidates = 0;
+
+	std::vector<std::string> m3u_paths;
+	std::vector<std::string> d88_paths;
+	if (!CollectRecursiveCandidates(folder_path, &m3u_paths, &d88_paths,
+		&imported->scanned_candidates, error)) {
+		return false;
+	}
+
+	for (const std::string& m3u_path : m3u_paths) {
+		ImportedPlaylist playlist;
+		if (!ImportM3U(m3u_path, &playlist, error)) {
+			return false;
+		}
+		imported->playlists.push_back(playlist);
+	}
+
+	for (const std::string& d88_path : d88_paths) {
+		ImportedMedia media;
+		if (!ImportDesktopD88(d88_path, &media, error)) {
+			return false;
+		}
+		imported->standalone_media.push_back(media);
+	}
+
+	return true;
+}
+
+bool RaMediaStore::ResetWorkingCopy(const std::string& source_path,
+	const std::string& expected_md5, std::string *working_path,
+	std::string *error)
+{
+	if (library_ == nullptr || working_path == nullptr ||
+		expected_md5.size() != 32) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+
+	D88MediaInfo media;
+	if (!ProbeD88File(source_path.c_str(), &media, error)) {
+		return false;
+	}
+	if (media.md5 != expected_md5) {
+		if (error != nullptr) {
+			*error = "source media does not match registered MD5";
+		}
+		return false;
+	}
+
+	const std::string media_dir = JoinPath(library_->MediaRoot(), media.md5);
+	const std::string target = JoinPath(media_dir, "working.d88");
+	const std::string temporary = JoinPath(library_->TempRoot(), RandomPartName());
+	const std::string backup = JoinPath(library_->TempRoot(),
+		media.md5 + "-" + RandomPartName() + ".old");
+	*working_path = target;
+
+	if (!MakeDirectoryTree(library_->TempRoot(), error) ||
+		!MakeDirectoryTree(media_dir, error)) {
+		return false;
+	}
+	if (!CopyAndVerify(source_path, temporary, media, error)) {
+		RemoveFile(temporary, nullptr);
+		return false;
+	}
+
+	bool had_existing = false;
+	if (PathExists(target)) {
+		had_existing = true;
+		if (!MoveFile(target, backup, error)) {
+			RemoveFile(temporary, nullptr);
+			return false;
+		}
+	}
+
+	if (!MoveFile(temporary, target, error)) {
+		RemoveFile(temporary, nullptr);
+		if (had_existing) {
+			MoveFile(backup, target, nullptr);
+		}
+		return false;
+	}
+
+	if (had_existing) {
+		RemoveFile(backup, nullptr);
+	}
+	return true;
+}
+
 bool RaMediaStore::ImportD88IntoGame(const std::string& source_path,
 	int64_t game_id, int ordinal, ImportedMedia *imported, std::string *error)
 {
@@ -227,7 +434,7 @@ bool RaMediaStore::EnsureWorkingCopy(const std::string& source_path,
 	*working_path = target;
 	*copied = false;
 
-	if (PathExists(target)) {
+	if (IsRegularFileNoFollow(target)) {
 		D88MediaInfo existing;
 		if (ProbeD88File(target.c_str(), &existing, nullptr)) {
 			return true;

@@ -133,6 +133,17 @@ bool WriteTextFile(const std::string& path, const char *text)
 	return stream.good();
 }
 
+bool CopyFileBytes(const std::string& source, const std::string& destination)
+{
+	std::ifstream input(source, std::ios::binary);
+	std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+	if (!input.is_open() || !output.is_open()) {
+		return false;
+	}
+	output << input.rdbuf();
+	return input.good() && output.good();
+}
+
 bool DirectoryHasPrefix(const std::string& path, const char *prefix)
 {
 	DIR *dir = opendir(path.c_str());
@@ -234,6 +245,17 @@ int main()
 	Check(ReadFile(duplicate.working_path) == original_single,
 		"duplicate working copy unchanged");
 
+	Check(AppendByte(first.working_path, '\x24'),
+		"simulate save data in working copy");
+	Check(ReadFile(single) == original_single,
+		"simulated save data does not change original");
+	std::string reset_path;
+	Check(store.ResetWorkingCopy(single, first.record.md5, &reset_path, &error),
+		"reset working copy from matching original");
+	Check(reset_path == first.working_path, "reset targets same working path");
+	Check(ReadFile(first.working_path) == original_single,
+		"reset working copy restores original bytes");
+
 	Xm8Ra::ImportedPlaylist playlist;
 	Check(store.ImportM3U(JoinPath(source_dir, "pair.m3u"), &playlist, &error),
 		"import M3U playlist");
@@ -255,7 +277,36 @@ int main()
 			"M3U second working copy is under RA media root");
 	}
 
+	const std::string folder_dir = JoinPath(base, "folder-scan");
+	const std::string nested_dir = JoinPath(folder_dir, "nested");
+	Check(MakeDirectoryTree(nested_dir, &error), "create folder scan tree");
+	Check(CopyFileBytes(JoinPath(source_dir, "single.d88"),
+		JoinPath(nested_dir, "alpha.D88")), "copy uppercase D88");
+	Check(CopyFileBytes(JoinPath(source_dir, "second.d88"),
+		JoinPath(nested_dir, "beta.d88")), "copy second D88");
+	Check(WriteTextFile(JoinPath(nested_dir, "group.M3U"),
+		"# recursive import fixture\nalpha.D88#0\nbeta.d88#0\n"),
+		"write uppercase M3U");
+	Xm8Ra::ImportedFolder folder_import;
+	Check(store.ImportFolderRecursive(folder_dir, &folder_import, &error),
+		"recursive folder import");
+	Check(folder_import.scanned_candidates == 3,
+		"recursive folder scans D88 and M3U candidates");
+	Check(folder_import.playlists.size() == 1,
+		"recursive folder imports playlist");
+	Check(folder_import.standalone_media.size() == 2,
+		"recursive folder imports standalone D88 after playlist");
+	if (!folder_import.playlists.empty()) {
+		Check(folder_import.playlists[0].media.size() == 2,
+			"recursive playlist has two media");
+		Check(folder_import.playlists[0].anchor_md5 ==
+			"5c50ca4f9e3a7afbe4d6666e8974949d",
+			"recursive playlist anchor uses first D88");
+	}
+
 	Check(AppendByte(single, '\x55'), "modify source fixture");
+	Check(!store.ResetWorkingCopy(single, first.record.md5, &reset_path, &error),
+		"reset rejects modified original");
 	Xm8Ra::ImportedMedia modified;
 	Check(store.ImportDesktopD88(single, &modified, &error),
 		"modified source imports as new medium");

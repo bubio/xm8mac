@@ -20,6 +20,12 @@ struct ImportedPlaylist {
 	std::string anchor_md5;
 };
 
+struct ImportedFolder {
+	std::vector<ImportedMedia> standalone_media;
+	std::vector<ImportedPlaylist> playlists;
+	int scanned_candidates = 0;
+};
+
 class RaMediaStore {
 public:
 	explicit RaMediaStore(RaLibrary *library);
@@ -28,6 +34,11 @@ public:
 		ImportedMedia *imported, std::string *error);
 	bool ImportM3U(const std::string& playlist_path,
 		ImportedPlaylist *imported, std::string *error);
+	bool ImportFolderRecursive(const std::string& folder_path,
+		ImportedFolder *imported, std::string *error);
+	bool ResetWorkingCopy(const std::string& source_path,
+		const std::string& expected_md5, std::string *working_path,
+		std::string *error);
 
 private:
 	bool ImportD88IntoGame(const std::string& source_path, int64_t game_id,
