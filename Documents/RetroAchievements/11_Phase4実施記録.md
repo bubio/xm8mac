@@ -21,6 +21,12 @@ Phase 4のうち、実RAサーバーへ接続しない共通土台、macOS HTTP 
   hash、badge URLをsnapshotへ反映する。
 - ゲームロード失敗時は当該起動セッションのRAを
   `DisabledForSession`として固定し、`rc_client_unload_game()`する。
+- `rc_client_set_event_handler()`を接続し、rcheevosイベントをXM8側で保持できる
+  所有コピーのイベントqueueへ変換する。
+- `DoFrame()`と`Idle()`を追加し、`rc_client_do_frame()`、
+  `rc_client_idle()`を`RaService`経由で呼べるようにした。
+- `rc_client_set_allow_background_memory_reads(client, 0)`を設定し、RAメモリ読み出しを
+  明示的なframe/idle処理内に限定した。
 - RA ON buildだけへ上記を組み込み、Normal buildには組み込んでいない。
 
 実RAサーバーへのHTTPS接続確認、実機D88からの自動ロード接続は未実装である。
@@ -73,7 +79,9 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 `Source/RA/ra_rc_client_http.*`は`rc_client_server_call_t` adapterである。
 
 - `rc_api_request_t::url`、`post_data`、`content_type`を`Send()`前に所有コピーへ変換する。
-- `rc_client_get_userdata(client)`からbridgeを取得する。
+- `RaService`導入後は`rc_client_get_userdata(client)`を`RaService`本体に割り当て、
+  `RaService::ServerCall()`からbridgeへ委譲する。
+- bridge単体の`ServerCall()`もテスト用・直接利用用として残す。
 - bridge未設定または不正requestでは同期的に
   `RC_API_SERVER_RESPONSE_CLIENT_ERROR`を返す。
 - transport successではHTTP statusとbodyをそのまま`rc_api_server_response_t`へ渡す。
@@ -100,8 +108,11 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 責務:
 
 - `rc_client_t`を生成、所有、破棄する。
-- `RaRcClientHttpBridge`を`rc_client_set_userdata()`へ接続する。
+- `rc_client_set_userdata()`へ`RaService`本体を接続し、HTTP server callとevent handlerの
+  両方を`RaService`経由で処理する。
 - 初期状態では`rc_client_set_hardcore_enabled(client, 0)`によりSoftcore相当にする。
+- `rc_client_set_allow_background_memory_reads(client, 0)`により、RAメモリ読み出しを
+  `DoFrame()`または`Idle()`中へ限定する。
 - password loginを`rc_client_begin_login_with_password()`へ渡す。
 - 保存済みtoken loginを`credentials.bin`読込後に
   `rc_client_begin_login_with_token()`へ渡す。
@@ -120,9 +131,17 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
   途中再接続によるRA復帰を行わない。
 - `UnloadGame()`は`rc_client_unload_game()`とbridge generation更新を行い、
   game snapshotを初期化する。
+- `DoFrame()`はゲームが`Loaded`のときだけ`rc_client_do_frame()`を呼ぶ。
+- `Idle()`はログイン・ロード状態に関係なく、サービス準備済みなら`rc_client_idle()`を呼ぶ。
+- `IsProcessingRequired()`で`rc_client_is_processing_required()`を参照できる。
+- `TakeEvents()`で蓄積済みイベントを取得し、取得後はqueueを空にする。
+- rcheevosのevent callbackで渡されるポインタはcallback中だけ有効なため、
+  実績、Leaderboard、scoreboard、server error、subsetの文字列と数値を即時コピーする。
+- Rich Presenceは`DoFrame()`/`Idle()`後に前回値と比較し、変化時だけ
+  `RichPresenceChanged`イベントを積む。
 
-現時点の`RaService`は認証とゲームロード開始までであり、実績フレーム評価、
-Leaderboard、Rich Presence表示はまだ扱わない。
+現時点では、イベントはサービス内部queueへ変換するだけで、SDLオーバーレイ表示には
+まだ接続していない。
 
 ## 5. テスト
 
@@ -149,8 +168,15 @@ Leaderboard、Rich Presence表示はまだ扱わない。
 - `BeginLoadGameByHash()`がD88全体MD5を`achievementsets` requestへ渡すこと。
 - `achievementsets`成功後に`startsession` requestが発行されること。
 - load成功時にGame ID、console ID、title、hashがsnapshotへ反映されること。
+- background memory read禁止下では、`startsession`応答後に`Idle()`を進めて
+  load完了callbackが実行されること。
 - 不正hashではHTTP requestを送信しないこと。
 - load失敗時にRAを当該セッションで`DisabledForSession`に固定すること。
+- game未load時の`DoFrame()`は`rc_client_do_frame()`を呼ばずfalseを返すこと。
+- game未load時でも`Idle()`は呼び出し可能で、不要なイベントを生成しないこと。
+- 実績イベントの文字列、ID、進捗値をrcheevos callback元ポインタから所有コピーへ
+  変換すること。
+- Leaderboard scoreboardイベントの上位entryを所有コピーへ変換すること。
 - shutdown時にpending HTTPをcancel/drainし、pendingを残さないこと。
 
 実行済み:
@@ -175,6 +201,8 @@ ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-
 1. macOS `NSURLSession` backendの実HTTPS疎通試験。
 2. `RaMediaStore`で得た起動媒体MD5から`RaService::BeginLoadGameByHash()`を呼ぶ
    アプリ統合。
-3. `rc_client_do_frame()`、`rc_client_idle()`、event handlerを接続する。
-4. request generationとsession generationを`RaService`側の状態更新破棄へさらに接続する。
-5. password、token、POST本文をログへ出さないことのテスト。
+3. エミュレーションフレーム完了後に`RaService::DoFrame()`、一時停止・メニュー中に
+   `RaService::Idle()`を呼ぶVM側統合。
+4. SDLオーバーレイ通知へ`RaEvent` queueを接続する。
+5. request generationとsession generationを`RaService`側の状態更新破棄へさらに接続する。
+6. password、token、POST本文をログへ出さないことのテスト。

@@ -4,6 +4,7 @@
 
 #include <cctype>
 #include <cstring>
+#include <utility>
 
 namespace Xm8Ra {
 
@@ -22,6 +23,156 @@ bool IsMd5Hex(const std::string& hash)
 	return true;
 }
 
+std::string SafeString(const char *value)
+{
+	return value != nullptr ? value : "";
+}
+
+RaEventType MapEventType(uint32_t type)
+{
+	switch (type) {
+	case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:
+		return RaEventType::AchievementTriggered;
+	case RC_CLIENT_EVENT_LEADERBOARD_STARTED:
+		return RaEventType::LeaderboardStarted;
+	case RC_CLIENT_EVENT_LEADERBOARD_FAILED:
+		return RaEventType::LeaderboardFailed;
+	case RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED:
+		return RaEventType::LeaderboardSubmitted;
+	case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
+		return RaEventType::AchievementChallengeIndicatorShow;
+	case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE:
+		return RaEventType::AchievementChallengeIndicatorHide;
+	case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW:
+		return RaEventType::AchievementProgressIndicatorShow;
+	case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE:
+		return RaEventType::AchievementProgressIndicatorHide;
+	case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE:
+		return RaEventType::AchievementProgressIndicatorUpdate;
+	case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_SHOW:
+		return RaEventType::LeaderboardTrackerShow;
+	case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE:
+		return RaEventType::LeaderboardTrackerHide;
+	case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_UPDATE:
+		return RaEventType::LeaderboardTrackerUpdate;
+	case RC_CLIENT_EVENT_LEADERBOARD_SCOREBOARD:
+		return RaEventType::LeaderboardScoreboard;
+	case RC_CLIENT_EVENT_RESET:
+		return RaEventType::ResetRequested;
+	case RC_CLIENT_EVENT_GAME_COMPLETED:
+		return RaEventType::GameCompleted;
+	case RC_CLIENT_EVENT_SERVER_ERROR:
+		return RaEventType::ServerError;
+	case RC_CLIENT_EVENT_DISCONNECTED:
+		return RaEventType::Disconnected;
+	case RC_CLIENT_EVENT_RECONNECTED:
+		return RaEventType::Reconnected;
+	case RC_CLIENT_EVENT_SUBSET_COMPLETED:
+		return RaEventType::SubsetCompleted;
+	default:
+		return RaEventType::None;
+	}
+}
+
+void CopyAchievement(RaAchievementEvent *target,
+	const rc_client_achievement_t *achievement)
+{
+	if (target == nullptr || achievement == nullptr) {
+		return;
+	}
+
+	target->id = achievement->id;
+	target->points = achievement->points;
+	target->state = achievement->state;
+	target->category = achievement->category;
+	target->bucket = achievement->bucket;
+	target->unlocked = achievement->unlocked;
+	target->type = achievement->type;
+	target->measured_percent = achievement->measured_percent;
+	target->title = SafeString(achievement->title);
+	target->description = SafeString(achievement->description);
+	target->measured_progress = achievement->measured_progress;
+	target->badge_url = SafeString(achievement->badge_url);
+	target->badge_locked_url = SafeString(achievement->badge_locked_url);
+}
+
+void CopyLeaderboard(RaLeaderboardEvent *target,
+	const rc_client_leaderboard_t *leaderboard)
+{
+	if (target == nullptr || leaderboard == nullptr) {
+		return;
+	}
+
+	target->id = leaderboard->id;
+	target->state = leaderboard->state;
+	target->format = leaderboard->format;
+	target->lower_is_better = leaderboard->lower_is_better != 0;
+	target->title = SafeString(leaderboard->title);
+	target->description = SafeString(leaderboard->description);
+	target->tracker_value = SafeString(leaderboard->tracker_value);
+}
+
+void CopyLeaderboardTracker(RaLeaderboardEvent *target,
+	const rc_client_leaderboard_tracker_t *tracker)
+{
+	if (target == nullptr || tracker == nullptr) {
+		return;
+	}
+
+	target->id = tracker->id;
+	target->display = tracker->display;
+}
+
+void CopyScoreboard(RaLeaderboardScoreboardEvent *target,
+	const rc_client_leaderboard_scoreboard_t *scoreboard)
+{
+	if (target == nullptr || scoreboard == nullptr) {
+		return;
+	}
+
+	target->leaderboard_id = scoreboard->leaderboard_id;
+	target->new_rank = scoreboard->new_rank;
+	target->num_entries = scoreboard->num_entries;
+	target->submitted_score = scoreboard->submitted_score;
+	target->best_score = scoreboard->best_score;
+	if (scoreboard->top_entries == nullptr) {
+		return;
+	}
+	for (uint32_t i = 0; i < scoreboard->num_top_entries; i++) {
+		RaLeaderboardScoreboardEntry entry;
+		entry.rank = scoreboard->top_entries[i].rank;
+		entry.username = SafeString(scoreboard->top_entries[i].username);
+		entry.score = scoreboard->top_entries[i].score;
+		target->top_entries.push_back(entry);
+	}
+}
+
+void CopyServerError(RaServerErrorEvent *target,
+	const rc_client_server_error_t *server_error)
+{
+	if (target == nullptr || server_error == nullptr) {
+		return;
+	}
+
+	target->result = server_error->result;
+	target->related_id = server_error->related_id;
+	target->api = SafeString(server_error->api);
+	target->message = SafeString(server_error->error_message);
+}
+
+void CopySubset(RaSubsetEvent *target, const rc_client_subset_t *subset)
+{
+	if (target == nullptr || subset == nullptr) {
+		return;
+	}
+
+	target->id = subset->id;
+	target->num_achievements = subset->num_achievements;
+	target->num_leaderboards = subset->num_leaderboards;
+	target->title = SafeString(subset->title);
+	target->badge_url = SafeString(subset->badge_url);
+}
+
 } // namespace
 
 RaService::RaService(RaServiceOptions options)
@@ -36,13 +187,15 @@ RaService::RaService(RaServiceOptions options)
 	http_bridge_.reset(new RaRcClientHttpBridge(http_client_.get()));
 	client_ = rc_client_create(
 		options.read_memory != nullptr ? options.read_memory : ReadNoMemory,
-		RaRcClientHttpBridge::ServerCall);
+		ServerCall);
 	if (client_ == nullptr) {
 		SetFailed(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY));
 		return;
 	}
 
-	rc_client_set_userdata(client_, http_bridge_.get());
+	rc_client_set_userdata(client_, this);
+	rc_client_set_event_handler(client_, ClientEventHandler);
+	rc_client_set_allow_background_memory_reads(client_, 0);
 	rc_client_set_hardcore_enabled(client_, 0);
 }
 
@@ -179,6 +332,40 @@ void RaService::DrainHttp()
 	}
 }
 
+bool RaService::DoFrame()
+{
+	if (!IsReady() || game_session_.state != RaGameSessionState::Loaded) {
+		return false;
+	}
+
+	rc_client_do_frame(client_);
+	UpdateRichPresenceEvent();
+	return true;
+}
+
+bool RaService::Idle()
+{
+	if (!IsReady()) {
+		return false;
+	}
+
+	rc_client_idle(client_);
+	UpdateRichPresenceEvent();
+	return true;
+}
+
+bool RaService::IsProcessingRequired() const
+{
+	return client_ != nullptr && rc_client_is_processing_required(client_) != 0;
+}
+
+std::vector<RaEvent> RaService::TakeEvents()
+{
+	std::vector<RaEvent> events;
+	events.swap(events_);
+	return events;
+}
+
 void RaService::UnloadGame()
 {
 	if (client_ != nullptr) {
@@ -188,6 +375,7 @@ void RaService::UnloadGame()
 		http_bridge_->AdvanceGeneration();
 	}
 	game_session_ = RaGameSessionSnapshot();
+	rich_presence_.clear();
 }
 
 void RaService::Logout()
@@ -261,6 +449,11 @@ RaHttpClient *RaService::HttpClientForTesting()
 	return http_client_.get();
 }
 
+void RaService::QueueEventForTesting(const rc_client_event_t *event)
+{
+	HandleClientEvent(event);
+}
+
 uint32_t RC_CCONV RaService::ReadNoMemory(uint32_t, uint8_t *buffer,
 	uint32_t num_bytes, rc_client_t *)
 {
@@ -286,6 +479,34 @@ void RC_CCONV RaService::LoadGameCallback(int result,
 	if (service != nullptr) {
 		service->HandleLoadGameCallback(result, error_message);
 	}
+}
+
+void RC_CCONV RaService::ClientEventHandler(const rc_client_event_t *event,
+	rc_client_t *client)
+{
+	RaService *service = client == nullptr ? nullptr :
+		static_cast<RaService *>(rc_client_get_userdata(client));
+	if (service != nullptr) {
+		service->HandleClientEvent(event);
+	}
+}
+
+void RC_CCONV RaService::ServerCall(const rc_api_request_t *request,
+	rc_client_server_callback_t callback, void *callback_data,
+	rc_client_t *client)
+{
+	RaService *service = client == nullptr ? nullptr :
+		static_cast<RaService *>(rc_client_get_userdata(client));
+	if (service == nullptr || service->http_bridge_ == nullptr) {
+		if (callback != nullptr) {
+			rc_api_server_response_t server_response = {};
+			server_response.http_status_code = RC_API_SERVER_RESPONSE_CLIENT_ERROR;
+			callback(&server_response, callback_data);
+		}
+		return;
+	}
+
+	service->http_bridge_->BeginServerCall(request, callback, callback_data);
 }
 
 void RaService::HandleLoginCallback(int result, const char *error_message)
@@ -351,6 +572,48 @@ void RaService::HandleLoadGameCallback(int result, const char *error_message)
 	game_session_.title = game->title != nullptr ? game->title : "";
 	game_session_.hash = game->hash != nullptr ? game->hash : game_session_.hash;
 	game_session_.badge_url = game->badge_url != nullptr ? game->badge_url : "";
+	UpdateRichPresenceEvent();
+}
+
+void RaService::HandleClientEvent(const rc_client_event_t *event)
+{
+	if (event == nullptr) {
+		return;
+	}
+
+	RaEvent copied;
+	copied.raw_type = event->type;
+	copied.type = MapEventType(event->type);
+	CopyAchievement(&copied.achievement, event->achievement);
+	CopyLeaderboard(&copied.leaderboard, event->leaderboard);
+	CopyLeaderboardTracker(&copied.leaderboard, event->leaderboard_tracker);
+	CopyScoreboard(&copied.scoreboard, event->leaderboard_scoreboard);
+	CopyServerError(&copied.server_error, event->server_error);
+	CopySubset(&copied.subset, event->subset);
+	events_.push_back(copied);
+}
+
+void RaService::UpdateRichPresenceEvent()
+{
+	if (client_ == nullptr || game_session_.state != RaGameSessionState::Loaded ||
+		rc_client_has_rich_presence(client_) == 0) {
+		return;
+	}
+
+	char buffer[256];
+	const size_t written = rc_client_get_rich_presence_message(
+		client_, buffer, sizeof(buffer));
+	buffer[sizeof(buffer) - 1] = '\0';
+	std::string current = written > 0 ? buffer : "";
+	if (current == rich_presence_) {
+		return;
+	}
+
+	rich_presence_ = current;
+	RaEvent event;
+	event.type = RaEventType::RichPresenceChanged;
+	event.rich_presence = rich_presence_;
+	events_.push_back(event);
 }
 
 void RaService::SetFailed(int result, const std::string& message)
@@ -371,6 +634,7 @@ void RaService::DisableGameSession(int result, const std::string& message)
 	game_session_.load_state = client_ != nullptr ?
 		rc_client_get_load_game_state(client_) : 0;
 	game_session_.disabled_for_session = true;
+	rich_presence_.clear();
 }
 
 void RaService::DeleteCredentialsForRejectedToken()

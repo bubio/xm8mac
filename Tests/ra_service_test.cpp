@@ -255,6 +255,7 @@ int main()
 		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
 			StartSessionJson()));
 		service.DrainHttp();
+		service.Idle();
 		const Xm8Ra::RaGameSessionSnapshot snapshot =
 			service.GameSessionSnapshot();
 		Check(snapshot.state == Xm8Ra::RaGameSessionState::Loaded,
@@ -303,6 +304,95 @@ int main()
 			"failed game load marks disabled flag");
 		Check(!snapshot.message.empty(),
 			"failed game load captures an explanatory message");
+	}
+
+	{
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.http_client = std::move(fake_http);
+		Xm8Ra::RaService service(std::move(options));
+
+		Check(!service.DoFrame(), "do frame is ignored before a game is loaded");
+		Check(service.Idle(), "idle is allowed before a game is loaded");
+		Check(service.TakeEvents().empty(),
+			"idle before game load does not synthesize RA events");
+
+		rc_client_achievement_t achievement = {};
+		achievement.id = 42;
+		achievement.points = 5;
+		achievement.title = "Original Title";
+		achievement.description = "Original Description";
+		achievement.measured_percent = 50.0f;
+		std::snprintf(achievement.measured_progress,
+			sizeof(achievement.measured_progress), "%s", "1/2");
+		achievement.badge_url = "https://media.example/ach.png";
+		achievement.badge_locked_url = "https://media.example/lock.png";
+
+		rc_client_event_t event = {};
+		event.type = RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED;
+		event.achievement = &achievement;
+		service.QueueEventForTesting(&event);
+		achievement.title = "Mutated Title";
+
+		std::vector<Xm8Ra::RaEvent> events = service.TakeEvents();
+		Check(events.size() == 1, "achievement event is queued");
+		Check(events[0].type == Xm8Ra::RaEventType::AchievementTriggered,
+			"achievement event type is mapped");
+		Check(events[0].achievement.id == 42,
+			"achievement event id is copied");
+		Check(events[0].achievement.title == "Original Title",
+			"achievement event title is copied away from rcheevos pointer");
+		Check(events[0].achievement.measured_progress == "1/2",
+			"achievement event measured progress is copied");
+		Check(service.TakeEvents().empty(),
+			"take events drains the event queue");
+	}
+
+	{
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.http_client = std::move(fake_http);
+		Xm8Ra::RaService service(std::move(options));
+
+		rc_client_leaderboard_scoreboard_entry_t top_entries[2] = {};
+		top_entries[0].username = "first";
+		top_entries[0].rank = 1;
+		std::snprintf(top_entries[0].score, sizeof(top_entries[0].score),
+			"%s", "1000");
+		top_entries[1].username = "second";
+		top_entries[1].rank = 2;
+		std::snprintf(top_entries[1].score, sizeof(top_entries[1].score),
+			"%s", "900");
+
+		rc_client_leaderboard_scoreboard_t scoreboard = {};
+		scoreboard.leaderboard_id = 77;
+		scoreboard.new_rank = 2;
+		scoreboard.num_entries = 10;
+		std::snprintf(scoreboard.submitted_score,
+			sizeof(scoreboard.submitted_score), "%s", "900");
+		std::snprintf(scoreboard.best_score, sizeof(scoreboard.best_score),
+			"%s", "900");
+		scoreboard.top_entries = top_entries;
+		scoreboard.num_top_entries = 2;
+
+		rc_client_event_t event = {};
+		event.type = RC_CLIENT_EVENT_LEADERBOARD_SCOREBOARD;
+		event.leaderboard_scoreboard = &scoreboard;
+		service.QueueEventForTesting(&event);
+		top_entries[1].username = "mutated";
+
+		const std::vector<Xm8Ra::RaEvent> events = service.TakeEvents();
+		Check(events.size() == 1, "scoreboard event is queued");
+		Check(events[0].type == Xm8Ra::RaEventType::LeaderboardScoreboard,
+			"scoreboard event type is mapped");
+		Check(events[0].scoreboard.leaderboard_id == 77,
+			"scoreboard leaderboard id is copied");
+		Check(events[0].scoreboard.top_entries.size() == 2,
+			"scoreboard top entries are copied");
+		Check(events[0].scoreboard.top_entries[1].username == "second",
+			"scoreboard entry username is copied away from rcheevos pointer");
 	}
 
 	{
