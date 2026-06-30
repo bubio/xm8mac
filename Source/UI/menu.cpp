@@ -534,6 +534,12 @@ void Menu::EnterSystem(int id)
 	list->AddCheckButton("Pseudo fast disk access", MENU_SYSTEM_FASTDISK);
 	list->AddCheckButton("Watch battery level", MENU_SYSTEM_BATTERY);
 	list->AddButton("DIP settings (w/reset)", MENU_SYSTEM_DIP);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	list->AddCheckButton("RetroAchievements mode", MENU_SYSTEM_RA_MODE);
+	list->AddButton("RA: disabled", MENU_SYSTEM_RA_STATUS);
+	list->AddButton("RA saved-token login", MENU_SYSTEM_RA_LOGIN);
+	list->AddButton("RA logout", MENU_SYSTEM_RA_LOGOUT);
+#endif
 
 	// get rom version
 	font = app->GetFont();
@@ -666,6 +672,16 @@ void Menu::EnterSystem(int id)
 
 	// watch battery
 	list->SetCheck(MENU_SYSTEM_BATTERY, setting->IsWatchBattery());
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	// RetroAchievements
+	list->SetCheck(MENU_SYSTEM_RA_MODE, app->IsRaModeEnabled());
+	{
+		char ra_status[96];
+		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+		list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
+	}
+#endif
 
 #ifdef __ANDROID__
 	// use external SD
@@ -2156,6 +2172,44 @@ void Menu::CmdSystem(int id)
 	case MENU_SYSTEM_DIP:
 		EnterDip();
 		break;
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	case MENU_SYSTEM_RA_MODE:
+		app->ToggleRaMode();
+		list->SetCheck(MENU_SYSTEM_RA_MODE, app->IsRaModeEnabled());
+		{
+			char ra_status[96];
+			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
+		}
+		break;
+
+	case MENU_SYSTEM_RA_STATUS:
+		{
+			char ra_status[96];
+			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
+		}
+		break;
+
+	case MENU_SYSTEM_RA_LOGIN:
+		app->RetryRaSavedLogin();
+		{
+			char ra_status[96];
+			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
+		}
+		break;
+
+	case MENU_SYSTEM_RA_LOGOUT:
+		app->LogoutRa();
+		{
+			char ra_status[96];
+			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
+		}
+		break;
+#endif
 
 	// ROM version
 	case MENU_SYSTEM_ROMVER:

@@ -11,6 +11,7 @@
 #ifdef SDL
 
 #include <cctype>
+#include <cstdio>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -153,6 +154,39 @@ std::string MakeRaUserAgent()
 		<< " (macOS)";
 	return stream.str();
 }
+
+std::string RaEventNotice(const Xm8Ra::RaEvent& event)
+{
+	switch (event.type) {
+	case Xm8Ra::RaEventType::AchievementTriggered:
+		return "RA: unlocked " + event.achievement.title;
+	case Xm8Ra::RaEventType::LeaderboardStarted:
+		return "RA: leaderboard started " + event.leaderboard.title;
+	case Xm8Ra::RaEventType::LeaderboardFailed:
+		return "RA: leaderboard failed " + event.leaderboard.title;
+	case Xm8Ra::RaEventType::LeaderboardSubmitted:
+		return "RA: leaderboard submitted " + event.leaderboard.title;
+	case Xm8Ra::RaEventType::LeaderboardScoreboard:
+		return "RA: leaderboard rank " +
+			std::to_string(event.scoreboard.new_rank);
+	case Xm8Ra::RaEventType::GameCompleted:
+		return "RA: game completed";
+	case Xm8Ra::RaEventType::ServerError:
+		return "RA: server error " + event.server_error.message;
+	case Xm8Ra::RaEventType::Disconnected:
+		return "RA: disconnected";
+	case Xm8Ra::RaEventType::Reconnected:
+		return "RA: reconnected";
+	case Xm8Ra::RaEventType::SubsetCompleted:
+		return "RA: subset completed " + event.subset.title;
+	case Xm8Ra::RaEventType::RichPresenceChanged:
+		return event.rich_presence.empty() ? std::string() :
+			"RA: " + event.rich_presence;
+	default:
+		break;
+	}
+	return std::string();
+}
 #endif
 
 } // namespace
@@ -195,6 +229,7 @@ App::App()
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
 	ra_session_disabled = false;
+	ra_notice_until = 0;
 #endif
 
 	// flags
@@ -446,18 +481,10 @@ bool App::Init(const CliOptions& options)
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	if (ra_mode_enabled && ra_library != NULL) {
-		Xm8Ra::RaServiceOptions ra_options;
-		ra_options.ra_root = ra_library->Root();
-		ra_options.user_agent = MakeRaUserAgent();
-		ra_options.http_client =
-			Xm8Ra::CreateMacRaHttpClient(ra_options.user_agent);
-		ra_options.host_read_memory = ReadRaMemoryFromVm;
-		ra_options.host_read_memory_userdata = vm;
-		ra_service = new Xm8Ra::RaService(std::move(ra_options));
-		if (!ra_service->IsReady()) {
-			delete ra_service;
-			ra_service = NULL;
+		std::string ra_error;
+		if (!EnsureRaService(&ra_error)) {
 			ra_mode_enabled = false;
+			AddRaNotice("RA: service unavailable");
 		}
 	}
 #endif
@@ -688,6 +715,68 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 }
 
 //
+// EnsureRaService()
+// create RA service on demand
+//
+bool App::EnsureRaService(std::string *error)
+{
+	if (ra_service != NULL) {
+		return true;
+	}
+	if (ra_library == NULL) {
+		if (error != NULL) {
+			*error = "RA library is not available";
+		}
+		return false;
+	}
+	if (vm == NULL) {
+		if (error != NULL) {
+			*error = "VM is not available";
+		}
+		return false;
+	}
+
+	Xm8Ra::RaServiceOptions ra_options;
+	ra_options.ra_root = ra_library->Root();
+	ra_options.user_agent = MakeRaUserAgent();
+	ra_options.http_client =
+		Xm8Ra::CreateMacRaHttpClient(ra_options.user_agent);
+	ra_options.host_read_memory = ReadRaMemoryFromVm;
+	ra_options.host_read_memory_userdata = vm;
+	ra_service = new Xm8Ra::RaService(std::move(ra_options));
+	if (!ra_service->IsReady()) {
+		delete ra_service;
+		ra_service = NULL;
+		if (error != NULL) {
+			*error = "RA service is not ready";
+		}
+		return false;
+	}
+	return true;
+}
+
+//
+// SaveRaModeSetting()
+// persist RA mode setting without changing other RA settings
+//
+bool App::SaveRaModeSetting(bool enabled, std::string *error)
+{
+	if (ra_library == NULL) {
+		if (error != NULL) {
+			*error = "RA library is not available";
+		}
+		return false;
+	}
+
+	Xm8Ra::RaSettings settings;
+	if (!ra_library->LoadSettings(&settings, error)) {
+		return false;
+	}
+	settings.enabled = enabled;
+	return ra_library->SaveSettings(settings, error);
+}
+
+//
 // BeginRaSessionForMedia()
 // remember the media hash to identify through RA
 //
@@ -701,6 +790,7 @@ void App::BeginRaSessionForMedia(const std::string& md5)
 	ra_saved_login_started = false;
 	ra_pending_game_hash = md5;
 	ra_loaded_game_hash.clear();
+	AddRaNotice("RA: identifying game");
 }
 
 //
@@ -727,6 +817,7 @@ void App::ProcessRaService(bool emulation_frame)
 				ra_service->BeginLoginWithSavedToken(&error);
 			if (!ra_saved_login_started) {
 				ra_session_disabled = true;
+				AddRaNotice("RA: login required");
 			}
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&
@@ -735,14 +826,27 @@ void App::ProcessRaService(bool emulation_frame)
 			if (ra_service->BeginLoadGameByHash(ra_pending_game_hash,
 				&error)) {
 				ra_loaded_game_hash = ra_pending_game_hash;
+				AddRaNotice("RA: loading game");
 			}
 			else {
 				ra_session_disabled = true;
+				AddRaNotice("RA: game load failed");
 			}
+		}
+		else if (game.state == Xm8Ra::RaGameSessionState::Loaded) {
+			ra_pending_game_hash.clear();
+			AddRaNotice(game.title.empty() ? "RA: game loaded" :
+				"RA: " + game.title);
 		}
 		else if (login.state == Xm8Ra::RaLoginState::Failed ||
 			game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
 			ra_session_disabled = true;
+			if (login.state == Xm8Ra::RaLoginState::Failed) {
+				AddRaNotice("RA: login failed");
+			}
+			else {
+				AddRaNotice("RA: disabled for this session");
+			}
 		}
 	}
 
@@ -754,7 +858,58 @@ void App::ProcessRaService(bool emulation_frame)
 	else {
 		ra_service->Idle();
 	}
-	ra_service->TakeEvents();
+	AddRaEventsAsNotices(ra_service->TakeEvents());
+}
+
+//
+// AddRaNotice()
+// add RA overlay notice
+//
+void App::AddRaNotice(const std::string& text)
+{
+	if (text.empty()) {
+		return;
+	}
+	ra_notice_text = text;
+	ra_notice_until = SDL_GetTicks() + 5000;
+}
+
+//
+// AddRaEventsAsNotices()
+// translate RA events to transient notices
+//
+void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
+{
+	for (const Xm8Ra::RaEvent& event : events) {
+		const std::string notice = RaEventNotice(event);
+		if (!notice.empty()) {
+			AddRaNotice(notice);
+		}
+	}
+}
+
+//
+// DrawRaOverlay()
+// draw RA notice overlay
+//
+void App::DrawRaOverlay()
+{
+	if (!ra_mode_enabled || ra_notice_text.empty() ||
+		SDL_TICKS_PASSED(SDL_GetTicks(), ra_notice_until)) {
+		return;
+	}
+
+	char text[72];
+	std::snprintf(text, sizeof(text), "%s", ra_notice_text.c_str());
+	SDL_Rect rect = {8, 8, 624, 24};
+	Uint32 *buf = video->GetFrameBuf(0);
+	font->DrawFillRect(buf, &rect, RGB_COLOR(0, 0, 0) | 0xc0000000);
+	font->DrawRect(buf, &rect, RGB_COLOR(255, 255, 255) | 0xc0000000,
+		RGB_COLOR(0, 0, 0) | 0xc0000000);
+	rect.x += 8;
+	rect.w -= 16;
+	font->DrawSjisLeftOr(buf, &rect, text, RGB_COLOR(255, 255, 255));
+	video->DrawCtrl();
 }
 #endif
 
@@ -1447,6 +1602,10 @@ void App::Draw()
 
 	// rendering
 	vm->draw_screen();
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	DrawRaOverlay();
+#endif
 
 	// calculate frame rate
 	urate = 0;
@@ -2668,6 +2827,132 @@ void App::Quit()
 {
 	app_quit = true;
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+//
+// IsRaModeEnabled()
+// get RA mode setting
+//
+bool App::IsRaModeEnabled() const
+{
+	return ra_mode_enabled;
+}
+
+//
+// ToggleRaMode()
+// toggle RA mode setting
+//
+bool App::ToggleRaMode()
+{
+	const bool enable = !ra_mode_enabled;
+	std::string error;
+
+	if (enable && !EnsureRaService(&error)) {
+		AddRaNotice("RA: service unavailable");
+		return false;
+	}
+	if (!SaveRaModeSetting(enable, &error)) {
+		AddRaNotice("RA: setting save failed");
+		return false;
+	}
+
+	ra_mode_enabled = enable;
+	ra_session_disabled = false;
+	ra_saved_login_started = false;
+	ra_pending_game_hash.clear();
+	ra_loaded_game_hash.clear();
+	if (!enable && ra_service != NULL) {
+		ra_service->UnloadGame();
+	}
+	AddRaNotice(enable ? "RA: mode enabled" : "RA: mode disabled");
+	return true;
+}
+
+//
+// RetryRaSavedLogin()
+// retry RA saved token login
+//
+bool App::RetryRaSavedLogin()
+{
+	if (!ra_mode_enabled) {
+		AddRaNotice("RA: mode is disabled");
+		return false;
+	}
+
+	std::string error;
+	if (!EnsureRaService(&error)) {
+		AddRaNotice("RA: service unavailable");
+		return false;
+	}
+	if (!ra_service->BeginLoginWithSavedToken(&error)) {
+		AddRaNotice("RA: login required");
+		return false;
+	}
+
+	ra_session_disabled = false;
+	ra_saved_login_started = true;
+	AddRaNotice("RA: login started");
+	return true;
+}
+
+//
+// LogoutRa()
+// logout RA
+//
+void App::LogoutRa()
+{
+	if (ra_service != NULL) {
+		ra_service->Logout();
+	}
+	ra_session_disabled = false;
+	ra_saved_login_started = false;
+	ra_pending_game_hash.clear();
+	ra_loaded_game_hash.clear();
+	AddRaNotice("RA: logged out");
+}
+
+//
+// GetRaMenuStatus()
+// get RA status text for menu
+//
+void App::GetRaMenuStatus(char *buffer, size_t capacity) const
+{
+	if (buffer == NULL || capacity == 0) {
+		return;
+	}
+	const char *text = "RA: unavailable";
+	if (ra_mode_enabled) {
+		text = "RA: enabled";
+	}
+	else if (ra_library != NULL) {
+		text = "RA: disabled";
+	}
+	if (ra_service != NULL) {
+		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
+		const Xm8Ra::RaGameSessionSnapshot game =
+			ra_service->GameSessionSnapshot();
+		if (login.state == Xm8Ra::RaLoginState::LoginPending) {
+			text = "RA: login pending";
+		}
+		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&
+			game.state == Xm8Ra::RaGameSessionState::Loaded) {
+			std::snprintf(buffer, capacity, "RA: %s",
+				game.title.empty() ? "game loaded" : game.title.c_str());
+			return;
+		}
+		else if (game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
+			text = "RA: session disabled";
+		}
+		else if (login.state == Xm8Ra::RaLoginState::LoggedIn) {
+			text = "RA: logged in";
+		}
+		else if (login.state == Xm8Ra::RaLoginState::Failed) {
+			text = "RA: login failed";
+		}
+	}
+	std::snprintf(buffer, capacity, "%s", text);
+}
+#endif
 
 //
 // LockVM()

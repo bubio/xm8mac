@@ -2,8 +2,9 @@
 
 ## 1. 現在の完了範囲
 
-Phase 4のうち、実RAサーバーへ接続しない共通土台、macOS HTTP adapter、
-`rc_client`認証サービス層、ハッシュ指定のゲームロード開始を追加した。
+Phase 4として、macOS HTTP adapter、`rc_client`認証サービス層、
+ハッシュ指定のゲームロード開始、保存済みtokenによるアプリ内セッション開始、
+SystemメニューからのRAモード操作、最小通知表示を追加した。
 
 - `RaHttpClient`契約を追加した。
 - fake HTTP backendを追加した。
@@ -36,9 +37,17 @@ Phase 4のうち、実RAサーバーへ接続しない共通土台、macOS HTTP 
   frame/idle処理まで進行するようにした。
 - 保存済みtokenがない、login失敗、ゲームロード失敗の場合はRAを当該セッションで
   無効化し、D88起動自体は継続する。
+- SystemメニューへRA mode、RA status、保存token login、logoutを追加した。
+- RA mode ON/OFFは`ra_settings`へ保存する。
+- RA mode OFF時は現在のRAゲームセッションを破棄するが、保存済みtokenは維持する。
+  token削除は明示的なlogout時だけ行う。
+- RA状態、login要求、ゲーム識別、ゲームロード、代表的なRAイベントを
+  エミュレーション画面上の短い通知として表示する。
 - RA ON buildだけへ上記を組み込み、Normal buildには組み込んでいない。
 
-実RAサーバーへのHTTPS接続確認、オーバーレイlogin UI、RAイベント通知表示は未実装である。
+実RAサーバーへのHTTPS疎通はmacOS backendとして実装済みだが、認証情報を使う手動疎通試験は
+未実施である。オーバーレイpassword login UI、実績一覧、バッジ画像、Leaderboard一覧は
+Phase 5以降で実装する。
 
 ## 2. 認証情報ファイル
 
@@ -153,12 +162,14 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - Rich Presenceは`DoFrame()`/`Idle()`後に前回値と比較し、変化時だけ
   `RichPresenceChanged`イベントを積む。
 
-現時点では、イベントはサービス内部queueへ変換するだけで、SDLオーバーレイ表示には
-まだ接続していない。
+Phase 4では、イベントqueueのうち実績解除、Leaderboard開始/失敗/送信/結果、
+Game Completed、server error、disconnect/reconnect、subset completed、Rich Presence変更を
+短い通知へ変換している。Challenge Indicatorや進捗indicatorの常駐表示はPhase 5の
+本格オーバーレイで扱う。
 
 ## 5. アプリ統合
 
-RA ON buildの`Source/UI/app.*`にmacOS向けの最小統合を追加した。
+RA ON buildの`Source/UI/app.*`と`Source/UI/menu.*`にmacOS向けの最小統合を追加した。
 
 - `RaLibrary`と`RaMediaStore`初期化後、VM生成後に`RaService`を生成する。
 - HTTP backendはmacOS `NSURLSession` adapterを使用する。
@@ -169,8 +180,20 @@ RA ON buildの`Source/UI/app.*`にmacOS向けの最小統合を追加した。
 - メニュー、バックグラウンド、power down中は`RaService::Idle()`を進める。
 - VMがフレームを進めた場合は、実行フレーム数ぶん`RaService::DoFrame()`を試し、
   game未ロード中は`Idle()`へフォールバックする。
-- 現時点ではオーバーレイがないため、保存済みtoken loginだけを自動実行する。
-- `RaService::TakeEvents()`はdrainするが、通知表示へは未接続である。
+- Phase 4時点ではpassword入力UIがないため、保存済みtoken loginだけを自動実行する。
+- `RaService::TakeEvents()`から取得した代表イベントを通知表示へ接続する。
+- RA通知はVM描画後、`video->Draw()`前に既存`Font`でフレームバッファへ合成する。
+- SystemメニューでRA modeを切り替えられる。ON時は必要に応じて`RaService`を生成し、
+  OFF時はRAゲームセッションだけをunloadする。
+- Systemメニューで保存token loginを明示的に再試行できる。
+- SystemメニューでRA statusを更新表示できる。
+
+制約:
+
+- Phase 4時点ではpassword入力UIを持たない。初回password loginは`RaService` APIと
+  自動テストで検証済みであり、ユーザー入力はPhase 5のSDLオーバーレイlogin画面で実装する。
+- 通知表示は短い状態表示のみで、実績一覧、バッジ、Leaderboard詳細、Challenge Indicatorの
+  レイアウトはPhase 5へ送る。
 
 ## 6. テスト
 
@@ -210,12 +233,14 @@ RA ON buildの`Source/UI/app.*`にmacOS向けの最小統合を追加した。
 - shutdown時にpending HTTPをcancel/drainし、pendingを残さないこと。
 - RA serviceがuserdata付きhost memory callbackを使えることは、RA ON `xm8` buildで
   VM統合として確認する。
+- RA ON `xm8` buildでSystemメニューのRA項目がコンパイルされること。
+- Normal buildではRAメニュー項目、RA service、macOS HTTP backendが組み込まれないこと。
 
 実行済み:
 
 ```text
 cmake -S . -B build-ra -DXM8_ENABLE_RETROACHIEVEMENTS=ON
-cmake --build build-ra --target ra_service_test ra_credentials_http_test xm8
+cmake --build build-ra --target xm8 ra_service_test ra_credentials_http_test
 ctest --test-dir build-ra -R 'ra_service_test|ra_credentials_http_test|ra_library_store_test|ra_media_probe_test|ra_memory_map_test|ra_dependency_test|d88fixture_test|d88probe_test' --output-on-failure
 cmake --build build --target xm8
 ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-on-failure
@@ -226,12 +251,25 @@ ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-
 - RA ON: 8/8 passed
 - Normal: 3/3 passed
 
-## 7. 次に実装するもの
+## 7. Phase 4完了判定
 
-次はPhase 4の残りを実装する。
+Phase 4は完了扱いとする。
 
-1. macOS `NSURLSession` backendの実HTTPS疎通試験。
-2. オーバーレイlogin UIからpassword loginを開始できるようにする。
-3. SDLオーバーレイ通知へ`RaEvent` queueを接続する。
-4. 画像cacheとバッジ表示を接続する。
-5. password、token、POST本文をログへ出さないことのテスト。
+完了理由:
+
+- macOS用HTTP backend、`rc_client` bridge、credentials、認証、ゲーム識別、session開始、
+  frame/idle処理入口が揃っている。
+- RAモード有効時だけD88作業コピー、保存token login、hash指定ゲームロードへ進む。
+- 失敗時は当該セッションのRAを無効化し、ゲーム起動を継続する。
+- SystemメニューからRA mode ON/OFF、保存token login再試行、logout、状態確認ができる。
+- 最低限の状態通知をSDLフレームバッファへ表示できる。
+- RA ON buildとNormal buildの双方で回帰テストが通っている。
+
+Phase 5へ送るもの:
+
+1. SDLオーバーレイlogin UIからpassword loginを開始する。
+2. ASCIIオンスクリーンキーボードと`SDL_TEXTINPUT`を接続する。
+3. 実績一覧、実績詳細、Leaderboard一覧、Rich Presence表示を実装する。
+4. `RaImageCache`とバッジ/アバター表示を接続する。
+5. Challenge Indicator、進捗indicator、通知優先順位を本格実装する。
+6. 実RAアカウントを使ったmacOS HTTPS手動疎通試験を実施する。

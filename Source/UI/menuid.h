@@ -237,6 +237,14 @@
 										// rom version
 #define MENU_ANDROID_SAF		712
 										// storage access framework (for Android 5.0 or later)
+#define MENU_SYSTEM_RA_MODE		713
+										// RetroAchievements mode
+#define MENU_SYSTEM_RA_STATUS	714
+										// RetroAchievements status
+#define MENU_SYSTEM_RA_LOGIN	715
+										// RetroAchievements saved token login
+#define MENU_SYSTEM_RA_LOGOUT	716
+										// RetroAchievements logout
 #define MENU_SYSTEM_MODE		797
 										// mode radio
 #define MENU_SYSTEM_CLOCK		798

@@ -16,6 +16,8 @@
 #include "classes.h"
 #include "clidisk.h"
 
+#include <cstddef>
+
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_library.h"
 #include "ra_media_store.h"
@@ -114,6 +116,18 @@ public:
 										// get state time
 	void Quit();
 										// quit
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	bool IsRaModeEnabled() const;
+										// get RA mode setting
+	bool ToggleRaMode();
+										// toggle RA mode setting
+	bool RetryRaSavedLogin();
+										// retry RA saved token login
+	void LogoutRa();
+										// logout RA
+	void GetRaMenuStatus(char *buffer, size_t capacity) const;
+										// get RA status text for menu
+#endif
 
 	// misc
 	Uint32 GetAppVersion();
@@ -162,10 +176,20 @@ private:
 	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		std::string *error);
 										// resolve disk to RA working copy
+	bool EnsureRaService(std::string *error);
+										// create RA service if needed
+	bool SaveRaModeSetting(bool enabled, std::string *error);
+										// persist RA mode setting
 	void BeginRaSessionForMedia(const std::string& md5);
 										// begin RA session for media hash
 	void ProcessRaService(bool emulation_frame);
 										// progress RA service
+	void AddRaNotice(const std::string& text);
+										// add RA overlay notice
+	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);
+										// translate RA events to notices
+	void DrawRaOverlay();
+										// draw RA notice overlay
 #endif
 	bool OpenStartupDisks(const std::vector<DiskSpec>& disks, std::string *error);
 										// open CLI disks
@@ -236,6 +260,10 @@ private:
 										// media hash pending RA load
 	std::string ra_loaded_game_hash;
 										// media hash passed to RA load
+	std::string ra_notice_text;
+										// RA transient notice
+	Uint32 ra_notice_until;
+										// RA notice expiration tick
 #endif
 
 	// flags
