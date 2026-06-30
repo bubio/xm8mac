@@ -13,6 +13,12 @@ namespace Xm8Ra {
 constexpr int kRaModeSoftcore = 1;
 constexpr int kRaModeHardcore = 2;
 
+constexpr int kRaMediaHealthOk = 0;
+constexpr int kRaMediaHealthSourceMissing = 1;
+constexpr int kRaMediaHealthSourceChanged = 2;
+constexpr int kRaMediaHealthWorkingMissing = 3;
+constexpr int kRaMediaHealthWorkingCorrupt = 4;
+
 struct RaSettings {
 	bool enabled = false;
 	int last_mode = kRaModeSoftcore;
@@ -28,6 +34,40 @@ struct MediaRecord {
 	int64_t game_id = 0;
 	std::string working_relpath;
 	bool inserted = false;
+};
+
+struct MediaHealthRecord {
+	std::string md5;
+	int64_t game_id = 0;
+	std::string source_locator;
+	int64_t source_size = 0;
+	int64_t source_mtime = -1;
+	std::string working_relpath;
+	int health_state = kRaMediaHealthOk;
+};
+
+struct MediaHealthStatus {
+	std::string md5;
+	int health_state = kRaMediaHealthOk;
+	bool source_exists = false;
+	bool source_metadata_changed = false;
+	bool source_hash_changed = false;
+	bool working_exists = false;
+	bool working_probe_ok = false;
+	int64_t source_size = 0;
+	int64_t source_mtime = -1;
+};
+
+struct LaunchDrive {
+	bool assigned = false;
+	std::string media_md5;
+	int bank_index = 0;
+	bool is_ra_anchor = false;
+};
+
+struct LaunchProfile {
+	int64_t game_id = 0;
+	LaunchDrive drives[2];
 };
 
 class RaLibrary {
@@ -56,6 +96,14 @@ public:
 		int64_t source_mtime, int64_t game_id, int ordinal,
 		MediaRecord *record, std::string *error);
 	bool FindMedia(const std::string& md5, MediaRecord *record,
+		std::string *error);
+	bool LoadMediaHealthRecord(const std::string& md5,
+		MediaHealthRecord *record, std::string *error);
+	bool UpdateMediaHealth(const MediaHealthStatus& status,
+		std::string *error);
+	bool LoadLaunchProfile(int64_t game_id, LaunchProfile *profile,
+		std::string *error);
+	bool SaveLaunchProfile(const LaunchProfile& profile,
 		std::string *error);
 
 private:

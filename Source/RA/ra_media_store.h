@@ -39,6 +39,8 @@ public:
 	bool ResetWorkingCopy(const std::string& source_path,
 		const std::string& expected_md5, std::string *working_path,
 		std::string *error);
+	bool CheckMediaHealth(const std::string& md5,
+		MediaHealthStatus *status, std::string *error);
 
 private:
 	bool ImportD88IntoGame(const std::string& source_path, int64_t game_id,

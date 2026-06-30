@@ -383,6 +383,78 @@ bool RaMediaStore::ResetWorkingCopy(const std::string& source_path,
 	return true;
 }
 
+bool RaMediaStore::CheckMediaHealth(const std::string& md5,
+	MediaHealthStatus *status, std::string *error)
+{
+	if (library_ == nullptr || status == nullptr || md5.size() != 32) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+
+	MediaHealthRecord record;
+	if (!library_->LoadMediaHealthRecord(md5, &record, error)) {
+		return false;
+	}
+
+	MediaHealthStatus checked;
+	checked.md5 = record.md5;
+
+	const std::string working_path =
+		JoinPath(library_->Root(), record.working_relpath);
+	checked.working_exists = IsRegularFileNoFollow(working_path);
+	if (checked.working_exists) {
+		D88MediaInfo working;
+		checked.working_probe_ok =
+			ProbeD88File(working_path.c_str(), &working, nullptr);
+	}
+
+	struct stat source_stat;
+	checked.source_exists = stat(record.source_locator.c_str(),
+		&source_stat) == 0 && S_ISREG(source_stat.st_mode);
+	if (checked.source_exists) {
+		checked.source_size = static_cast<int64_t>(source_stat.st_size);
+		checked.source_mtime = static_cast<int64_t>(source_stat.st_mtime);
+		checked.source_metadata_changed =
+			checked.source_size != record.source_size ||
+			(record.source_mtime >= 0 &&
+			 checked.source_mtime != record.source_mtime);
+		if (checked.source_metadata_changed) {
+			D88MediaInfo source_media;
+			if (ProbeD88File(record.source_locator.c_str(), &source_media,
+				nullptr)) {
+				checked.source_hash_changed = source_media.md5 != record.md5;
+			}
+			else {
+				checked.source_hash_changed = true;
+			}
+		}
+	}
+
+	if (!checked.working_exists) {
+		checked.health_state = kRaMediaHealthWorkingMissing;
+	}
+	else if (!checked.working_probe_ok) {
+		checked.health_state = kRaMediaHealthWorkingCorrupt;
+	}
+	else if (!checked.source_exists) {
+		checked.health_state = kRaMediaHealthSourceMissing;
+	}
+	else if (checked.source_hash_changed) {
+		checked.health_state = kRaMediaHealthSourceChanged;
+	}
+	else {
+		checked.health_state = kRaMediaHealthOk;
+	}
+
+	if (!library_->UpdateMediaHealth(checked, error)) {
+		return false;
+	}
+	*status = checked;
+	return true;
+}
+
 bool RaMediaStore::ImportD88IntoGame(const std::string& source_path,
 	int64_t game_id, int ordinal, ImportedMedia *imported, std::string *error)
 {

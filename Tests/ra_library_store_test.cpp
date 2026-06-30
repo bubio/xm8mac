@@ -245,11 +245,31 @@ int main()
 	Check(ReadFile(duplicate.working_path) == original_single,
 		"duplicate working copy unchanged");
 
+	Xm8Ra::MediaHealthStatus health;
+	Check(store.CheckMediaHealth(first.record.md5, &health, &error),
+		"check healthy media");
+	Check(health.health_state == Xm8Ra::kRaMediaHealthOk,
+		"healthy media state");
+	Check(health.source_exists, "healthy media source exists");
+	Check(health.working_exists, "healthy media working copy exists");
+	Check(health.working_probe_ok, "healthy media working copy probes");
+
+	Check(unlink(first.working_path.c_str()) == 0,
+		"remove working copy for health check");
+	Check(store.CheckMediaHealth(first.record.md5, &health, &error),
+		"check missing working copy");
+	Check(health.health_state == Xm8Ra::kRaMediaHealthWorkingMissing,
+		"missing working copy health state");
+	std::string reset_path;
+	Check(store.ResetWorkingCopy(single, first.record.md5, &reset_path, &error),
+		"restore missing working copy from matching original");
+	Check(ReadFile(first.working_path) == original_single,
+		"restored missing working copy bytes");
+
 	Check(AppendByte(first.working_path, '\x24'),
 		"simulate save data in working copy");
 	Check(ReadFile(single) == original_single,
 		"simulated save data does not change original");
-	std::string reset_path;
 	Check(store.ResetWorkingCopy(single, first.record.md5, &reset_path, &error),
 		"reset working copy from matching original");
 	Check(reset_path == first.working_path, "reset targets same working path");
@@ -275,6 +295,37 @@ int main()
 		Check(playlist.media[1].working_path.find("/ra/media/") !=
 			std::string::npos,
 			"M3U second working copy is under RA media root");
+
+		Xm8Ra::LaunchProfile profile;
+		Check(library.LoadLaunchProfile(playlist.game_id, &profile, &error),
+			"load default launch profile");
+		Check(profile.drives[0].assigned,
+			"default launch profile assigns drive 1");
+		Check(profile.drives[0].media_md5 == playlist.anchor_md5,
+			"default launch profile drive 1 uses anchor media");
+		Check(profile.drives[0].is_ra_anchor,
+			"default launch profile marks drive 1 as RA anchor");
+		Check(!profile.drives[1].assigned,
+			"default launch profile leaves drive 2 empty");
+
+		profile.drives[1].assigned = true;
+		profile.drives[1].media_md5 = playlist.media[1].record.md5;
+		profile.drives[1].bank_index = 0;
+		profile.drives[1].is_ra_anchor = false;
+		Check(library.SaveLaunchProfile(profile, &error),
+			"save two-drive launch profile");
+		Xm8Ra::LaunchProfile saved_profile;
+		Check(library.LoadLaunchProfile(playlist.game_id, &saved_profile,
+			&error), "reload two-drive launch profile");
+		Check(saved_profile.drives[1].assigned,
+			"two-drive launch profile assigns drive 2");
+		Check(saved_profile.drives[1].media_md5 ==
+			playlist.media[1].record.md5,
+			"two-drive launch profile drive 2 media");
+
+		saved_profile.drives[0].is_ra_anchor = false;
+		Check(!library.SaveLaunchProfile(saved_profile, &error),
+			"reject launch profile without RA anchor");
 	}
 
 	const std::string folder_dir = JoinPath(base, "folder-scan");
@@ -307,6 +358,10 @@ int main()
 	Check(AppendByte(single, '\x55'), "modify source fixture");
 	Check(!store.ResetWorkingCopy(single, first.record.md5, &reset_path, &error),
 		"reset rejects modified original");
+	Check(store.CheckMediaHealth(first.record.md5, &health, &error),
+		"check modified original health");
+	Check(health.health_state == Xm8Ra::kRaMediaHealthSourceChanged,
+		"modified original health state");
 	Xm8Ra::ImportedMedia modified;
 	Check(store.ImportDesktopD88(single, &modified, &error),
 		"modified source imports as new medium");

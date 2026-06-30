@@ -612,6 +612,254 @@ bool RaLibrary::FindMedia(const std::string& md5, MediaRecord *record,
 	return true;
 }
 
+bool RaLibrary::LoadMediaHealthRecord(const std::string& md5,
+	MediaHealthRecord *record, std::string *error)
+{
+	if (record == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT md5, game_id, source_locator, source_size, source_mtime,"
+		" working_relpath, health_state FROM media WHERE md5 = ?",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_text(stmt, 1, md5.c_str(), -1, SQLITE_TRANSIENT);
+	const int rc = sqlite3_step(stmt);
+	if (rc == SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		if (error != nullptr) {
+			*error = "media is not registered";
+		}
+		return false;
+	}
+	if (rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		return false;
+	}
+
+	record->md5 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+	record->game_id = sqlite3_column_int64(stmt, 1);
+	record->source_locator =
+		reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+	record->source_size = sqlite3_column_int64(stmt, 3);
+	record->source_mtime = sqlite3_column_type(stmt, 4) == SQLITE_NULL ?
+		-1 : sqlite3_column_int64(stmt, 4);
+	record->working_relpath =
+		reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+	record->health_state = sqlite3_column_int(stmt, 6);
+	sqlite3_finalize(stmt);
+	return true;
+}
+
+bool RaLibrary::UpdateMediaHealth(const MediaHealthStatus& status,
+	std::string *error)
+{
+	if (status.md5.size() != 32 ||
+		status.health_state < kRaMediaHealthOk ||
+		status.health_state > kRaMediaHealthWorkingCorrupt) {
+		if (error != nullptr) {
+			*error = "invalid media health status";
+		}
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"UPDATE media SET health_state = ?,"
+		" source_size = CASE WHEN ? THEN ? ELSE source_size END,"
+		" source_mtime = CASE WHEN ? THEN ? ELSE source_mtime END,"
+		" verified_at = ? WHERE md5 = ?",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_int(stmt, 1, status.health_state);
+	const bool update_source_metadata =
+		status.source_exists && !status.source_hash_changed &&
+		status.source_size > 0;
+	sqlite3_bind_int(stmt, 2, update_source_metadata ? 1 : 0);
+	sqlite3_bind_int64(stmt, 3,
+		update_source_metadata ?
+			static_cast<sqlite3_int64>(status.source_size) : 0);
+	sqlite3_bind_int(stmt, 4, update_source_metadata ? 1 : 0);
+	if (update_source_metadata && status.source_mtime >= 0) {
+		sqlite3_bind_int64(stmt, 5, status.source_mtime);
+	}
+	else {
+		sqlite3_bind_null(stmt, 5);
+	}
+	sqlite3_bind_int64(stmt, 6, NowUnixTime());
+	sqlite3_bind_text(stmt, 7, status.md5.c_str(), -1, SQLITE_TRANSIENT);
+	if (!StepDone(db_, stmt, error)) {
+		return false;
+	}
+	if (sqlite3_changes(db_) != 1) {
+		if (error != nullptr) {
+			*error = "media is not registered";
+		}
+		return false;
+	}
+	return true;
+}
+
+bool RaLibrary::LoadLaunchProfile(int64_t game_id, LaunchProfile *profile,
+	std::string *error)
+{
+	if (game_id <= 0 || profile == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+
+	LaunchProfile loaded;
+	loaded.game_id = game_id;
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT drive, media_md5, bank_index, is_ra_anchor"
+		" FROM launch_profiles WHERE game_id = ? ORDER BY drive",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, game_id);
+	while (true) {
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_DONE) {
+			break;
+		}
+		if (rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			sqlite3_finalize(stmt);
+			return false;
+		}
+		const int drive = sqlite3_column_int(stmt, 0);
+		if (drive < 0 || drive > 1) {
+			sqlite3_finalize(stmt);
+			if (error != nullptr) {
+				*error = "invalid launch profile drive";
+			}
+			return false;
+		}
+		LaunchDrive& slot = loaded.drives[drive];
+		slot.assigned = true;
+		slot.media_md5 =
+			reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+		slot.bank_index = sqlite3_column_int(stmt, 2);
+		slot.is_ra_anchor = sqlite3_column_int(stmt, 3) != 0;
+	}
+	sqlite3_finalize(stmt);
+	*profile = loaded;
+	return true;
+}
+
+bool RaLibrary::SaveLaunchProfile(const LaunchProfile& profile,
+	std::string *error)
+{
+	if (profile.game_id <= 0) {
+		if (error != nullptr) {
+			*error = "invalid launch profile game";
+		}
+		return false;
+	}
+
+	int assigned_count = 0;
+	int anchor_count = 0;
+	for (int drive = 0; drive < 2; drive++) {
+		const LaunchDrive& slot = profile.drives[drive];
+		if (!slot.assigned) {
+			continue;
+		}
+		assigned_count++;
+		if (slot.media_md5.size() != 32 || slot.bank_index < 0) {
+			if (error != nullptr) {
+				*error = "invalid launch profile media";
+			}
+			return false;
+		}
+		if (slot.is_ra_anchor) {
+			anchor_count++;
+		}
+	}
+	if (assigned_count == 0 || anchor_count != 1) {
+		if (error != nullptr) {
+			*error = "launch profile must contain exactly one RA anchor";
+		}
+		return false;
+	}
+
+	if (!Exec("BEGIN IMMEDIATE", error)) {
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "DELETE FROM launch_profiles WHERE game_id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, profile.game_id);
+	if (!StepDone(db_, stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+
+	for (int drive = 0; drive < 2; drive++) {
+		const LaunchDrive& slot = profile.drives[drive];
+		if (!slot.assigned) {
+			continue;
+		}
+		if (!Prepare(db_,
+			"INSERT INTO launch_profiles(game_id, drive, media_md5,"
+			" bank_index, is_ra_anchor) VALUES(?, ?, ?, ?, ?)",
+			&stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+		sqlite3_bind_int64(stmt, 1, profile.game_id);
+		sqlite3_bind_int(stmt, 2, drive);
+		sqlite3_bind_text(stmt, 3, slot.media_md5.c_str(), -1,
+			SQLITE_TRANSIENT);
+		sqlite3_bind_int(stmt, 4, slot.bank_index);
+		sqlite3_bind_int(stmt, 5, slot.is_ra_anchor ? 1 : 0);
+		if (!StepDone(db_, stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+	}
+
+	if (!Prepare(db_,
+		"SELECT COUNT(*) FROM launch_profiles"
+		" WHERE game_id = ? AND is_ra_anchor = 1",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, profile.game_id);
+	const int rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW || sqlite3_column_int(stmt, 0) != 1) {
+		if (error != nullptr) {
+			*error = rc == SQLITE_ROW ? "launch profile anchor invariant failed" :
+				sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_finalize(stmt);
+
+	return Exec("COMMIT", error);
+}
+
 bool RaLibrary::RegisterDesktopMedia(const D88MediaInfo& media,
 	const std::string& source_path, const std::string& display_name,
 	int64_t source_mtime, MediaRecord *record, std::string *error)
