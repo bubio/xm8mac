@@ -2,15 +2,18 @@
 
 ## 1. 現在の完了範囲
 
-Phase 4のうち、実RAサーバーへ接続しない共通土台を追加した。
+Phase 4のうち、実RAサーバーへ接続しない共通土台とmacOS HTTP adapterの
+コンパイル可能な実装を追加した。
 
 - `RaHttpClient`契約を追加した。
 - fake HTTP backendを追加した。
 - `credentials.bin`の保存、読込、削除を追加した。
+- `rc_client_server_call_t`から`RaHttpClient`へ変換するbridgeを追加した。
+- macOS用`NSURLSession` backendを追加した。
 - RA ON buildだけへ上記を組み込み、Normal buildには組み込んでいない。
 
-`NSURLSession`実装、`rc_client_server_call_t` adapter、password/token loginの
-`rc_client`接続は未実装である。
+password/token loginの`rc_client`接続、実RAサーバーへのHTTPS接続確認、
+token拒否時の資格情報削除は未実装である。
 
 ## 2. 認証情報ファイル
 
@@ -57,6 +60,29 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 `Source/RA/ra_http_fake.*`はテスト用backendであり、実通信は行わない。cancel済みrequestの
 遅延responseは破棄する。
 
+`Source/RA/ra_rc_client_http.*`は`rc_client_server_call_t` adapterである。
+
+- `rc_api_request_t::url`、`post_data`、`content_type`を`Send()`前に所有コピーへ変換する。
+- `rc_client_get_userdata(client)`からbridgeを取得する。
+- bridge未設定または不正requestでは同期的に
+  `RC_API_SERVER_RESPONSE_CLIENT_ERROR`を返す。
+- transport successではHTTP statusとbodyをそのまま`rc_api_server_response_t`へ渡す。
+- timeoutとretryable transport errorは
+  `RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR`へ変換する。
+- cancel、oversize、非retryable transport errorは
+  `RC_API_SERVER_RESPONSE_CLIENT_ERROR`へ変換する。
+- callback中だけ有効なbody pointerを渡し、callback後は保持しない。
+
+`Source/RA/ra_http_mac.*`はmacOS専用`NSURLSession` backendである。
+
+- GET、空POST、通常POSTを区別する。
+- RA API requestではredirectを追跡しない。
+- 画像requestだけHTTPSからHTTPSへのredirectを最大5回許可する。
+- response上限超過時はtaskをcancelし、`Oversize`として完了queueへ積む。
+- `NSURLSession` callbackは完了queueへ積むだけで、VMやUIを操作しない。
+- Cookieは使用しない。
+- User-Agentをrequest headerへ設定する。
+
 ## 4. テスト
 
 `Tests/ra_credentials_http_test.cpp`を追加した。
@@ -71,12 +97,16 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - HTTP fake backendがGET、空POST、通常POSTを区別すること。
 - request bodyが所有コピーになっていること。
 - cancel後の遅延responseが二重通知されないこと。
+- `rc_client_server_call_t` adapterが空POSTを保持すること。
+- adapterがtransport結果を`rc_api_server_response_t`へ分類すること。
+- adapterが`rc_client` userdataからbridgeを取得すること。
+- macOS `NSURLSession` backendを生成し、空drainとcancel allができること。
 
 実行済み:
 
 ```text
 cmake -S . -B build-ra -DXM8_ENABLE_RETROACHIEVEMENTS=ON
-cmake --build build-ra --target ra_credentials_http_test ra_library_store_test xm8
+cmake --build build-ra --target ra_credentials_http_test xm8
 ctest --test-dir build-ra -R 'ra_credentials_http_test|ra_library_store_test|ra_media_probe_test|ra_memory_map_test|ra_dependency_test|d88fixture_test|d88probe_test' --output-on-failure
 cmake --build build --target xm8
 ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-on-failure
@@ -91,10 +121,10 @@ ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-
 
 次はPhase 4の残りを実装する。
 
-1. `NSURLSession`を使うmacOS HTTP adapter。
-2. API redirect禁止、画像HTTPS redirect制限、oversize、timeout、TLS失敗の分類。
-3. `rc_client_server_call_t` adapter。
-4. request generation、cancel、shutdown順序。
-5. password login、token login、logoutの`rc_client`接続。
-6. token拒否時の`credentials.bin`削除。
-7. password、token、POST本文をログへ出さないことのテスト。
+1. macOS `NSURLSession` backendの実HTTPS疎通試験。
+2. request generationとsession generationを`RaService`側の状態更新破棄へ接続する。
+3. shutdown時の`CancelAll()`、drain、callback完了、worker停止、
+   `rc_client_destroy()`順序を`RaService`で固定する。
+4. password login、token login、logoutの`rc_client`接続。
+5. token拒否時の`credentials.bin`削除。
+6. password、token、POST本文をログへ出さないことのテスト。

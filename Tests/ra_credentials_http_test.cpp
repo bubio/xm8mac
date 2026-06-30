@@ -1,5 +1,12 @@
 #include "ra_credentials.h"
 #include "ra_http_fake.h"
+#ifdef __APPLE__
+#include "ra_http_mac.h"
+#endif
+#include "ra_rc_client_http.h"
+
+#include "rc_api_request.h"
+#include "rc_client.h"
 
 #include <chrono>
 #include <cerrno>
@@ -49,6 +56,27 @@ bool WriteByte(const std::string& path, long offset, char value)
 std::string LongString(size_t size, char value)
 {
 	return std::string(size, value);
+}
+
+struct CallbackCapture {
+	int calls = 0;
+	int http_status = 0;
+	std::string body;
+};
+
+void RC_CCONV CaptureServerResponse(
+	const rc_api_server_response_t *server_response, void *callback_data)
+{
+	CallbackCapture *capture = static_cast<CallbackCapture *>(callback_data);
+	capture->calls++;
+	capture->http_status = server_response->http_status_code;
+	capture->body.assign(server_response->body != nullptr ? server_response->body : "",
+		server_response->body_length);
+}
+
+uint32_t RC_CCONV ReadNoMemory(uint32_t, uint8_t*, uint32_t, rc_client_t*)
+{
+	return 0;
 }
 
 } // namespace
@@ -155,6 +183,98 @@ int main()
 	Check(completed[1].request_id == 2 &&
 		completed[1].transport_result == Xm8Ra::RaHttpTransportResult::Canceled,
 		"cancel response drained once");
+
+	Xm8Ra::FakeRaHttpClient bridge_http;
+	Xm8Ra::RaRcClientHttpBridge bridge(&bridge_http);
+	rc_api_request_t api_request = {};
+	api_request.url = "https://retroachievements.org/API/API_GetGame";
+	api_request.post_data = "";
+	api_request.content_type = "application/x-www-form-urlencoded";
+	CallbackCapture callback_capture;
+	bridge.BeginServerCall(&api_request, CaptureServerResponse, &callback_capture);
+	Check(bridge_http.SentRequests().size() == 1, "bridge sends request");
+	Check(bridge_http.SentRequests()[0].has_post_data &&
+		bridge_http.SentRequests()[0].post_data.empty(),
+		"bridge preserves empty POST");
+	Check(bridge.PendingCount() == 1, "bridge tracks pending request");
+
+	Xm8Ra::RaHttpResponse bridge_response;
+	bridge_response.request_id = bridge.LastIssuedRequestId();
+	bridge_response.http_status = 200;
+	const std::string response_body = "{\"Success\":true}";
+	bridge_response.body.assign(response_body.begin(), response_body.end());
+	bridge_http.Complete(bridge_response);
+	bridge.DrainCompleted();
+	Check(callback_capture.calls == 1, "bridge invokes callback once");
+	Check(callback_capture.http_status == 200, "bridge forwards HTTP status");
+	Check(callback_capture.body == response_body, "bridge forwards response body");
+	Check(bridge.PendingCount() == 0, "bridge clears completed pending request");
+
+	Check(Xm8Ra::RaRcClientHttpBridge::HttpStatusForTransportResult(
+		Xm8Ra::RaHttpTransportResult::Timeout, 0) ==
+		RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR,
+		"timeout maps to retryable client error");
+	Check(Xm8Ra::RaRcClientHttpBridge::HttpStatusForTransportResult(
+		Xm8Ra::RaHttpTransportResult::Oversize, 0) ==
+		RC_API_SERVER_RESPONSE_CLIENT_ERROR,
+		"oversize maps to client error");
+	Check(Xm8Ra::RaRcClientHttpBridge::HttpStatusForTransportResult(
+		Xm8Ra::RaHttpTransportResult::Success, 503) == 503,
+		"HTTP status preserved for successful transport");
+
+	CallbackCapture cancel_capture;
+	api_request.post_data = nullptr;
+	bridge.BeginServerCall(&api_request, CaptureServerResponse, &cancel_capture);
+	const uint64_t cancel_request_id = bridge.LastIssuedRequestId();
+	bridge.Cancel(cancel_request_id);
+	bridge.DrainCompleted();
+	Check(cancel_capture.calls == 1, "cancel invokes callback");
+	Check(cancel_capture.http_status == RC_API_SERVER_RESPONSE_CLIENT_ERROR,
+		"cancel maps to client error response");
+
+	CallbackCapture orphan_capture;
+	Xm8Ra::RaRcClientHttpBridge::ServerCall(&api_request, CaptureServerResponse,
+		&orphan_capture, nullptr);
+	Check(orphan_capture.calls == 1 &&
+		orphan_capture.http_status == RC_API_SERVER_RESPONSE_CLIENT_ERROR,
+		"server call without bridge fails synchronously");
+
+	Xm8Ra::FakeRaHttpClient userdata_http;
+	Xm8Ra::RaRcClientHttpBridge userdata_bridge(&userdata_http);
+	rc_client_t *client = rc_client_create(ReadNoMemory,
+		Xm8Ra::RaRcClientHttpBridge::ServerCall);
+	Check(client != nullptr, "create rc_client for bridge test");
+	if (client != nullptr) {
+		rc_client_set_userdata(client, &userdata_bridge);
+		CallbackCapture userdata_capture;
+		Xm8Ra::RaRcClientHttpBridge::ServerCall(&api_request, CaptureServerResponse,
+			&userdata_capture, client);
+		Check(userdata_http.SentRequests().size() == 1,
+			"server call uses bridge from rc_client userdata");
+		Xm8Ra::RaHttpResponse userdata_response;
+		userdata_response.request_id = userdata_bridge.LastIssuedRequestId();
+		userdata_response.transport_result =
+			Xm8Ra::RaHttpTransportResult::RetryableClientError;
+		userdata_http.Complete(userdata_response);
+		userdata_bridge.DrainCompleted();
+		Check(userdata_capture.calls == 1 &&
+			userdata_capture.http_status ==
+				RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR,
+			"retryable transport result returned to rc_client callback");
+		rc_client_destroy(client);
+	}
+
+#ifdef __APPLE__
+	{
+		auto mac_http = Xm8Ra::CreateMacRaHttpClient(
+			"XM8/test rcheevos/test (macOS)");
+		Check(mac_http != nullptr, "create macOS HTTP client");
+		std::vector<Xm8Ra::RaHttpResponse> mac_completed;
+		mac_http->DrainCompleted(&mac_completed);
+		Check(mac_completed.empty(), "macOS HTTP empty drain");
+		mac_http->CancelAll();
+	}
+#endif
 
 	std::remove(store.Path().c_str());
 #ifndef _WIN32

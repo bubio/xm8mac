@@ -84,7 +84,13 @@ add_library(xm8_ra_core OBJECT
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_probe.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_store.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_paths.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_rc_client_http.cpp
 )
+if(APPLE)
+  target_sources(xm8_ra_core PRIVATE
+    ${PROJECT_SOURCE_DIR}/Source/RA/ra_http_mac.mm
+  )
+endif()
 target_include_directories(xm8_ra_core
   PUBLIC ${PROJECT_SOURCE_DIR}/Source/RA
   PRIVATE
@@ -93,6 +99,9 @@ target_include_directories(xm8_ra_core
 )
 target_link_libraries(xm8_ra_core PRIVATE xm8_ra_dependencies)
 target_compile_definitions(xm8_ra_core PUBLIC XM8_ENABLE_RETROACHIEVEMENTS=1)
+if(APPLE)
+  target_link_libraries(xm8_ra_dependencies INTERFACE "-framework Foundation")
+endif()
 
 function(xm8_enable_ra_for_target target_name)
   target_sources(${target_name} PRIVATE $<TARGET_OBJECTS:xm8_ra_core>)
