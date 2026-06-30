@@ -2,9 +2,27 @@
 
 #include "rc_error.h"
 
+#include <cctype>
 #include <cstring>
 
 namespace Xm8Ra {
+
+namespace {
+
+bool IsMd5Hex(const std::string& hash)
+{
+	if (hash.size() != 32) {
+		return false;
+	}
+	for (const char c : hash) {
+		if (!std::isxdigit(static_cast<unsigned char>(c))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+} // namespace
 
 RaService::RaService(RaServiceOptions options)
 	: http_client_(std::move(options.http_client)),
@@ -103,15 +121,78 @@ bool RaService::BeginLoginWithSavedToken(std::string *error)
 	return true;
 }
 
+bool RaService::BeginLoadGameByHash(const std::string& hash, std::string *error)
+{
+	if (!IsReady()) {
+		if (error != nullptr) {
+			*error = "RA service is not ready";
+		}
+		return false;
+	}
+	if (login_.state != RaLoginState::LoggedIn) {
+		if (error != nullptr) {
+			*error = "RA login is required before loading a game";
+		}
+		return false;
+	}
+	if (!IsMd5Hex(hash)) {
+		if (error != nullptr) {
+			*error = "RA game hash must be a 32-character MD5 hex string";
+		}
+		return false;
+	}
+	if (game_session_.state == RaGameSessionState::LoadPending) {
+		if (error != nullptr) {
+			*error = "RA game load is already pending";
+		}
+		return false;
+	}
+
+	http_bridge_->AdvanceGeneration();
+	game_session_ = RaGameSessionSnapshot();
+	game_session_.state = RaGameSessionState::LoadPending;
+	game_session_.hash = hash;
+	game_session_.load_state = rc_client_get_load_game_state(client_);
+
+	rc_client_async_handle_t *handle = rc_client_begin_load_game(
+		client_, hash.c_str(), LoadGameCallback, this);
+	game_session_.load_state = rc_client_get_load_game_state(client_);
+	if (handle == nullptr &&
+		game_session_.state == RaGameSessionState::LoadPending) {
+		DisableGameSession(RC_INVALID_STATE, "RA game load did not start");
+		if (error != nullptr) {
+			*error = game_session_.message;
+		}
+		return false;
+	}
+
+	return true;
+}
+
 void RaService::DrainHttp()
 {
 	if (http_bridge_ != nullptr) {
 		http_bridge_->DrainCompleted();
+		if (client_ != nullptr) {
+			game_session_.load_state = rc_client_get_load_game_state(client_);
+		}
 	}
+}
+
+void RaService::UnloadGame()
+{
+	if (client_ != nullptr) {
+		rc_client_unload_game(client_);
+	}
+	if (http_bridge_ != nullptr) {
+		http_bridge_->AdvanceGeneration();
+	}
+	game_session_ = RaGameSessionSnapshot();
 }
 
 void RaService::Logout()
 {
+	UnloadGame();
 	if (client_ != nullptr) {
 		rc_client_logout(client_);
 	}
@@ -155,6 +236,11 @@ RaLoginSnapshot RaService::LoginSnapshot() const
 	return login_;
 }
 
+RaGameSessionSnapshot RaService::GameSessionSnapshot() const
+{
+	return game_session_;
+}
+
 size_t RaService::PendingHttpCount() const
 {
 	return http_bridge_ != nullptr ? http_bridge_->PendingCount() : 0;
@@ -190,6 +276,15 @@ void RC_CCONV RaService::LoginCallback(int result, const char *error_message,
 	RaService *service = static_cast<RaService *>(userdata);
 	if (service != nullptr) {
 		service->HandleLoginCallback(result, error_message);
+	}
+}
+
+void RC_CCONV RaService::LoadGameCallback(int result,
+	const char *error_message, rc_client_t *, void *userdata)
+{
+	RaService *service = static_cast<RaService *>(userdata);
+	if (service != nullptr) {
+		service->HandleLoadGameCallback(result, error_message);
 	}
 }
 
@@ -232,11 +327,50 @@ void RaService::HandleLoginCallback(int result, const char *error_message)
 	login_kind_ = LoginKind::None;
 }
 
+void RaService::HandleLoadGameCallback(int result, const char *error_message)
+{
+	game_session_.result = result;
+	game_session_.message = error_message != nullptr ? error_message : "";
+	game_session_.load_state = rc_client_get_load_game_state(client_);
+
+	if (result != RC_OK) {
+		DisableGameSession(result, game_session_.message);
+		return;
+	}
+
+	const rc_client_game_t *game = rc_client_get_game_info(client_);
+	if (game == nullptr || game->id == 0) {
+		DisableGameSession(RC_NO_GAME_LOADED, "RA game information is unavailable");
+		return;
+	}
+
+	game_session_.state = RaGameSessionState::Loaded;
+	game_session_.disabled_for_session = false;
+	game_session_.game_id = game->id;
+	game_session_.console_id = game->console_id;
+	game_session_.title = game->title != nullptr ? game->title : "";
+	game_session_.hash = game->hash != nullptr ? game->hash : game_session_.hash;
+	game_session_.badge_url = game->badge_url != nullptr ? game->badge_url : "";
+}
+
 void RaService::SetFailed(int result, const std::string& message)
 {
 	login_.state = RaLoginState::Failed;
 	login_.result = result;
 	login_.message = message;
+}
+
+void RaService::DisableGameSession(int result, const std::string& message)
+{
+	if (client_ != nullptr) {
+		rc_client_unload_game(client_);
+	}
+	game_session_.state = RaGameSessionState::DisabledForSession;
+	game_session_.result = result;
+	game_session_.message = message;
+	game_session_.load_state = client_ != nullptr ?
+		rc_client_get_load_game_state(client_) : 0;
+	game_session_.disabled_for_session = true;
 }
 
 void RaService::DeleteCredentialsForRejectedToken()

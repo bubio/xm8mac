@@ -19,6 +19,13 @@ enum class RaLoginState {
 	Failed,
 };
 
+enum class RaGameSessionState {
+	NoGame,
+	LoadPending,
+	Loaded,
+	DisabledForSession,
+};
+
 struct RaLoginSnapshot {
 	RaLoginState state = RaLoginState::LoggedOut;
 	int result = 0;
@@ -26,6 +33,19 @@ struct RaLoginSnapshot {
 	std::string username;
 	std::string display_name;
 	bool credentials_deleted = false;
+};
+
+struct RaGameSessionSnapshot {
+	RaGameSessionState state = RaGameSessionState::NoGame;
+	int result = 0;
+	int load_state = 0;
+	std::string message;
+	std::string hash;
+	uint32_t game_id = 0;
+	uint32_t console_id = 0;
+	std::string title;
+	std::string badge_url;
+	bool disabled_for_session = false;
 };
 
 struct RaServiceOptions {
@@ -47,11 +67,14 @@ public:
 	bool BeginLoginWithPassword(const std::string& username,
 		const std::string& password, std::string *error);
 	bool BeginLoginWithSavedToken(std::string *error);
+	bool BeginLoadGameByHash(const std::string& hash, std::string *error);
 	void DrainHttp();
+	void UnloadGame();
 	void Logout();
 	void Shutdown();
 
 	RaLoginSnapshot LoginSnapshot() const;
+	RaGameSessionSnapshot GameSessionSnapshot() const;
 	size_t PendingHttpCount() const;
 	uint64_t LastIssuedRequestId() const;
 	const RaHttpClient *HttpClientForTesting() const;
@@ -68,9 +91,13 @@ private:
 		uint32_t num_bytes, rc_client_t *client);
 	static void RC_CCONV LoginCallback(int result, const char *error_message,
 		rc_client_t *client, void *userdata);
+	static void RC_CCONV LoadGameCallback(int result, const char *error_message,
+		rc_client_t *client, void *userdata);
 
 	void HandleLoginCallback(int result, const char *error_message);
+	void HandleLoadGameCallback(int result, const char *error_message);
 	void SetFailed(int result, const std::string& message);
+	void DisableGameSession(int result, const std::string& message);
 	void DeleteCredentialsForRejectedToken();
 
 	std::unique_ptr<RaHttpClient> http_client_;
@@ -79,6 +106,7 @@ private:
 	rc_client_t *client_ = nullptr;
 	LoginKind login_kind_ = LoginKind::None;
 	RaLoginSnapshot login_;
+	RaGameSessionSnapshot game_session_;
 	bool shutdown_ = false;
 };
 

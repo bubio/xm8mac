@@ -3,7 +3,7 @@
 ## 1. 現在の完了範囲
 
 Phase 4のうち、実RAサーバーへ接続しない共通土台、macOS HTTP adapter、
-`rc_client`認証サービス層のコンパイル可能な実装を追加した。
+`rc_client`認証サービス層、ハッシュ指定のゲームロード開始を追加した。
 
 - `RaHttpClient`契約を追加した。
 - fake HTTP backendを追加した。
@@ -15,9 +15,15 @@ Phase 4のうち、実RAサーバーへ接続しない共通土台、macOS HTTP 
 - password login成功時はRAから返されたtokenを`credentials.bin`へ保存する。
 - 保存token login失敗時は`credentials.bin`を削除する。
 - logout時は`rc_client_logout()`後に`credentials.bin`を削除する。
+- D88全体MD5を`rc_client_begin_load_game()`へ渡してゲーム識別、実績定義取得、
+  RA session開始を`rc_client`へ委譲する。
+- ゲームロード成功時は`rc_client_get_game_info()`からGame ID、console ID、title、
+  hash、badge URLをsnapshotへ反映する。
+- ゲームロード失敗時は当該起動セッションのRAを
+  `DisabledForSession`として固定し、`rc_client_unload_game()`する。
 - RA ON buildだけへ上記を組み込み、Normal buildには組み込んでいない。
 
-実RAサーバーへのHTTPS接続確認、ゲーム識別、セッション開始は未実装である。
+実RAサーバーへのHTTPS接続確認、実機D88からの自動ロード接続は未実装である。
 
 ## 2. 認証情報ファイル
 
@@ -104,9 +110,19 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - 保存済みtoken login失敗時は`credentials.bin`を削除し、当該tokenを再利用しない。
 - logout時は`rc_client_logout()`を呼び、保存tokenも削除する。
 - shutdown時は`CancelAll()`、drain、`rc_client_destroy()`、bridge破棄の順で処理する。
+- `BeginLoadGameByHash()`で32文字MD5 hexだけを受け付ける。
+- load中の二重load要求は拒否する。
+- load開始前にHTTP bridge generationを進め、前セッションの遅延HTTP完了を破棄する。
+- `rc_client_begin_load_game()`へhashを渡し、`achievementsets`、`startsession`等のRA API
+  詳細は`rc_client`に委譲する。
+- load成功時は`RaGameSessionSnapshot`を`Loaded`へ更新する。
+- load失敗時は`RaGameSessionSnapshot`を`DisabledForSession`へ更新し、
+  途中再接続によるRA復帰を行わない。
+- `UnloadGame()`は`rc_client_unload_game()`とbridge generation更新を行い、
+  game snapshotを初期化する。
 
-現時点の`RaService`は認証単位であり、ゲーム識別、ロード、実績評価、
-Leaderboard、Rich Presenceはまだ扱わない。
+現時点の`RaService`は認証とゲームロード開始までであり、実績フレーム評価、
+Leaderboard、Rich Presence表示はまだ扱わない。
 
 ## 5. テスト
 
@@ -130,6 +146,11 @@ Leaderboard、Rich Presenceはまだ扱わない。
 - `RaService`が保存token loginを`rc_client`へ渡し、password fieldを送信しないこと。
 - 保存token拒否時に`credentials.bin`を削除すること。
 - logout時に`credentials.bin`を削除すること。
+- `BeginLoadGameByHash()`がD88全体MD5を`achievementsets` requestへ渡すこと。
+- `achievementsets`成功後に`startsession` requestが発行されること。
+- load成功時にGame ID、console ID、title、hashがsnapshotへ反映されること。
+- 不正hashではHTTP requestを送信しないこと。
+- load失敗時にRAを当該セッションで`DisabledForSession`に固定すること。
 - shutdown時にpending HTTPをcancel/drainし、pendingを残さないこと。
 
 実行済み:
@@ -152,7 +173,8 @@ ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-
 次はPhase 4の残りを実装する。
 
 1. macOS `NSURLSession` backendの実HTTPS疎通試験。
-2. request generationとsession generationを`RaService`側の状態更新破棄へ接続する。
-3. `RaService`にゲーム識別、load game、RAセッション開始を追加する。
-4. session開始失敗時に当該セッションをoffline扱いへ固定し、途中再接続しない。
+2. `RaMediaStore`で得た起動媒体MD5から`RaService::BeginLoadGameByHash()`を呼ぶ
+   アプリ統合。
+3. `rc_client_do_frame()`、`rc_client_idle()`、event handlerを接続する。
+4. request generationとsession generationを`RaService`側の状態更新破棄へさらに接続する。
 5. password、token、POST本文をログへ出さないことのテスト。
