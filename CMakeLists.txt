@@ -379,6 +379,21 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_library_store_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_library_store_test COMMAND ra_library_store_test)
+
+    add_executable(ra_credentials_http_test
+      Tests/ra_credentials_http_test.cpp
+      Source/RA/ra_http_fake.cpp
+      Source/UI/m3u.cpp
+      $<TARGET_OBJECTS:xm8_ra_core>
+    )
+    target_link_libraries(ra_credentials_http_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_credentials_http_test PRIVATE
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_credentials_http_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_credentials_http_test COMMAND ra_credentials_http_test)
   endif()
 endif()
 
