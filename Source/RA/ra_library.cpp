@@ -8,6 +8,7 @@
 #include <cstring>
 #include <sstream>
 #include <sys/stat.h>
+#include <vector>
 
 namespace Xm8Ra {
 namespace {
@@ -856,6 +857,152 @@ bool RaLibrary::SaveLaunchProfile(const LaunchProfile& profile,
 		return false;
 	}
 	sqlite3_finalize(stmt);
+
+	return Exec("COMMIT", error);
+}
+
+bool RaLibrary::MergeGameMedia(int64_t target_game_id,
+	int64_t source_game_id, std::string *error)
+{
+	if (target_game_id <= 0 || source_game_id <= 0 ||
+		target_game_id == source_game_id) {
+		if (error != nullptr) {
+			*error = "invalid game merge target";
+		}
+		return false;
+	}
+	if (!Exec("BEGIN IMMEDIATE", error)) {
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "SELECT 1 FROM games WHERE id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, target_game_id);
+	const int target_rc = sqlite3_step(stmt);
+	sqlite3_finalize(stmt);
+	if (target_rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = "target game does not exist";
+		}
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+
+	if (!Prepare(db_, "SELECT 1 FROM games WHERE id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, source_game_id);
+	const int source_rc = sqlite3_step(stmt);
+	sqlite3_finalize(stmt);
+	if (source_rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = "source game does not exist";
+		}
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+
+	int max_ordinal = -1;
+	if (!Prepare(db_,
+		"SELECT COALESCE(MAX(ordinal), -1) FROM media WHERE game_id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, target_game_id);
+	if (sqlite3_step(stmt) == SQLITE_ROW) {
+		max_ordinal = sqlite3_column_int(stmt, 0);
+	}
+	else {
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_finalize(stmt);
+
+	std::vector<std::string> media_md5s;
+	if (!Prepare(db_,
+		"SELECT md5 FROM media WHERE game_id = ? ORDER BY ordinal, md5",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, source_game_id);
+	while (true) {
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_DONE) {
+			break;
+		}
+		if (rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			sqlite3_finalize(stmt);
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+		media_md5s.push_back(
+			reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+	}
+	sqlite3_finalize(stmt);
+	if (media_md5s.empty()) {
+		if (error != nullptr) {
+			*error = "source game has no media";
+		}
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+
+	if (!Prepare(db_, "DELETE FROM launch_profiles WHERE game_id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, source_game_id);
+	if (!StepDone(db_, stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+
+	for (size_t i = 0; i < media_md5s.size(); i++) {
+		if (!Prepare(db_,
+			"UPDATE media SET game_id = ?, ordinal = ?, detached_at = NULL"
+			" WHERE md5 = ? AND game_id = ?",
+			&stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+		sqlite3_bind_int64(stmt, 1, target_game_id);
+		sqlite3_bind_int(stmt, 2,
+			max_ordinal + 1 + static_cast<int>(i));
+		sqlite3_bind_text(stmt, 3, media_md5s[i].c_str(), -1,
+			SQLITE_TRANSIENT);
+		sqlite3_bind_int64(stmt, 4, source_game_id);
+		if (!StepDone(db_, stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+	}
+
+	if (!Prepare(db_, "DELETE FROM games WHERE id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, source_game_id);
+	if (!StepDone(db_, stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
 
 	return Exec("COMMIT", error);
 }

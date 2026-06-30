@@ -1,6 +1,7 @@
 #include "Fixtures/d88_fixture.h"
 #include "ra_library.h"
 #include "ra_media_store.h"
+#include "ra_paths.h"
 
 #include <chrono>
 #include <cerrno>
@@ -190,6 +191,10 @@ int main()
 	if (!error.empty()) {
 		std::cerr << error << '\n';
 	}
+	Check(Xm8Ra::RootFromSettingDir((base + "/").c_str()) == ra_root,
+		"RA root is under setting directory");
+	Check(Xm8Ra::RootFromSettingDir("") == "",
+		"empty setting directory has no RA root");
 	Check(D88Fixture::GenerateStandardSet(source_dir, &error),
 		"generate fixture set");
 	if (!error.empty()) {
@@ -323,10 +328,52 @@ int main()
 			playlist.media[1].record.md5,
 			"two-drive launch profile drive 2 media");
 
+		Xm8Ra::ResolvedLaunchProfile resolved;
+		Check(store.ResolveLaunchProfile(playlist.game_id, &resolved,
+			&error), "resolve two-drive launch profile");
+		Check(resolved.drives[0].assigned && resolved.drives[1].assigned,
+			"resolved launch profile has two drives");
+		Check(resolved.drives[0].working_path.find("/ra/media/") !=
+			std::string::npos,
+			"resolved drive 1 uses RA working copy");
+		Check(resolved.drives[1].working_path.find("/ra/media/") !=
+			std::string::npos,
+			"resolved drive 2 uses RA working copy");
+		Check(resolved.drives[0].working_path != single,
+			"resolved drive 1 does not use original path");
+		Check(resolved.anchor_md5 == playlist.anchor_md5,
+			"resolved launch profile exposes RA anchor");
+
+		Check(unlink(resolved.drives[1].working_path.c_str()) == 0,
+			"remove drive 2 working copy before resolve");
+		Check(store.ResolveLaunchProfile(playlist.game_id, &resolved,
+			&error), "resolve recreates missing working copy");
+		Check(PathExists(resolved.drives[1].working_path),
+			"resolved launch profile recreated drive 2 working copy");
+
 		saved_profile.drives[0].is_ra_anchor = false;
 		Check(!library.SaveLaunchProfile(saved_profile, &error),
 			"reject launch profile without RA anchor");
 	}
+
+	Xm8Ra::ImportedMedia standalone_multi;
+	Check(store.ImportDesktopD88(JoinPath(source_dir, "multi.d88"),
+		&standalone_multi, &error), "import standalone multi-bank D88");
+	Check(standalone_multi.record.game_id != first.record.game_id,
+		"standalone D88 creates a separate game before merge");
+	Check(library.MergeGameMedia(first.record.game_id,
+		standalone_multi.record.game_id, &error),
+		"merge standalone game media into existing game");
+	Xm8Ra::MediaHealthRecord merged_record;
+	Check(library.LoadMediaHealthRecord(standalone_multi.record.md5,
+		&merged_record, &error), "load merged media record");
+	Check(merged_record.game_id == first.record.game_id,
+		"merged media belongs to target game");
+	Xm8Ra::ResolvedLaunchProfile merged_profile;
+	Check(store.ResolveLaunchProfile(first.record.game_id, &merged_profile,
+		&error), "resolve launch profile after media merge");
+	Check(merged_profile.anchor_md5 == first.record.md5,
+		"media merge keeps target launch anchor");
 
 	const std::string folder_dir = JoinPath(base, "folder-scan");
 	const std::string nested_dir = JoinPath(folder_dir, "nested");

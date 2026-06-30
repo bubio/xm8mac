@@ -26,6 +26,23 @@ struct ImportedFolder {
 	int scanned_candidates = 0;
 };
 
+struct ResolvedLaunchDisk {
+	bool assigned = false;
+	int drive = 0;
+	int bank_index = 0;
+	std::string media_md5;
+	std::string working_path;
+	int health_state = kRaMediaHealthOk;
+	bool is_ra_anchor = false;
+};
+
+struct ResolvedLaunchProfile {
+	int64_t game_id = 0;
+	ResolvedLaunchDisk drives[2];
+	std::string anchor_md5;
+	std::string anchor_working_path;
+};
+
 class RaMediaStore {
 public:
 	explicit RaMediaStore(RaLibrary *library);
@@ -41,6 +58,8 @@ public:
 		std::string *error);
 	bool CheckMediaHealth(const std::string& md5,
 		MediaHealthStatus *status, std::string *error);
+	bool ResolveLaunchProfile(int64_t game_id,
+		ResolvedLaunchProfile *profile, std::string *error);
 
 private:
 	bool ImportD88IntoGame(const std::string& source_path, int64_t game_id,

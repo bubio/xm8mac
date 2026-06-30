@@ -16,6 +16,11 @@
 #include "classes.h"
 #include "clidisk.h"
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+#include "ra_library.h"
+#include "ra_media_store.h"
+#endif
+
 const char* GetAppVersionString();
 
 //
@@ -152,6 +157,11 @@ private:
 										// validate disk specification
 	bool OpenDiskFromUser(const DiskSpec& spec, std::string *error);
 										// open one disk
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
+		std::string *error);
+										// resolve disk to RA working copy
+#endif
 	bool OpenStartupDisks(const std::vector<DiskSpec>& disks, std::string *error);
 										// open CLI disks
 	bool OpenDroppedDisk(const char *path, std::string *error);
@@ -204,6 +214,14 @@ private:
 										// disk manager
 	TapeManager *tapemgr;
 										// tape manager
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	Xm8Ra::RaLibrary *ra_library;
+										// RA library database
+	Xm8Ra::RaMediaStore *ra_media_store;
+										// RA media store
+	bool ra_mode_enabled;
+										// RA mode setting
+#endif
 
 	// flags
 	bool app_quit;

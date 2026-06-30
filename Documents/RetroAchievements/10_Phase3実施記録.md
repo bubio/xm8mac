@@ -2,9 +2,9 @@
 
 ## 位置づけ
 
-この記録は `05_実装工程とテスト計画.md` の Phase 3「SQLiteライブラリと作業コピー」のうち、VM起動経路へ接続する前の基盤実装を対象とする。
+この記録は `05_実装工程とテスト計画.md` の Phase 3「SQLiteライブラリと作業コピー」の完了記録である。
 
-本段階ではRAモードの実行時挙動はまだ変更しない。既存の通常モードではD88を従来どおり扱い、RA有効ビルドでのみ新規のRAライブラリ/媒体ストアコードをビルド・テストできる状態にした。
+既存の通常モードではD88を従来どおり扱う。RA有効ビルドで、かつRA設定が有効な場合だけ、D88原本をRA媒体ストアへ登録し、VMへ渡すパスを `ra/media/<md5>/working.d88` に置き換える。
 
 ## 実装内容
 
@@ -113,10 +113,35 @@ M3U取り込みの基盤を追加した。既存`LoadM3U()`を使い、M3Uに記
 - `SaveLaunchProfile()` はDrive 1/2の構成を1トランザクションで置換する。
 - RA anchorは必ず1件だけ必要とし、0件または2件の構成は保存前に拒否する。
 - 別ゲーム媒体や存在しないbankはSQLiteの外部キー制約で拒否する。
+- `RaLibrary::MergeGameMedia()` を追加し、別ローカルゲームとして登録された媒体を明示的に既存ゲームへ統合できるようにした。
+- 統合時は移動元ゲームの起動構成を削除し、媒体ordinalを移動先ゲーム末尾へ付け替え、移動元ゲームを削除する。
+
+RA起動用パス解決の基盤を追加した。
+
+- `RaMediaStore::ResolveLaunchProfile()` はDrive 1/2の起動構成を `working.d88` の実パスへ解決する。
+- 返却する各Driveのパスは必ずRA root配下の `media/` 相対パスから構成される。
+- 作業コピーが消失またはprobe不能で、原本が登録時MD5と一致する場合は起動前に再作成する。
+- 原本が消失または変更されていても、作業コピーがprobe可能なら既存セーブからの起動を妨げない。
+
+### RA rootとApp接続
+
+`Source/RA/ra_paths.*` を追加し、既存 `Setting::GetSettingDir()` の直下にRA rootを置く規則を固定した。
+
+```text
+<setting_dir>/ra/
+```
+
+`setting.bin`の形式は変更しない。RA有効/無効と前回RA modeは `ra/library.sqlite3` の `ra_settings` だけに保存する。
+
+RA有効ビルドでは `App` が起動時にRAライブラリを開き、`ra_settings.enabled` がtrueの場合だけD88オープン経路をRAモードにする。
+
+- RA mode OFF: 従来どおりユーザー指定D88を `DiskManager` へ渡す。
+- RA mode ON: ユーザー指定D88を `RaMediaStore::ImportDesktopD88()` で登録し、作業コピーを `DiskManager` へ渡す。
+- RA DB初期化失敗時はRA modeを無効化し、既存起動処理を継続する。
 
 ### ビルド接続
 
-`ThirdParty/CMakeLists.txt` の `xm8_ra_core` に `ra_library.cpp` と `ra_media_store.cpp` を追加した。
+`ThirdParty/CMakeLists.txt` の `xm8_ra_core` に `ra_library.cpp`、`ra_media_store.cpp`、`ra_paths.cpp` を追加した。
 
 `CMakeLists.txt` に `ra_library_store_test` を追加した。
 
@@ -150,6 +175,11 @@ macOS 10.13ターゲットを維持するため、本実装とテストでは `s
 - 媒体状態検査は正常、作業コピー消失、原本変更を区別する。
 - 起動構成は標準でDrive 1にRA anchorを持ち、Drive 2の明示割当を保存できる。
 - RA anchorが0件の起動構成は拒否される。
+- `Setting::GetSettingDir()` 配下の `ra/` をRA rootとして解決する。
+- 起動構成解決でDrive 1/2とも `ra/media/` 配下の作業コピーだけが返る。
+- 作業コピー消失時、原本が登録時MD5と一致すれば起動構成解決で再作成される。
+- 別ゲームとして登録された媒体を既存ゲームへ明示統合できる。
+- 明示統合後も移動先ゲームのRA anchorは維持される。
 
 ## 検証結果
 
@@ -171,16 +201,23 @@ ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-
 
 結果: 3件すべて成功。
 
-## 未実装
+## Phase 3完了範囲
 
-次の項目はPhase 3の残作業、または後続Phaseで実装する。
+Phase 3として、次を完了した。
 
-- アプリ設定ディレクトリから実際のRA rootを決定する `ra_settings`/設定層接続。
-- D88/M3U/フォルダ再帰走査のUIまたは起動経路からの登録。
-- 複数媒体を同一ゲームへ統合する編集処理。
-- 原本消失、原本更新、作業コピー破損をライブラリ画面へ表示する処理。
-- RAモードで未登録D88を直接開いた場合の自動登録から起動までの接続。
-- DiskManager/VMへ作業コピーだけを渡す接続。
+- SQLite schema、RA設定、破損DB隔離。
+- 単体D88、M3U、フォルダ再帰取り込み。
+- 作業コピー生成、重複再利用、セーブデータ初期化。
+- 媒体状態検査。
+- 起動構成保存、RA anchor不変条件、既存ゲーム同士の媒体統合。
+- RA root解決。
+- RA mode ON時のD88直接起動から作業コピー経由のVM挿入。
+
+次はPhase 4以降で扱う。
+
+- RA API通信、認証、ゲーム識別、RA Game IDによる自動統合。
+- ライブラリ画面、媒体状態表示、作業コピー再作成の確認UI。
+- オーバーレイからのD88/M3U/フォルダ取り込み操作。
 - Android SAF URI記録とストリームコピー。
 
 ## 後続実装への注意

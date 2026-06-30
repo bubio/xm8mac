@@ -37,6 +37,9 @@
 #include "diskmgr.h"
 #include "tapemgr.h"
 #include "clidisk.h"
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+#include "ra_paths.h"
+#endif
 #ifdef __ANDROID__
 #include "xm8jni.h"
 #endif // __ANDROID__
@@ -160,6 +163,11 @@ App::App()
 	evmgr = NULL;
 	pc88 = NULL;
 	upd1990a = NULL;
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	ra_library = NULL;
+	ra_media_store = NULL;
+	ra_mode_enabled = false;
+#endif
 
 	// flags
 	app_quit = false;
@@ -258,6 +266,27 @@ bool App::Init(const CliOptions& options)
 		Deinit();
 		return false;
 	}
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	ra_library = new Xm8Ra::RaLibrary;
+	{
+		std::string ra_error;
+		const std::string ra_root =
+			Xm8Ra::RootFromSettingDir(setting->GetSettingDir());
+		if (!ra_root.empty() && ra_library->Open(ra_root, &ra_error)) {
+			Xm8Ra::RaSettings ra_settings;
+			if (ra_library->LoadSettings(&ra_settings, &ra_error)) {
+				ra_mode_enabled = ra_settings.enabled;
+			}
+			ra_media_store = new Xm8Ra::RaMediaStore(ra_library);
+		}
+		else {
+			delete ra_library;
+			ra_library = NULL;
+			ra_mode_enabled = false;
+		}
+	}
+#endif
 
 	// spcfiy scaling quality (all platforms)
 	if (setting->IsImageInterpolation()) {
@@ -558,19 +587,56 @@ bool App::ProbeDisk(const DiskSpec& spec, int *banks, std::string *error)
 //
 bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 {
-	int banks;
-	if (ProbeDisk(spec, &banks, error) == false) {
+	DiskSpec open_spec = spec;
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ResolveDiskForRaMode(spec, &open_spec, error) == false) {
 		return false;
 	}
-	if (diskmgr[spec.drive]->Open(spec.path.c_str(), spec.bank) == false) {
+#endif
+	int banks;
+	if (ProbeDisk(open_spec, &banks, error) == false) {
+		return false;
+	}
+	if (diskmgr[open_spec.drive]->Open(open_spec.path.c_str(),
+		open_spec.bank) == false) {
 		std::ostringstream message;
-		message << "drive " << spec.drive << ": failed to insert D88: "
-			<< spec.path;
+		message << "drive " << open_spec.drive << ": failed to insert D88: "
+			<< open_spec.path;
 		*error = message.str();
 		return false;
 	}
 	return true;
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+//
+// ResolveDiskForRaMode()
+// map original D88 to RA working copy when RA mode is enabled
+//
+bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
+	std::string *error)
+{
+	if (resolved == NULL) {
+		*error = "invalid RA disk target";
+		return false;
+	}
+	*resolved = spec;
+	if (!ra_mode_enabled) {
+		return true;
+	}
+	if (ra_media_store == NULL) {
+		*error = "RA media store is not available";
+		return false;
+	}
+
+	Xm8Ra::ImportedMedia imported;
+	if (!ra_media_store->ImportDesktopD88(spec.path, &imported, error)) {
+		return false;
+	}
+	resolved->path = imported.working_path;
+	return true;
+}
+#endif
 
 //
 // OpenStartupDisks()
@@ -760,6 +826,18 @@ void App::Deinit()
 		delete platform;
 		platform = NULL;
 	}
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_media_store != NULL) {
+		delete ra_media_store;
+		ra_media_store = NULL;
+	}
+	if (ra_library != NULL) {
+		delete ra_library;
+		ra_library = NULL;
+	}
+	ra_mode_enabled = false;
+#endif
 
 	// setting
 	if (setting != NULL) {

@@ -455,6 +455,98 @@ bool RaMediaStore::CheckMediaHealth(const std::string& md5,
 	return true;
 }
 
+bool RaMediaStore::ResolveLaunchProfile(int64_t game_id,
+	ResolvedLaunchProfile *profile, std::string *error)
+{
+	if (library_ == nullptr || profile == nullptr || game_id <= 0) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+
+	LaunchProfile launch;
+	if (!library_->LoadLaunchProfile(game_id, &launch, error)) {
+		return false;
+	}
+
+	ResolvedLaunchProfile resolved;
+	resolved.game_id = game_id;
+	int anchor_count = 0;
+	for (int drive = 0; drive < 2; drive++) {
+		const LaunchDrive& source = launch.drives[drive];
+		if (!source.assigned) {
+			continue;
+		}
+
+		MediaHealthRecord record;
+		if (!library_->LoadMediaHealthRecord(source.media_md5, &record,
+			error)) {
+			return false;
+		}
+		if (record.game_id != game_id) {
+			if (error != nullptr) {
+				*error = "launch profile references media from another game";
+			}
+			return false;
+		}
+
+		MediaHealthStatus health;
+		if (!CheckMediaHealth(source.media_md5, &health, error)) {
+			return false;
+		}
+
+		std::string working_path =
+			JoinPath(library_->Root(), record.working_relpath);
+		if (health.health_state == kRaMediaHealthWorkingMissing ||
+			health.health_state == kRaMediaHealthWorkingCorrupt) {
+			if (!ResetWorkingCopy(record.source_locator, record.md5,
+				&working_path, error)) {
+				return false;
+			}
+			if (!CheckMediaHealth(source.media_md5, &health, error)) {
+				return false;
+			}
+		}
+		if (!health.working_exists || !health.working_probe_ok) {
+			if (error != nullptr) {
+				*error = "working copy is not available";
+			}
+			return false;
+		}
+		if (record.working_relpath.compare(0, 6, "media/") != 0) {
+			if (error != nullptr) {
+				*error = "working copy is outside RA media store";
+			}
+			return false;
+		}
+
+		ResolvedLaunchDisk& disk = resolved.drives[drive];
+		disk.assigned = true;
+		disk.drive = drive;
+		disk.bank_index = source.bank_index;
+		disk.media_md5 = source.media_md5;
+		disk.working_path = working_path;
+		disk.health_state = health.health_state;
+		disk.is_ra_anchor = source.is_ra_anchor;
+		if (source.is_ra_anchor) {
+			anchor_count++;
+			resolved.anchor_md5 = disk.media_md5;
+			resolved.anchor_working_path = disk.working_path;
+		}
+	}
+
+	if (anchor_count != 1) {
+		if (error != nullptr) {
+			*error = "launch profile must contain exactly one RA anchor";
+		}
+		return false;
+	}
+
+	*profile = resolved;
+	return true;
+}
+
 bool RaMediaStore::ImportD88IntoGame(const std::string& source_path,
 	int64_t game_id, int ordinal, ImportedMedia *imported, std::string *error)
 {

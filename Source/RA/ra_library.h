@@ -105,6 +105,8 @@ public:
 		std::string *error);
 	bool SaveLaunchProfile(const LaunchProfile& profile,
 		std::string *error);
+	bool MergeGameMedia(int64_t target_game_id, int64_t source_game_id,
+		std::string *error);
 
 private:
 	bool Exec(const char *sql, std::string *error);
