@@ -2,18 +2,22 @@
 
 ## 1. 現在の完了範囲
 
-Phase 4のうち、実RAサーバーへ接続しない共通土台とmacOS HTTP adapterの
-コンパイル可能な実装を追加した。
+Phase 4のうち、実RAサーバーへ接続しない共通土台、macOS HTTP adapter、
+`rc_client`認証サービス層のコンパイル可能な実装を追加した。
 
 - `RaHttpClient`契約を追加した。
 - fake HTTP backendを追加した。
 - `credentials.bin`の保存、読込、削除を追加した。
 - `rc_client_server_call_t`から`RaHttpClient`へ変換するbridgeを追加した。
 - macOS用`NSURLSession` backendを追加した。
+- `RaService`を追加し、`rc_client`所有、password login、保存token login、logout、
+  shutdown順序を接続した。
+- password login成功時はRAから返されたtokenを`credentials.bin`へ保存する。
+- 保存token login失敗時は`credentials.bin`を削除する。
+- logout時は`rc_client_logout()`後に`credentials.bin`を削除する。
 - RA ON buildだけへ上記を組み込み、Normal buildには組み込んでいない。
 
-password/token loginの`rc_client`接続、実RAサーバーへのHTTPS接続確認、
-token拒否時の資格情報削除は未実装である。
+実RAサーバーへのHTTPS接続確認、ゲーム識別、セッション開始は未実装である。
 
 ## 2. 認証情報ファイル
 
@@ -83,9 +87,30 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - Cookieは使用しない。
 - User-Agentをrequest headerへ設定する。
 
-## 4. テスト
+## 4. RAサービス層
 
-`Tests/ra_credentials_http_test.cpp`を追加した。
+`Source/RA/ra_service.*`を追加した。
+
+責務:
+
+- `rc_client_t`を生成、所有、破棄する。
+- `RaRcClientHttpBridge`を`rc_client_set_userdata()`へ接続する。
+- 初期状態では`rc_client_set_hardcore_enabled(client, 0)`によりSoftcore相当にする。
+- password loginを`rc_client_begin_login_with_password()`へ渡す。
+- 保存済みtoken loginを`credentials.bin`読込後に
+  `rc_client_begin_login_with_token()`へ渡す。
+- HTTP完了は`DrainHttp()`からbridgeをdrainし、`rc_client` callbackをメイン側で実行する。
+- password login成功時は、`rc_client_get_user_info()`から取得したusername/tokenを保存する。
+- 保存済みtoken login失敗時は`credentials.bin`を削除し、当該tokenを再利用しない。
+- logout時は`rc_client_logout()`を呼び、保存tokenも削除する。
+- shutdown時は`CancelAll()`、drain、`rc_client_destroy()`、bridge破棄の順で処理する。
+
+現時点の`RaService`は認証単位であり、ゲーム識別、ロード、実績評価、
+Leaderboard、Rich Presenceはまだ扱わない。
+
+## 5. テスト
+
+`Tests/ra_credentials_http_test.cpp`と`Tests/ra_service_test.cpp`を追加した。
 
 検証内容:
 
@@ -101,30 +126,33 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - adapterがtransport結果を`rc_api_server_response_t`へ分類すること。
 - adapterが`rc_client` userdataからbridgeを取得すること。
 - macOS `NSURLSession` backendを生成し、空drainとcancel allができること。
+- `RaService`がpassword loginを`rc_client`へ渡し、成功時に返却tokenを保存すること。
+- `RaService`が保存token loginを`rc_client`へ渡し、password fieldを送信しないこと。
+- 保存token拒否時に`credentials.bin`を削除すること。
+- logout時に`credentials.bin`を削除すること。
+- shutdown時にpending HTTPをcancel/drainし、pendingを残さないこと。
 
 実行済み:
 
 ```text
 cmake -S . -B build-ra -DXM8_ENABLE_RETROACHIEVEMENTS=ON
-cmake --build build-ra --target ra_credentials_http_test xm8
-ctest --test-dir build-ra -R 'ra_credentials_http_test|ra_library_store_test|ra_media_probe_test|ra_memory_map_test|ra_dependency_test|d88fixture_test|d88probe_test' --output-on-failure
+cmake --build build-ra --target ra_service_test ra_credentials_http_test xm8
+ctest --test-dir build-ra -R 'ra_service_test|ra_credentials_http_test|ra_library_store_test|ra_media_probe_test|ra_memory_map_test|ra_dependency_test|d88fixture_test|d88probe_test' --output-on-failure
 cmake --build build --target xm8
 ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-on-failure
 ```
 
 結果:
 
-- RA ON: 7/7 passed
+- RA ON: 8/8 passed
 - Normal: 3/3 passed
 
-## 5. 次に実装するもの
+## 6. 次に実装するもの
 
 次はPhase 4の残りを実装する。
 
 1. macOS `NSURLSession` backendの実HTTPS疎通試験。
 2. request generationとsession generationを`RaService`側の状態更新破棄へ接続する。
-3. shutdown時の`CancelAll()`、drain、callback完了、worker停止、
-   `rc_client_destroy()`順序を`RaService`で固定する。
-4. password login、token login、logoutの`rc_client`接続。
-5. token拒否時の`credentials.bin`削除。
-6. password、token、POST本文をログへ出さないことのテスト。
+3. `RaService`にゲーム識別、load game、RAセッション開始を追加する。
+4. session開始失敗時に当該セッションをoffline扱いへ固定し、途中再接続しない。
+5. password、token、POST本文をログへ出さないことのテスト。
