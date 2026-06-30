@@ -13,6 +13,9 @@
 
 namespace Xm8Ra {
 
+typedef uint32_t (*RaHostReadMemoryFunc)(uint32_t address, uint8_t *buffer,
+	uint32_t num_bytes, void *userdata);
+
 enum class RaLoginState {
 	LoggedOut,
 	LoginPending,
@@ -145,6 +148,8 @@ struct RaServiceOptions {
 	std::string ra_root;
 	std::unique_ptr<RaHttpClient> http_client;
 	rc_client_read_memory_func_t read_memory = nullptr;
+	RaHostReadMemoryFunc host_read_memory = nullptr;
+	void *host_read_memory_userdata = nullptr;
 	std::string user_agent;
 };
 
@@ -187,6 +192,8 @@ private:
 
 	static uint32_t RC_CCONV ReadNoMemory(uint32_t address, uint8_t *buffer,
 		uint32_t num_bytes, rc_client_t *client);
+	static uint32_t RC_CCONV ReadHostMemory(uint32_t address, uint8_t *buffer,
+		uint32_t num_bytes, rc_client_t *client);
 	static void RC_CCONV LoginCallback(int result, const char *error_message,
 		rc_client_t *client, void *userdata);
 	static void RC_CCONV LoadGameCallback(int result, const char *error_message,
@@ -209,6 +216,8 @@ private:
 	std::unique_ptr<RaRcClientHttpBridge> http_bridge_;
 	RaCredentialsStore credentials_;
 	rc_client_t *client_ = nullptr;
+	RaHostReadMemoryFunc host_read_memory_ = nullptr;
+	void *host_read_memory_userdata_ = nullptr;
 	LoginKind login_kind_ = LoginKind::None;
 	RaLoginSnapshot login_;
 	RaGameSessionSnapshot game_session_;

@@ -27,9 +27,18 @@ Phase 4のうち、実RAサーバーへ接続しない共通土台、macOS HTTP 
   `rc_client_idle()`を`RaService`経由で呼べるようにした。
 - `rc_client_set_allow_background_memory_reads(client, 0)`を設定し、RAメモリ読み出しを
   明示的なframe/idle処理内に限定した。
+- `RaService`にVM側メモリ読み出し用のuserdata付きcallbackを追加した。
+- macOS RA ON buildの`App`へ`RaService`生成を接続した。
+- User-AgentへXM8 versionとrcheevos versionを含めるようにした。
+- RAモードでDrive 1のD88を作業コピーへ解決した時点で、媒体MD5を当該セッションの
+  RA識別対象として固定するようにした。
+- 保存済みtokenがある場合、アプリループで自動login、hash指定ゲームロード、
+  frame/idle処理まで進行するようにした。
+- 保存済みtokenがない、login失敗、ゲームロード失敗の場合はRAを当該セッションで
+  無効化し、D88起動自体は継続する。
 - RA ON buildだけへ上記を組み込み、Normal buildには組み込んでいない。
 
-実RAサーバーへのHTTPS接続確認、実機D88からの自動ロード接続は未実装である。
+実RAサーバーへのHTTPS接続確認、オーバーレイlogin UI、RAイベント通知表示は未実装である。
 
 ## 2. 認証情報ファイル
 
@@ -89,6 +98,8 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
   `RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR`へ変換する。
 - cancel、oversize、非retryable transport errorは
   `RC_API_SERVER_RESPONSE_CLIENT_ERROR`へ変換する。
+- bridge generationが進んだ後に届いた古い完了応答はpendingから除去するが、
+  `rc_client` callbackへは渡さない。
 - callback中だけ有効なbody pointerを渡し、callback後は保持しない。
 
 `Source/RA/ra_http_mac.*`はmacOS専用`NSURLSession` backendである。
@@ -113,6 +124,8 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - 初期状態では`rc_client_set_hardcore_enabled(client, 0)`によりSoftcore相当にする。
 - `rc_client_set_allow_background_memory_reads(client, 0)`により、RAメモリ読み出しを
   `DoFrame()`または`Idle()`中へ限定する。
+- アプリ統合時は`RaHostReadMemoryFunc`からVMの
+  `read_ra_inspection_memory()`を呼び、`rc_client` userdataは`RaService`本体のままにする。
 - password loginを`rc_client_begin_login_with_password()`へ渡す。
 - 保存済みtoken loginを`credentials.bin`読込後に
   `rc_client_begin_login_with_token()`へ渡す。
@@ -143,7 +156,23 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 現時点では、イベントはサービス内部queueへ変換するだけで、SDLオーバーレイ表示には
 まだ接続していない。
 
-## 5. テスト
+## 5. アプリ統合
+
+RA ON buildの`Source/UI/app.*`にmacOS向けの最小統合を追加した。
+
+- `RaLibrary`と`RaMediaStore`初期化後、VM生成後に`RaService`を生成する。
+- HTTP backendはmacOS `NSURLSession` adapterを使用する。
+- RA service生成失敗時はRAモードだけを無効化し、Normal起動は継続する。
+- `ResolveDiskForRaMode()`で作業コピーへ差し替えたDrive 1媒体のMD5を
+  `ra_pending_game_hash`へ保持する。
+- Drive 2や後続媒体の挿入だけではRA active mediaを変更しない。
+- メニュー、バックグラウンド、power down中は`RaService::Idle()`を進める。
+- VMがフレームを進めた場合は、実行フレーム数ぶん`RaService::DoFrame()`を試し、
+  game未ロード中は`Idle()`へフォールバックする。
+- 現時点ではオーバーレイがないため、保存済みtoken loginだけを自動実行する。
+- `RaService::TakeEvents()`はdrainするが、通知表示へは未接続である。
+
+## 6. テスト
 
 `Tests/ra_credentials_http_test.cpp`と`Tests/ra_service_test.cpp`を追加した。
 
@@ -160,6 +189,7 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - `rc_client_server_call_t` adapterが空POSTを保持すること。
 - adapterがtransport結果を`rc_api_server_response_t`へ分類すること。
 - adapterが`rc_client` userdataからbridgeを取得すること。
+- bridge generation更新後に届いた古いHTTP完了をcallbackせず破棄すること。
 - macOS `NSURLSession` backendを生成し、空drainとcancel allができること。
 - `RaService`がpassword loginを`rc_client`へ渡し、成功時に返却tokenを保存すること。
 - `RaService`が保存token loginを`rc_client`へ渡し、password fieldを送信しないこと。
@@ -178,6 +208,8 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
   変換すること。
 - Leaderboard scoreboardイベントの上位entryを所有コピーへ変換すること。
 - shutdown時にpending HTTPをcancel/drainし、pendingを残さないこと。
+- RA serviceがuserdata付きhost memory callbackを使えることは、RA ON `xm8` buildで
+  VM統合として確認する。
 
 実行済み:
 
@@ -194,15 +226,12 @@ ctest --test-dir build -R 'd88fixture_test|d88probe_test|clidisk_test' --output-
 - RA ON: 8/8 passed
 - Normal: 3/3 passed
 
-## 6. 次に実装するもの
+## 7. 次に実装するもの
 
 次はPhase 4の残りを実装する。
 
 1. macOS `NSURLSession` backendの実HTTPS疎通試験。
-2. `RaMediaStore`で得た起動媒体MD5から`RaService::BeginLoadGameByHash()`を呼ぶ
-   アプリ統合。
-3. エミュレーションフレーム完了後に`RaService::DoFrame()`、一時停止・メニュー中に
-   `RaService::Idle()`を呼ぶVM側統合。
-4. SDLオーバーレイ通知へ`RaEvent` queueを接続する。
-5. request generationとsession generationを`RaService`側の状態更新破棄へさらに接続する。
-6. password、token、POST本文をログへ出さないことのテスト。
+2. オーバーレイlogin UIからpassword loginを開始できるようにする。
+3. SDLオーバーレイ通知へ`RaEvent` queueを接続する。
+4. 画像cacheとバッジ表示を接続する。
+5. password、token、POST本文をログへ出さないことのテスト。

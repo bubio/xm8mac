@@ -19,6 +19,7 @@
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_library.h"
 #include "ra_media_store.h"
+#include "ra_service.h"
 #endif
 
 const char* GetAppVersionString();
@@ -161,6 +162,10 @@ private:
 	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		std::string *error);
 										// resolve disk to RA working copy
+	void BeginRaSessionForMedia(const std::string& md5);
+										// begin RA session for media hash
+	void ProcessRaService(bool emulation_frame);
+										// progress RA service
 #endif
 	bool OpenStartupDisks(const std::vector<DiskSpec>& disks, std::string *error);
 										// open CLI disks
@@ -219,8 +224,18 @@ private:
 										// RA library database
 	Xm8Ra::RaMediaStore *ra_media_store;
 										// RA media store
+	Xm8Ra::RaService *ra_service;
+										// RA client service
 	bool ra_mode_enabled;
 										// RA mode setting
+	bool ra_saved_login_started;
+										// saved token login started
+	bool ra_session_disabled;
+										// RA disabled for current launch session
+	std::string ra_pending_game_hash;
+										// media hash pending RA load
+	std::string ra_loaded_game_hash;
+										// media hash passed to RA load
 #endif
 
 	// flags

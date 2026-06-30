@@ -13,6 +13,7 @@
 #include <cctype>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "os.h"
@@ -38,6 +39,8 @@
 #include "tapemgr.h"
 #include "clidisk.h"
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+#include "ra_build_info.h"
+#include "ra_http_mac.h"
 #include "ra_paths.h"
 #endif
 #ifdef __ANDROID__
@@ -130,6 +133,28 @@ bool DecodeDropPath(const char *source, char *destination, size_t capacity,
 	return true;
 }
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+uint32_t ReadRaMemoryFromVm(uint32_t address, uint8_t *buffer,
+	uint32_t num_bytes, void *userdata)
+{
+	VM *vm = static_cast<VM *>(userdata);
+	if (vm == NULL || buffer == NULL) {
+		return 0;
+	}
+	return static_cast<uint32_t>(
+		vm->read_ra_inspection_memory(address, buffer, num_bytes));
+}
+
+std::string MakeRaUserAgent()
+{
+	std::ostringstream stream;
+	stream << "XM8/" << GetAppVersionString()
+		<< " rcheevos/" << Xm8RaBuildInfo::RcheevosVersionString()
+		<< " (macOS)";
+	return stream.str();
+}
+#endif
+
 } // namespace
 
 //
@@ -166,7 +191,10 @@ App::App()
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	ra_library = NULL;
 	ra_media_store = NULL;
+	ra_service = NULL;
 	ra_mode_enabled = false;
+	ra_saved_login_started = false;
+	ra_session_disabled = false;
 #endif
 
 	// flags
@@ -416,6 +444,24 @@ bool App::Init(const CliOptions& options)
 	// rtc device
 	upd1990a = (UPD1990A*)vm->get_device(6);
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_mode_enabled && ra_library != NULL) {
+		Xm8Ra::RaServiceOptions ra_options;
+		ra_options.ra_root = ra_library->Root();
+		ra_options.user_agent = MakeRaUserAgent();
+		ra_options.http_client =
+			Xm8Ra::CreateMacRaHttpClient(ra_options.user_agent);
+		ra_options.host_read_memory = ReadRaMemoryFromVm;
+		ra_options.host_read_memory_userdata = vm;
+		ra_service = new Xm8Ra::RaService(std::move(ra_options));
+		if (!ra_service->IsReady()) {
+			delete ra_service;
+			ra_service = NULL;
+			ra_mode_enabled = false;
+		}
+	}
+#endif
+
 	// disk manager
 	for (loop=0; loop<2; loop++) {
 		diskmgr[loop] = new DiskManager;
@@ -634,7 +680,81 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		return false;
 	}
 	resolved->path = imported.working_path;
+	if (spec.drive == 0 && ra_pending_game_hash.empty() &&
+		ra_loaded_game_hash.empty()) {
+		BeginRaSessionForMedia(imported.record.md5);
+	}
 	return true;
+}
+
+//
+// BeginRaSessionForMedia()
+// remember the media hash to identify through RA
+//
+void App::BeginRaSessionForMedia(const std::string& md5)
+{
+	if (!ra_mode_enabled || ra_service == NULL || md5.empty()) {
+		return;
+	}
+
+	ra_session_disabled = false;
+	ra_saved_login_started = false;
+	ra_pending_game_hash = md5;
+	ra_loaded_game_hash.clear();
+}
+
+//
+// ProcessRaService()
+// progress RA HTTP, login, game load, and frame/idle processing
+//
+void App::ProcessRaService(bool emulation_frame)
+{
+	if (!ra_mode_enabled || ra_service == NULL || ra_session_disabled) {
+		return;
+	}
+
+	ra_service->DrainHttp();
+
+	if (!ra_pending_game_hash.empty()) {
+		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
+		const Xm8Ra::RaGameSessionSnapshot game =
+			ra_service->GameSessionSnapshot();
+
+		if (login.state == Xm8Ra::RaLoginState::LoggedOut &&
+			!ra_saved_login_started) {
+			std::string error;
+			ra_saved_login_started =
+				ra_service->BeginLoginWithSavedToken(&error);
+			if (!ra_saved_login_started) {
+				ra_session_disabled = true;
+			}
+		}
+		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&
+			game.state == Xm8Ra::RaGameSessionState::NoGame) {
+			std::string error;
+			if (ra_service->BeginLoadGameByHash(ra_pending_game_hash,
+				&error)) {
+				ra_loaded_game_hash = ra_pending_game_hash;
+			}
+			else {
+				ra_session_disabled = true;
+			}
+		}
+		else if (login.state == Xm8Ra::RaLoginState::Failed ||
+			game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
+			ra_session_disabled = true;
+		}
+	}
+
+	if (emulation_frame) {
+		if (!ra_service->DoFrame()) {
+			ra_service->Idle();
+		}
+	}
+	else {
+		ra_service->Idle();
+	}
+	ra_service->TakeEvents();
 }
 #endif
 
@@ -743,6 +863,13 @@ void App::Deinit()
 		}
 	}
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_service != NULL) {
+		delete ra_service;
+		ra_service = NULL;
+	}
+#endif
+
 	// virtual machine
 	if (vm != NULL) {
 		delete vm;
@@ -837,6 +964,10 @@ void App::Deinit()
 		ra_library = NULL;
 	}
 	ra_mode_enabled = false;
+	ra_saved_login_started = false;
+	ra_session_disabled = false;
+	ra_pending_game_hash.clear();
+	ra_loaded_game_hash.clear();
 #endif
 
 	// setting
@@ -1071,6 +1202,9 @@ void App::Run()
 			if (app_menu == true) {
 				menu->ProcessMenu();
 			}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			ProcessRaService(false);
+#endif
 
 			// power management
 			PowerMng();
@@ -1153,6 +1287,11 @@ void App::Run()
 				evmgr->set_sample_multi(multi_table[buffer_pct >> 4]);
 				evmgr->create_sound32_after(buffer_evmgr);
 			}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			for (ret=0; ret<extra; ret++) {
+				ProcessRaService(true);
+			}
+#endif
 			UnlockVM();
 
 			// calc next time

@@ -66,6 +66,9 @@ void RaRcClientHttpBridge::DrainCompleted()
 
 		const PendingCall call = pending->second;
 		pending_.erase(pending);
+		if (call.generation != current_generation_) {
+			continue;
+		}
 
 		rc_api_server_response_t server_response = {};
 		server_response.body = response.body.empty() ?

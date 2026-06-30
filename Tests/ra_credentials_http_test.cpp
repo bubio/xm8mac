@@ -210,6 +210,20 @@ int main()
 	Check(callback_capture.body == response_body, "bridge forwards response body");
 	Check(bridge.PendingCount() == 0, "bridge clears completed pending request");
 
+	CallbackCapture stale_capture;
+	bridge.BeginServerCall(&api_request, CaptureServerResponse, &stale_capture);
+	const uint64_t stale_request_id = bridge.LastIssuedRequestId();
+	Check(bridge.PendingCount() == 1, "bridge tracks stale-generation request");
+	bridge.AdvanceGeneration();
+	Xm8Ra::RaHttpResponse stale_response;
+	stale_response.request_id = stale_request_id;
+	stale_response.http_status = 200;
+	stale_response.body.assign(response_body.begin(), response_body.end());
+	bridge_http.Complete(stale_response);
+	bridge.DrainCompleted();
+	Check(stale_capture.calls == 0, "stale-generation response is discarded");
+	Check(bridge.PendingCount() == 0, "stale-generation request is cleared");
+
 	Check(Xm8Ra::RaRcClientHttpBridge::HttpStatusForTransportResult(
 		Xm8Ra::RaHttpTransportResult::Timeout, 0) ==
 		RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR,

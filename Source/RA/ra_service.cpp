@@ -185,8 +185,11 @@ RaService::RaService(RaServiceOptions options)
 	}
 
 	http_bridge_.reset(new RaRcClientHttpBridge(http_client_.get()));
+	host_read_memory_ = options.host_read_memory;
+	host_read_memory_userdata_ = options.host_read_memory_userdata;
 	client_ = rc_client_create(
-		options.read_memory != nullptr ? options.read_memory : ReadNoMemory,
+		host_read_memory_ != nullptr ? ReadHostMemory :
+			(options.read_memory != nullptr ? options.read_memory : ReadNoMemory),
 		ServerCall);
 	if (client_ == nullptr) {
 		SetFailed(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY));
@@ -461,6 +464,21 @@ uint32_t RC_CCONV RaService::ReadNoMemory(uint32_t, uint8_t *buffer,
 		std::memset(buffer, 0, num_bytes);
 	}
 	return 0;
+}
+
+uint32_t RC_CCONV RaService::ReadHostMemory(uint32_t address, uint8_t *buffer,
+	uint32_t num_bytes, rc_client_t *client)
+{
+	RaService *service = client == nullptr ? nullptr :
+		static_cast<RaService *>(rc_client_get_userdata(client));
+	if (service == nullptr || service->host_read_memory_ == nullptr) {
+		if (buffer != nullptr && num_bytes != 0) {
+			std::memset(buffer, 0, num_bytes);
+		}
+		return 0;
+	}
+	return service->host_read_memory_(address, buffer, num_bytes,
+		service->host_read_memory_userdata_);
 }
 
 void RC_CCONV RaService::LoginCallback(int result, const char *error_message,
