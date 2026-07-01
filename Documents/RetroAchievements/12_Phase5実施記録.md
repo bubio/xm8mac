@@ -13,6 +13,11 @@ Phase 5の入口として、Phase 4で`App`へ直書きしていたRA通知状�
 - Phase 4で実装した短いRA通知の見た目と表示位置は変更していない。
 - トップ階層のRetroAchievementsメニューの`Login`から、物理キーボード入力用の
   Loginオーバーレイを開ける。
+- RAメニューのLogin操作は、未ログイン時は`Login`、ログイン済み時は`Logout`として表示する。
+- RAメニューへ`Saved-token login`を追加し、保存済みtokenによる明示loginを実行できる。
+- `Login`または`Saved-token login`実行時にRA modeがOFFなら、RA modeをONにしてから処理する。
+- RAメニューの状態行は、ログイン済みでユーザー名が取得できている場合に
+  `RA: logged in <user>`と表示する。
 - Loginオーバーレイは`SDL_TEXTINPUT`、Tab、Backspace、Enter、Escape、上下キーを扱う。
 - Enterで`RaService::BeginLoginWithPassword()`を呼び、開始後にPasswordバッファを消去する。
 - Login開始後は`ProcessRaService()`が成功または失敗を一度だけ通知する。
@@ -74,6 +79,7 @@ git diff --check
 
 - RAホーム画面の常設表示。
 - ASCIIオンスクリーンキーボード。
+- 既存softkeyはVMへのPC-88キー入力経路であり、RA Login文字列入力へ渡す変換層は未接続。
 - マウス、タッチ、ゲームコントローラによるLogin画面操作。
 - 実績一覧と詳細表示。
 - バッジ、アバター画像cacheの描画接続。

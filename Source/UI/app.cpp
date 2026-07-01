@@ -3075,15 +3075,21 @@ bool App::ToggleRaMode()
 //
 bool App::RetryRaSavedLogin()
 {
-	if (!ra_mode_enabled) {
-		AddRaNotice("RA: mode is disabled");
-		return false;
-	}
-
 	std::string error;
+	if (!ra_mode_enabled) {
+		if (!SaveRaModeSetting(true, &error)) {
+			AddRaNotice("RA: setting save failed");
+			return false;
+		}
+		ra_mode_enabled = true;
+	}
 	if (!EnsureRaService(&error)) {
 		AddRaNotice("RA: service unavailable");
 		return false;
+	}
+	if (IsRaLoggedIn()) {
+		AddRaNotice("RA: already logged in");
+		return true;
 	}
 	if (!ra_service->BeginLoginWithSavedToken(&error)) {
 		AddRaNotice("RA: login required");
@@ -3095,6 +3101,18 @@ bool App::RetryRaSavedLogin()
 	ra_manual_login_started = false;
 	AddRaNotice("RA: login started");
 	return true;
+}
+
+//
+// IsRaLoggedIn()
+// get RA login state
+//
+bool App::IsRaLoggedIn() const
+{
+	if (ra_service == NULL) {
+		return false;
+	}
+	return ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn;
 }
 
 //
@@ -3188,6 +3206,13 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 			text = "RA: session disabled";
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn) {
+			const std::string name = login.display_name.empty() ?
+				login.username : login.display_name;
+			if (!name.empty()) {
+				std::snprintf(buffer, capacity, "RA: logged in %s",
+					name.c_str());
+				return;
+			}
 			text = "RA: logged in";
 		}
 		else if (login.state == Xm8Ra::RaLoginState::Failed) {

@@ -701,7 +701,7 @@ void Menu::EnterRa(int id)
 	list->AddCheckButton("RA mode", MENU_RA_MODE);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
 	list->AddButton("Login", MENU_RA_LOGIN);
-	list->AddButton("Logout", MENU_RA_LOGOUT);
+	list->AddButton("Saved-token login", MENU_RA_TOKEN_LOGIN);
 
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
 	{
@@ -709,6 +709,8 @@ void Menu::EnterRa(int id)
 		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
 		list->SetText(MENU_RA_STATUS, ra_status);
 	}
+	list->SetText(MENU_RA_LOGIN,
+		app->IsRaLoggedIn() ? "Logout" : "Login");
 
 	if (id == MENU_BACK) {
 		id = MENU_RA_MODE;
@@ -2250,6 +2252,9 @@ void Menu::CmdRa(int id)
 		char ra_status[96];
 		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
 		list->SetText(MENU_RA_STATUS, ra_status);
+		list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+		list->SetText(MENU_RA_LOGIN,
+			app->IsRaLoggedIn() ? "Logout" : "Login");
 	};
 
 	switch (id) {
@@ -2264,12 +2269,17 @@ void Menu::CmdRa(int id)
 		break;
 
 	case MENU_RA_LOGIN:
-		app->OpenRaLoginOverlay();
+		if (app->IsRaLoggedIn()) {
+			app->LogoutRa();
+		}
+		else {
+			app->OpenRaLoginOverlay();
+		}
 		update_status();
 		break;
 
-	case MENU_RA_LOGOUT:
-		app->LogoutRa();
+	case MENU_RA_TOKEN_LOGIN:
+		app->RetryRaSavedLogin();
 		update_status();
 		break;
 

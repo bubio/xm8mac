@@ -126,6 +126,8 @@ public:
 										// retry RA saved token login
 	bool OpenRaLoginOverlay();
 										// open RA password login overlay
+	bool IsRaLoggedIn() const;
+										// get RA login state
 	void LogoutRa();
 										// logout RA
 	void GetRaMenuStatus(char *buffer, size_t capacity) const;
