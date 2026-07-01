@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -1100,6 +1101,18 @@ void App::DrawRaOverlay()
 			RGB_COLOR(255, 255, 255));
 		font->DrawSjisLeftOr(buf, &pass_box, pass,
 			RGB_COLOR(255, 255, 255));
+		if (((SDL_GetTicks() / 500) & 1) == 0) {
+			const char *focused_text = user_focus ? user : pass;
+			SDL_Rect cursor_box = user_focus ? user_box : pass_box;
+			int cursor_x = cursor_box.x +
+				static_cast<int>(std::strlen(focused_text)) * 8;
+			const int cursor_limit = cursor_box.x + cursor_box.w - 2;
+			if (cursor_x > cursor_limit) {
+				cursor_x = cursor_limit;
+			}
+			SDL_Rect cursor = {cursor_x, cursor_box.y + 5, 2, 16};
+			font->DrawFillRect(buf, &cursor, RGB_COLOR(255, 255, 255));
+		}
 
 		SDL_Rect hint = {panel.x + 24, panel.y + 138, panel.w - 48, 22};
 		font->DrawSjisLeftOr(buf, &hint,
