@@ -243,6 +243,10 @@ void MenuItem::SetName(const char *name)
 
 		// set current
 		item_name = ptr;
+		if (item_name_sjis != NULL) {
+			SDL_free(item_name_sjis);
+			item_name_sjis = NULL;
+		}
 	}
 }
 
