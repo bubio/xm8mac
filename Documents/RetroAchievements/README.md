@@ -57,6 +57,9 @@ ePC-8801MAの旧版
 | [07_Phase0実施記録.md](07_Phase0実施記録.md) | macOS基準build/test、Normal実動作、fixture、後続OS build調査 |
 | [08_Phase1実施記録.md](08_Phase1実施記録.md) | macOS RA依存物、ON/OFF build、ライセンス監査、検証結果 |
 | [09_Phase2実施記録.md](09_Phase2実施記録.md) | macOS RAメモリ検査API、D88 hash/media probe、検証結果 |
+| [10_Phase3実施記録.md](10_Phase3実施記録.md) | macOS SQLiteライブラリ、D88作業コピー、M3U起動構成、検証結果 |
+| [11_Phase4実施記録.md](11_Phase4実施記録.md) | macOS HTTP、認証、RAセッション開始、トップ階層RAメニュー、検証結果 |
+| [12_Phase5実施記録.md](12_Phase5実施記録.md) | macOS RAオーバーレイ基盤、通知状態分離、検証結果 |
 
 ## 3. 確定事項
 

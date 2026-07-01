@@ -21,6 +21,7 @@
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_library.h"
 #include "ra_media_store.h"
+#include "ra_overlay.h"
 #include "ra_service.h"
 #endif
 
@@ -250,6 +251,8 @@ private:
 										// RA media store
 	Xm8Ra::RaService *ra_service;
 										// RA client service
+	Xm8Ra::RaOverlay *ra_overlay;
+										// RA overlay state
 	bool ra_mode_enabled;
 										// RA mode setting
 	bool ra_saved_login_started;
@@ -260,10 +263,6 @@ private:
 										// media hash pending RA load
 	std::string ra_loaded_game_hash;
 										// media hash passed to RA load
-	std::string ra_notice_text;
-										// RA transient notice
-	Uint32 ra_notice_until;
-										// RA notice expiration tick
 #endif
 
 	// flags

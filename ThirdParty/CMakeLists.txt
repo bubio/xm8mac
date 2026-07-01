@@ -83,6 +83,7 @@ add_library(xm8_ra_core OBJECT
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_library.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_probe.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_store.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_overlay.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_paths.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_rc_client_http.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_service.cpp

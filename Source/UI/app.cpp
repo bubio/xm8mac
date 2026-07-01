@@ -226,10 +226,10 @@ App::App()
 	ra_library = NULL;
 	ra_media_store = NULL;
 	ra_service = NULL;
+	ra_overlay = NULL;
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
 	ra_session_disabled = false;
-	ra_notice_until = 0;
 #endif
 
 	// flags
@@ -331,6 +331,7 @@ bool App::Init(const CliOptions& options)
 	}
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	ra_overlay = new Xm8Ra::RaOverlay;
 	ra_library = new Xm8Ra::RaLibrary;
 	{
 		std::string ra_error;
@@ -867,11 +868,10 @@ void App::ProcessRaService(bool emulation_frame)
 //
 void App::AddRaNotice(const std::string& text)
 {
-	if (text.empty()) {
+	if (ra_overlay == NULL) {
 		return;
 	}
-	ra_notice_text = text;
-	ra_notice_until = SDL_GetTicks() + 5000;
+	ra_overlay->AddNotice(text, SDL_GetTicks());
 }
 
 //
@@ -894,13 +894,16 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 //
 void App::DrawRaOverlay()
 {
-	if (!ra_mode_enabled || ra_notice_text.empty() ||
-		SDL_TICKS_PASSED(SDL_GetTicks(), ra_notice_until)) {
+	if (!ra_mode_enabled || ra_overlay == NULL) {
+		return;
+	}
+	const std::string notice = ra_overlay->VisibleNotice(SDL_GetTicks());
+	if (notice.empty()) {
 		return;
 	}
 
 	char text[72];
-	std::snprintf(text, sizeof(text), "%s", ra_notice_text.c_str());
+	std::snprintf(text, sizeof(text), "%s", notice.c_str());
 	SDL_Rect rect = {8, 8, 624, 24};
 	Uint32 *buf = video->GetFrameBuf(0);
 	font->DrawFillRect(buf, &rect, RGB_COLOR(0, 0, 0) | 0xc0000000);
@@ -1022,6 +1025,10 @@ void App::Deinit()
 	if (ra_service != NULL) {
 		delete ra_service;
 		ra_service = NULL;
+	}
+	if (ra_overlay != NULL) {
+		delete ra_overlay;
+		ra_overlay = NULL;
 	}
 #endif
 

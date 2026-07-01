@@ -409,6 +409,15 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_service_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_service_test COMMAND ra_service_test)
+
+    add_executable(ra_overlay_test
+      Tests/ra_overlay_test.cpp
+      Source/RA/ra_overlay.cpp
+    )
+    target_include_directories(ra_overlay_test PRIVATE Source/RA)
+    target_compile_definitions(ra_overlay_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_overlay_test COMMAND ra_overlay_test)
   endif()
 endif()
 
