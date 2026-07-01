@@ -489,6 +489,9 @@ bool App::Init(const CliOptions& options)
 			ra_mode_enabled = false;
 			AddRaNotice("RA: service unavailable");
 		}
+		else {
+			BeginRaSavedTokenLogin(false);
+		}
 	}
 #endif
 
@@ -777,6 +780,42 @@ bool App::SaveRaModeSetting(bool enabled, std::string *error)
 	}
 	settings.enabled = enabled;
 	return ra_library->SaveSettings(settings, error);
+}
+
+//
+// BeginRaSavedTokenLogin()
+// begin saved token login if possible
+//
+bool App::BeginRaSavedTokenLogin(bool notify_missing_token)
+{
+	if (ra_service == NULL) {
+		if (notify_missing_token) {
+			AddRaNotice("RA: service unavailable");
+		}
+		return false;
+	}
+	if (IsRaLoggedIn()) {
+		if (notify_missing_token) {
+			AddRaNotice("RA: already logged in");
+		}
+		return true;
+	}
+
+	std::string error;
+	if (!ra_service->BeginLoginWithSavedToken(&error)) {
+		if (notify_missing_token) {
+			AddRaNotice("RA: login required");
+		}
+		return false;
+	}
+
+	ra_session_disabled = false;
+	ra_saved_login_started = true;
+	ra_manual_login_started = false;
+	if (notify_missing_token) {
+		AddRaNotice("RA: token login started");
+	}
+	return true;
 }
 
 //
@@ -3065,6 +3104,9 @@ bool App::ToggleRaMode()
 	if (!enable && ra_service != NULL) {
 		ra_service->UnloadGame();
 	}
+	else if (enable) {
+		BeginRaSavedTokenLogin(false);
+	}
 	AddRaNotice(enable ? "RA: mode enabled" : "RA: mode disabled");
 	return true;
 }
@@ -3087,20 +3129,7 @@ bool App::RetryRaSavedLogin()
 		AddRaNotice("RA: service unavailable");
 		return false;
 	}
-	if (IsRaLoggedIn()) {
-		AddRaNotice("RA: already logged in");
-		return true;
-	}
-	if (!ra_service->BeginLoginWithSavedToken(&error)) {
-		AddRaNotice("RA: login required");
-		return false;
-	}
-
-	ra_session_disabled = false;
-	ra_saved_login_started = true;
-	ra_manual_login_started = false;
-	AddRaNotice("RA: login started");
-	return true;
+	return BeginRaSavedTokenLogin(true);
 }
 
 //

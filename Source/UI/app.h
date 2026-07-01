@@ -185,6 +185,8 @@ private:
 										// create RA service if needed
 	bool SaveRaModeSetting(bool enabled, std::string *error);
 										// persist RA mode setting
+	bool BeginRaSavedTokenLogin(bool notify_missing_token);
+										// begin saved token login if possible
 	void BeginRaSessionForMedia(const std::string& md5);
 										// begin RA session for media hash
 	void ProcessRaService(bool emulation_frame);
