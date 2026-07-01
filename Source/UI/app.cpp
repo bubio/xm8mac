@@ -3112,27 +3112,6 @@ bool App::ToggleRaMode()
 }
 
 //
-// RetryRaSavedLogin()
-// retry RA saved token login
-//
-bool App::RetryRaSavedLogin()
-{
-	std::string error;
-	if (!ra_mode_enabled) {
-		if (!SaveRaModeSetting(true, &error)) {
-			AddRaNotice("RA: setting save failed");
-			return false;
-		}
-		ra_mode_enabled = true;
-	}
-	if (!EnsureRaService(&error)) {
-		AddRaNotice("RA: service unavailable");
-		return false;
-	}
-	return BeginRaSavedTokenLogin(true);
-}
-
-//
 // IsRaLoggedIn()
 // get RA login state
 //

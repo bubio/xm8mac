@@ -122,8 +122,6 @@ public:
 										// get RA mode setting
 	bool ToggleRaMode();
 										// toggle RA mode setting
-	bool RetryRaSavedLogin();
-										// retry RA saved token login
 	bool OpenRaLoginOverlay();
 										// open RA password login overlay
 	bool IsRaLoggedIn() const;

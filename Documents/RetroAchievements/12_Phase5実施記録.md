@@ -14,8 +14,8 @@ Phase 5の入口として、Phase 4で`App`へ直書きしていたRA通知状�
 - トップ階層のRetroAchievementsメニューの`Login`から、物理キーボード入力用の
   Loginオーバーレイを開ける。
 - RAメニューのLogin操作は、未ログイン時は`Login`、ログイン済み時は`Logout`として表示する。
-- RAメニューへ`Saved-token login`を追加し、保存済みtokenによる明示loginを実行できる。
-- `Login`または`Saved-token login`実行時にRA modeがOFFなら、RA modeをONにしてから処理する。
+- Logout後はRAメニューのLogin操作を即座に`Login`表示へ戻す。
+- Login実行時にRA modeがOFFなら、RA modeをONにしてから処理する。
 - RA modeがONの状態でアプリを起動した場合、保存済みtokenがあれば自動的にtoken loginを開始する。
 - RA modeをOFFからONへ切り替えた場合も、保存済みtokenがあれば自動的にtoken loginを開始する。
 - RAメニューの状態行は、ログイン済みでユーザー名が取得できている場合に

@@ -701,7 +701,6 @@ void Menu::EnterRa(int id)
 	list->AddCheckButton("RA mode", MENU_RA_MODE);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
 	list->AddButton("Login", MENU_RA_LOGIN);
-	list->AddButton("Saved-token login", MENU_RA_TOKEN_LOGIN);
 
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
 	{
@@ -2271,15 +2270,11 @@ void Menu::CmdRa(int id)
 	case MENU_RA_LOGIN:
 		if (app->IsRaLoggedIn()) {
 			app->LogoutRa();
+			list->SetText(MENU_RA_LOGIN, "Login");
 		}
 		else {
 			app->OpenRaLoginOverlay();
 		}
-		update_status();
-		break;
-
-	case MENU_RA_TOKEN_LOGIN:
-		app->RetryRaSavedLogin();
 		update_status();
 		break;
 

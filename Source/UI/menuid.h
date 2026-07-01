@@ -259,8 +259,6 @@
 										// RetroAchievements status
 #define MENU_RA_LOGIN			1503
 										// RetroAchievements login/logout
-#define MENU_RA_TOKEN_LOGIN		1504
-										// RetroAchievements saved token login
 #define MENU_RA_MAX				1599
 										// maximum
 
