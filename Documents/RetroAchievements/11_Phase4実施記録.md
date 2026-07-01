@@ -4,7 +4,7 @@
 
 Phase 4として、macOS HTTP adapter、`rc_client`認証サービス層、
 ハッシュ指定のゲームロード開始、保存済みtokenによるアプリ内セッション開始、
-SystemメニューからのRAモード操作、最小通知表示を追加した。
+トップ階層のRetroAchievementsメニューからのRAモード操作、最小通知表示を追加した。
 
 - `RaHttpClient`契約を追加した。
 - fake HTTP backendを追加した。
@@ -37,7 +37,8 @@ SystemメニューからのRAモード操作、最小通知表示を追加した
   frame/idle処理まで進行するようにした。
 - 保存済みtokenがない、login失敗、ゲームロード失敗の場合はRAを当該セッションで
   無効化し、D88起動自体は継続する。
-- SystemメニューへRA mode、RA status、保存token login、logoutを追加した。
+- トップ階層へRetroAchievementsメニューを追加し、RA mode、RA status、保存token login、
+  logoutを配置した。
 - RA mode ON/OFFは`ra_settings`へ保存する。
 - RA mode OFF時は現在のRAゲームセッションを破棄するが、保存済みtokenは維持する。
   token削除は明示的なlogout時だけ行う。
@@ -183,10 +184,10 @@ RA ON buildの`Source/UI/app.*`と`Source/UI/menu.*`にmacOS向けの最小統�
 - Phase 4時点ではpassword入力UIがないため、保存済みtoken loginだけを自動実行する。
 - `RaService::TakeEvents()`から取得した代表イベントを通知表示へ接続する。
 - RA通知はVM描画後、`video->Draw()`前に既存`Font`でフレームバッファへ合成する。
-- SystemメニューでRA modeを切り替えられる。ON時は必要に応じて`RaService`を生成し、
+- RetroAchievementsメニューでRA modeを切り替えられる。ON時は必要に応じて`RaService`を生成し、
   OFF時はRAゲームセッションだけをunloadする。
-- Systemメニューで保存token loginを明示的に再試行できる。
-- SystemメニューでRA statusを更新表示できる。
+- RetroAchievementsメニューで保存token loginを明示的に再試行できる。
+- RetroAchievementsメニューでRA statusを更新表示できる。
 
 制約:
 
@@ -233,7 +234,7 @@ RA ON buildの`Source/UI/app.*`と`Source/UI/menu.*`にmacOS向けの最小統�
 - shutdown時にpending HTTPをcancel/drainし、pendingを残さないこと。
 - RA serviceがuserdata付きhost memory callbackを使えることは、RA ON `xm8` buildで
   VM統合として確認する。
-- RA ON `xm8` buildでSystemメニューのRA項目がコンパイルされること。
+- RA ON `xm8` buildでトップ階層のRetroAchievementsメニューがコンパイルされること。
 - Normal buildではRAメニュー項目、RA service、macOS HTTP backendが組み込まれないこと。
 
 実行済み:
@@ -261,7 +262,8 @@ Phase 4は完了扱いとする。
   frame/idle処理入口が揃っている。
 - RAモード有効時だけD88作業コピー、保存token login、hash指定ゲームロードへ進む。
 - 失敗時は当該セッションのRAを無効化し、ゲーム起動を継続する。
-- SystemメニューからRA mode ON/OFF、保存token login再試行、logout、状態確認ができる。
+- トップ階層のRetroAchievementsメニューからRA mode ON/OFF、保存token login再試行、
+  logout、状態確認ができる。
 - 最低限の状態通知をSDLフレームバッファへ表示できる。
 - RA ON buildとNormal buildの双方で回帰テストが通っている。
 

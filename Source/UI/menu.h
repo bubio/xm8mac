@@ -49,6 +49,8 @@ public:
 										// enter save menu
 	void EnterSystem(int id);
 										// enter system menu
+	void EnterRa(int id);
+										// enter RetroAchievements menu
 	void EnterVideo(int id);
 										// enter video menu
 	void EnterAudio();
@@ -95,6 +97,8 @@ public:
 										// command (save)
 	void CmdSystem(int id);
 										// command (system)
+	void CmdRa(int id);
+										// command (RetroAchievements)
 	void CmdVideo(bool down, int id);
 										// command (video)
 	void CmdAudio(bool down, int id);

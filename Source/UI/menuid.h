@@ -68,6 +68,8 @@
 										// joystick test menu
 #define MENU_SCALEFILTER		23
 										// video scale filter
+#define MENU_RA					24
+										// RetroAchievements menu
 //
 // main menu
 //
@@ -93,13 +95,15 @@
 										// audio output device
 #define MENU_MAIN_INPUT			109
 										// input options
-#define MENU_MAIN_SCREEN		110
+#define MENU_MAIN_RA			110
+										// RetroAchievements
+#define MENU_MAIN_SCREEN		111
 										// full/window screen
-#define MENU_MAIN_SPEED			111
+#define MENU_MAIN_SPEED			112
 										// full/normal speed
-#define MENU_MAIN_RESET			112
+#define MENU_MAIN_RESET			113
 										// reset
-#define MENU_MAIN_QUIT			113
+#define MENU_MAIN_QUIT			114
 										// quit
 #define MENU_MAIN_MAX			199
 										// maximum
@@ -237,19 +241,27 @@
 										// rom version
 #define MENU_ANDROID_SAF		712
 										// storage access framework (for Android 5.0 or later)
-#define MENU_SYSTEM_RA_MODE		713
-										// RetroAchievements mode
-#define MENU_SYSTEM_RA_STATUS	714
-										// RetroAchievements status
-#define MENU_SYSTEM_RA_LOGIN	715
-										// RetroAchievements saved token login
-#define MENU_SYSTEM_RA_LOGOUT	716
-										// RetroAchievements logout
 #define MENU_SYSTEM_MODE		797
 										// mode radio
 #define MENU_SYSTEM_CLOCK		798
 										// clock radio
 #define MENU_SYSTEM_MAX			799
+										// maximum
+
+//
+// RetroAchievements menu
+//
+#define MENU_RA_MIN				1500
+										// minimum
+#define MENU_RA_MODE			1501
+										// RetroAchievements mode
+#define MENU_RA_STATUS			1502
+										// RetroAchievements status
+#define MENU_RA_LOGIN			1503
+										// RetroAchievements saved token login
+#define MENU_RA_LOGOUT			1504
+										// RetroAchievements logout
+#define MENU_RA_MAX				1599
 										// maximum
 
 //

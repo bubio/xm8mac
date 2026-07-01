@@ -235,6 +235,9 @@ void Menu::EnterMain(int id)
 	list->AddButton("Audio Options", MENU_MAIN_AUDIO);
 	list->AddButton("Audio Output Device", MENU_MAIN_AUDIO_OUT);
 	list->AddButton("Input Options", MENU_MAIN_INPUT);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	list->AddButton("RetroAchievements", MENU_MAIN_RA);
+#endif
 
 #ifndef __ANDROID__
 	// screen
@@ -534,12 +537,6 @@ void Menu::EnterSystem(int id)
 	list->AddCheckButton("Pseudo fast disk access", MENU_SYSTEM_FASTDISK);
 	list->AddCheckButton("Watch battery level", MENU_SYSTEM_BATTERY);
 	list->AddButton("DIP settings (w/reset)", MENU_SYSTEM_DIP);
-#ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	list->AddCheckButton("RetroAchievements mode", MENU_SYSTEM_RA_MODE);
-	list->AddButton("RA: disabled", MENU_SYSTEM_RA_STATUS);
-	list->AddButton("RA saved-token login", MENU_SYSTEM_RA_LOGIN);
-	list->AddButton("RA logout", MENU_SYSTEM_RA_LOGOUT);
-#endif
 
 	// get rom version
 	font = app->GetFont();
@@ -673,16 +670,6 @@ void Menu::EnterSystem(int id)
 	// watch battery
 	list->SetCheck(MENU_SYSTEM_BATTERY, setting->IsWatchBattery());
 
-#ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	// RetroAchievements
-	list->SetCheck(MENU_SYSTEM_RA_MODE, app->IsRaModeEnabled());
-	{
-		char ra_status[96];
-		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
-		list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
-	}
-#endif
-
 #ifdef __ANDROID__
 	// use external SD
 	if (Android_GetSdkVersion() >= 21) {
@@ -701,6 +688,34 @@ void Menu::EnterSystem(int id)
 	// set focus
 	list->SetFocus(id);
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+//
+// EnterRa()
+// enter RetroAchievements menu
+//
+void Menu::EnterRa(int id)
+{
+	list->SetTitle("<< RetroAchievements >>", MENU_RA);
+
+	list->AddCheckButton("RA mode", MENU_RA_MODE);
+	list->AddButton("RA: disabled", MENU_RA_STATUS);
+	list->AddButton("Saved-token login", MENU_RA_LOGIN);
+	list->AddButton("Logout", MENU_RA_LOGOUT);
+
+	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+	{
+		char ra_status[96];
+		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+		list->SetText(MENU_RA_STATUS, ra_status);
+	}
+
+	if (id == MENU_BACK) {
+		id = MENU_RA_MODE;
+	}
+	list->SetFocus(id);
+}
+#endif
 
 //
 // EnterVideo()
@@ -1542,6 +1557,16 @@ void Menu::Command(bool down, int id)
 		return;
 	}
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	// RetroAchievements menu
+	if ((id >= MENU_RA_MIN) && (id <= MENU_RA_MAX)) {
+		if (down == false) {
+			CmdRa(id);
+		}
+		return;
+	}
+#endif
+
 	// video menu
 	if ((id >= MENU_VIDEO_MIN) && (id <= MENU_VIDEO_MAX)) {
 		if (down == false) {
@@ -1679,6 +1704,13 @@ void Menu::CmdBack()
 	case MENU_SYSTEM:
 		EnterMain(MENU_MAIN_SYSTEM);
 		break;
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	// RetroAchievements menu
+	case MENU_RA:
+		EnterMain(MENU_MAIN_RA);
+		break;
+#endif
 
 	// video menu
 	case MENU_VIDEO:
@@ -1846,6 +1878,13 @@ void Menu::CmdMain(int id)
 	case MENU_MAIN_INPUT:
 		EnterInput(MENU_INPUT_SOFTKEY1);
 		break;
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	// RetroAchievements
+	case MENU_MAIN_RA:
+		EnterRa(MENU_RA_MODE);
+		break;
+#endif
 
 #ifndef __ANDROID__
 	// screen
@@ -2173,44 +2212,6 @@ void Menu::CmdSystem(int id)
 		EnterDip();
 		break;
 
-#ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	case MENU_SYSTEM_RA_MODE:
-		app->ToggleRaMode();
-		list->SetCheck(MENU_SYSTEM_RA_MODE, app->IsRaModeEnabled());
-		{
-			char ra_status[96];
-			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
-			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
-		}
-		break;
-
-	case MENU_SYSTEM_RA_STATUS:
-		{
-			char ra_status[96];
-			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
-			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
-		}
-		break;
-
-	case MENU_SYSTEM_RA_LOGIN:
-		app->RetryRaSavedLogin();
-		{
-			char ra_status[96];
-			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
-			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
-		}
-		break;
-
-	case MENU_SYSTEM_RA_LOGOUT:
-		app->LogoutRa();
-		{
-			char ra_status[96];
-			app->GetRaMenuStatus(ra_status, sizeof(ra_status));
-			list->SetText(MENU_SYSTEM_RA_STATUS, ra_status);
-		}
-		break;
-#endif
-
 	// ROM version
 	case MENU_SYSTEM_ROMVER:
 		break;
@@ -2237,6 +2238,46 @@ void Menu::CmdSystem(int id)
 		break;
 	}
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+//
+// CmdRa()
+// command (RetroAchievements)
+//
+void Menu::CmdRa(int id)
+{
+	auto update_status = [this]() {
+		char ra_status[96];
+		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+		list->SetText(MENU_RA_STATUS, ra_status);
+	};
+
+	switch (id) {
+	case MENU_RA_MODE:
+		app->ToggleRaMode();
+		list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+		update_status();
+		break;
+
+	case MENU_RA_STATUS:
+		update_status();
+		break;
+
+	case MENU_RA_LOGIN:
+		app->RetryRaSavedLogin();
+		update_status();
+		break;
+
+	case MENU_RA_LOGOUT:
+		app->LogoutRa();
+		update_status();
+		break;
+
+	default:
+		break;
+	}
+}
+#endif
 
 //
 // CmdVideo()
