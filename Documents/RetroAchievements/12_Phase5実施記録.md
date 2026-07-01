@@ -7,13 +7,19 @@ Phase 5の入口として、Phase 4で`App`へ直書きしていたRA通知状�
 
 - `Source/RA/ra_overlay.*`を追加した。
 - `RaOverlay`は通知本文、通知期限、RAホーム画面で使う状態snapshotを保持する。
+- `RaOverlay`はLogin画面の入力状態、focus、submit状態を保持する。
 - 通知の実描画は従来どおり`App::DrawRaOverlay()`が既存`Font`、`Video`を使って行う。
 - `RaOverlay`本体はSDL描画依存を持たないため、RA共通コードの単体テストから利用できる。
 - Phase 4で実装した短いRA通知の見た目と表示位置は変更していない。
+- トップ階層のRetroAchievementsメニューの`Login`から、物理キーボード入力用の
+  Loginオーバーレイを開ける。
+- Loginオーバーレイは`SDL_TEXTINPUT`、Tab、Backspace、Enter、Escape、上下キーを扱う。
+- Enterで`RaService::BeginLoginWithPassword()`を呼び、開始後にPasswordバッファを消去する。
+- Login開始後は`ProcessRaService()`が成功または失敗を一度だけ通知する。
 
-この段階では、ログイン画面、ASCIIオンスクリーンキーボード、実績一覧、バッジ画像、
-Leaderboard画面はまだ実装していない。次工程で`RaOverlay`のsnapshotと入力状態を拡張し、
-SDL上のRA専用画面へ進める。
+この段階では、ASCIIオンスクリーンキーボード、実績一覧、バッジ画像、Leaderboard画面は
+まだ実装していない。次工程で`RaOverlay`のscreen stackと入力状態を拡張し、
+SDL上のRA専用画面を増やす。
 
 ## 2. 実装意図
 
@@ -39,6 +45,7 @@ RA専用の状態オブジェクトへ集約する。描画自体は既存UI資�
 - Normal buildには`RaOverlay`を組み込まない。
 - 既存のRA通知表示が維持される。
 - 通知期限、空通知、snapshot保持の単体テストが通る。
+- Login画面のfield切替、Password伏字、Submit、Cancel、Password消去の単体テストが通る。
 - Phase 4のRA service、media store、memory map関連テストが引き続き通る。
 
 ## 4. 検証結果
@@ -66,9 +73,8 @@ git diff --check
 ## 5. 未完了項目
 
 - RAホーム画面の常設表示。
-- password login UI。
 - ASCIIオンスクリーンキーボード。
-- `SDL_TEXTINPUT`による物理キーボード入力。
+- マウス、タッチ、ゲームコントローラによるLogin画面操作。
 - 実績一覧と詳細表示。
 - バッジ、アバター画像cacheの描画接続。
 - Leaderboard一覧、送信結果、順位表示。

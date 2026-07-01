@@ -10,6 +10,7 @@
 
 #ifdef SDL
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <sstream>
@@ -229,6 +230,7 @@ App::App()
 	ra_overlay = NULL;
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
+	ra_manual_login_started = false;
 	ra_session_disabled = false;
 #endif
 
@@ -805,6 +807,20 @@ void App::ProcessRaService(bool emulation_frame)
 	}
 
 	ra_service->DrainHttp();
+	if (ra_manual_login_started) {
+		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
+		if (login.state == Xm8Ra::RaLoginState::LoggedIn) {
+			ra_manual_login_started = false;
+			const std::string name = login.display_name.empty() ?
+				login.username : login.display_name;
+			AddRaNotice(name.empty() ? "RA: logged in" :
+				"RA: logged in " + name);
+		}
+		else if (login.state == Xm8Ra::RaLoginState::Failed) {
+			ra_manual_login_started = false;
+			AddRaNotice("RA: login failed");
+		}
+	}
 
 	if (!ra_pending_game_hash.empty()) {
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
@@ -889,6 +905,108 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 }
 
 //
+// HandleRaOverlayKeyDown()
+// handle RA overlay key input
+//
+bool App::HandleRaOverlayKeyDown(SDL_Event *e)
+{
+	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
+		return false;
+	}
+
+	Xm8Ra::RaOverlayKey key;
+	switch (e->key.keysym.scancode) {
+	case SDL_SCANCODE_TAB:
+		key = Xm8Ra::RaOverlayKey::Tab;
+		break;
+	case SDL_SCANCODE_BACKSPACE:
+		key = Xm8Ra::RaOverlayKey::Backspace;
+		break;
+	case SDL_SCANCODE_RETURN:
+	case SDL_SCANCODE_KP_ENTER:
+		key = Xm8Ra::RaOverlayKey::Enter;
+		break;
+	case SDL_SCANCODE_ESCAPE:
+		key = Xm8Ra::RaOverlayKey::Escape;
+		break;
+	case SDL_SCANCODE_UP:
+		key = Xm8Ra::RaOverlayKey::Up;
+		break;
+	case SDL_SCANCODE_DOWN:
+		key = Xm8Ra::RaOverlayKey::Down;
+		break;
+	default:
+		return true;
+	}
+
+	const Xm8Ra::RaOverlayAction action = ra_overlay->OnControlKey(key);
+	if (action == Xm8Ra::RaOverlayAction::SubmitLogin) {
+		SubmitRaOverlayLogin();
+	}
+	else if (action == Xm8Ra::RaOverlayAction::Close) {
+		SDL_StopTextInput();
+		AddRaNotice("RA: login canceled");
+	}
+	return true;
+}
+
+//
+// HandleRaOverlayTextInput()
+// handle RA overlay text input
+//
+bool App::HandleRaOverlayTextInput(SDL_Event *e)
+{
+	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
+		return false;
+	}
+	ra_overlay->OnTextInput(e->text.text);
+	return true;
+}
+
+//
+// SubmitRaOverlayLogin()
+// submit RA overlay login form
+//
+bool App::SubmitRaOverlayLogin()
+{
+	if (ra_overlay == NULL) {
+		return false;
+	}
+
+	std::string username;
+	std::string password;
+	if (!ra_overlay->ConsumeSubmittedLogin(&username, &password)) {
+		return false;
+	}
+
+	std::string error;
+	if (!EnsureRaService(&error)) {
+		ra_overlay->SetLoginStatus("RA service unavailable");
+		AddRaNotice("RA: service unavailable");
+		std::fill(password.begin(), password.end(), '\0');
+		return false;
+	}
+
+	const bool started = ra_service->BeginLoginWithPassword(username,
+		password, &error);
+	std::fill(password.begin(), password.end(), '\0');
+	if (!started) {
+		ra_overlay->SetLoginStatus(error.empty() ?
+			"Login failed to start" : error);
+		AddRaNotice("RA: login failed");
+		return false;
+	}
+
+	ra_session_disabled = false;
+	ra_saved_login_started = false;
+	ra_manual_login_started = true;
+	ra_overlay->CloseScreen();
+	SDL_StopTextInput();
+	AddRaNotice("RA: login started");
+	return true;
+}
+
+//
 // DrawRaOverlay()
 // draw RA notice overlay
 //
@@ -896,6 +1014,69 @@ void App::DrawRaOverlay()
 {
 	if (!ra_mode_enabled || ra_overlay == NULL) {
 		return;
+	}
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
+		const Xm8Ra::RaOverlayLoginSnapshot login =
+			ra_overlay->LoginSnapshot();
+		SDL_Rect panel = {104, 78, 432, 218};
+		Uint32 *buf = video->GetFrameBuf(0);
+		font->DrawFillRect(buf, &panel,
+			RGB_COLOR(16, 16, 16) | 0xe0000000);
+		font->DrawRect(buf, &panel,
+			RGB_COLOR(255, 255, 255) | 0xe0000000,
+			RGB_COLOR(16, 16, 16) | 0xe0000000);
+
+		SDL_Rect title = {panel.x, panel.y + 12, panel.w, 24};
+		font->DrawSjisCenterOr(buf, &title, "RetroAchievements Login",
+			RGB_COLOR(255, 255, 255));
+
+		SDL_Rect user_label = {panel.x + 24, panel.y + 56, 104, 22};
+		SDL_Rect user_box = {panel.x + 128, panel.y + 52, 272, 28};
+		SDL_Rect pass_label = {panel.x + 24, panel.y + 96, 104, 22};
+		SDL_Rect pass_box = {panel.x + 128, panel.y + 92, 272, 28};
+		font->DrawSjisLeftOr(buf, &user_label, "Username",
+			RGB_COLOR(220, 220, 220));
+		font->DrawSjisLeftOr(buf, &pass_label, "Password",
+			RGB_COLOR(220, 220, 220));
+
+		const bool user_focus =
+			login.field == Xm8Ra::RaOverlayLoginField::Username;
+		font->DrawRect(buf, &user_box,
+			user_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
+			RGB_COLOR(0, 0, 0) | 0xe0000000);
+		font->DrawRect(buf, &pass_box,
+			!user_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
+			RGB_COLOR(0, 0, 0) | 0xe0000000);
+
+		char user[64];
+		char pass[64];
+		std::snprintf(user, sizeof(user), "%s", login.username.c_str());
+		std::snprintf(pass, sizeof(pass), "%s",
+			login.masked_password.c_str());
+		user_box.x += 8;
+		user_box.w -= 16;
+		pass_box.x += 8;
+		pass_box.w -= 16;
+		font->DrawSjisLeftOr(buf, &user_box, user,
+			RGB_COLOR(255, 255, 255));
+		font->DrawSjisLeftOr(buf, &pass_box, pass,
+			RGB_COLOR(255, 255, 255));
+
+		SDL_Rect hint = {panel.x + 24, panel.y + 138, panel.w - 48, 22};
+		font->DrawSjisLeftOr(buf, &hint,
+			login.can_submit ? "Enter: Login  Esc: Cancel" :
+				"Tab: Switch field  Esc: Cancel",
+			RGB_COLOR(200, 200, 200));
+		if (!login.status_message.empty()) {
+			char status[72];
+			std::snprintf(status, sizeof(status), "%s",
+				login.status_message.c_str());
+			SDL_Rect status_rect = {panel.x + 24, panel.y + 170,
+				panel.w - 48, 22};
+			font->DrawSjisLeftOr(buf, &status_rect, status,
+				RGB_COLOR(255, 192, 96));
+		}
+		video->DrawCtrl();
 	}
 	const std::string notice = ra_overlay->VisibleNotice(SDL_GetTicks());
 	if (notice.empty()) {
@@ -1127,6 +1308,7 @@ void App::Deinit()
 	}
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
+	ra_manual_login_started = false;
 	ra_session_disabled = false;
 	ra_pending_game_hash.clear();
 	ra_loaded_game_hash.clear();
@@ -1869,6 +2051,11 @@ void App::Poll(SDL_Event *e)
 		break;
 
 	case SDL_TEXTINPUT:
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayTextInput(e)) {
+			break;
+		}
+#endif
 		break;
 
 	case SDL_JOYAXISMOTION:
@@ -2124,6 +2311,12 @@ void App::OnKeyDown(SDL_Event *e)
 		}
 	}
 #endif // !__ANDROID__
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (HandleRaOverlayKeyDown(e)) {
+		return;
+	}
+#endif
 
 	// menu
 	if (app_menu == true) {
@@ -2866,6 +3059,7 @@ bool App::ToggleRaMode()
 	ra_mode_enabled = enable;
 	ra_session_disabled = false;
 	ra_saved_login_started = false;
+	ra_manual_login_started = false;
 	ra_pending_game_hash.clear();
 	ra_loaded_game_hash.clear();
 	if (!enable && ra_service != NULL) {
@@ -2898,7 +3092,49 @@ bool App::RetryRaSavedLogin()
 
 	ra_session_disabled = false;
 	ra_saved_login_started = true;
+	ra_manual_login_started = false;
 	AddRaNotice("RA: login started");
+	return true;
+}
+
+//
+// OpenRaLoginOverlay()
+// open RA password login overlay
+//
+bool App::OpenRaLoginOverlay()
+{
+	if (ra_overlay == NULL) {
+		AddRaNotice("RA: overlay unavailable");
+		return false;
+	}
+
+	std::string error;
+	if (!ra_mode_enabled) {
+		if (!SaveRaModeSetting(true, &error)) {
+			AddRaNotice("RA: setting save failed");
+			return false;
+		}
+		ra_mode_enabled = true;
+	}
+	if (!EnsureRaService(&error)) {
+		AddRaNotice("RA: service unavailable");
+		return false;
+	}
+
+	std::string username;
+	const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
+	if (!login.username.empty()) {
+		username = login.username;
+	}
+	else if (!login.display_name.empty()) {
+		username = login.display_name;
+	}
+	ra_overlay->OpenLogin(username);
+	SDL_StartTextInput();
+	if (app_menu == true) {
+		LeaveMenu(false);
+	}
+	AddRaNotice("RA: login");
 	return true;
 }
 
@@ -2913,6 +3149,7 @@ void App::LogoutRa()
 	}
 	ra_session_disabled = false;
 	ra_saved_login_started = false;
+	ra_manual_login_started = false;
 	ra_pending_game_hash.clear();
 	ra_loaded_game_hash.clear();
 	AddRaNotice("RA: logged out");

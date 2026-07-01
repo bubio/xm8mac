@@ -124,6 +124,8 @@ public:
 										// toggle RA mode setting
 	bool RetryRaSavedLogin();
 										// retry RA saved token login
+	bool OpenRaLoginOverlay();
+										// open RA password login overlay
 	void LogoutRa();
 										// logout RA
 	void GetRaMenuStatus(char *buffer, size_t capacity) const;
@@ -189,6 +191,12 @@ private:
 										// add RA overlay notice
 	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);
 										// translate RA events to notices
+	bool HandleRaOverlayKeyDown(SDL_Event *e);
+										// handle RA overlay key input
+	bool HandleRaOverlayTextInput(SDL_Event *e);
+										// handle RA overlay text input
+	bool SubmitRaOverlayLogin();
+										// submit RA overlay login form
 	void DrawRaOverlay();
 										// draw RA notice overlay
 #endif
@@ -257,6 +265,8 @@ private:
 										// RA mode setting
 	bool ra_saved_login_started;
 										// saved token login started
+	bool ra_manual_login_started;
+										// manual password login started
 	bool ra_session_disabled;
 										// RA disabled for current launch session
 	std::string ra_pending_game_hash;
