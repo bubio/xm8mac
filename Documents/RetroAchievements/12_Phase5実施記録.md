@@ -21,8 +21,20 @@ Phase 5の入口として、Phase 4で`App`へ直書きしていたRA通知状�
 - RAメニューの状態行は、ログイン済みでユーザー名が取得できている場合に
   `RA: logged in <user>`と表示する。
 - Loginオーバーレイは`SDL_TEXTINPUT`、Tab、Backspace、Enter、Escape、上下キーを扱う。
+- LoginオーバーレイはUsername、Password、Login、Cancelへフォーカスを持ち、
+  マウス、タッチ、方向キー、controllerでフォーカス移動と実行を行える。
+- 入力欄フォーカス時は`SDL_StartTextInput()`、Login/Cancelなど入力欄以外への
+  フォーカス移動またはLogin画面終了時は`SDL_StopTextInput()`を呼ぶ。
+- AndroidではOSソフトウェアキーボードを第一候補とする。ただし実機表示確認は
+  Android Phaseで行い、表示できない環境の保険としてRAオーバーレイ内入力手段を残す。
 - Enterで`RaService::BeginLoginWithPassword()`を呼び、開始後にPasswordバッファを消去する。
-- Login開始後は`ProcessRaService()`が成功または失敗を一度だけ通知する。
+- Login開始後はLogin画面をpending表示のまま維持し、成功時だけ閉じる。
+- Login pending中は`Cancel`、`Esc`、Android Backを含むLogin画面操作を無効化する。
+  `rc_client`の非同期login requestは中断せず、完了callbackを待つ。
+- Login失敗時は短い通知だけを出し、RAから返った安全な詳細文または固定文言を
+  Login画面内に表示する。Usernameは維持し、Passwordは消去する。
+- マウスとタッチは押下開始targetと解放targetが一致した場合だけ`Login`または
+  `Cancel`を実行する。解放位置だけで実行しない。
 
 この段階では、ASCIIオンスクリーンキーボード、実績一覧、バッジ画像、Leaderboard画面は
 まだ実装していない。次工程で`RaOverlay`のscreen stackと入力状態を拡張し、
@@ -53,11 +65,14 @@ RA専用の状態オブジェクトへ集約する。描画自体は既存UI資�
 - 既存のRA通知表示が維持される。
 - 通知期限、空通知、snapshot保持の単体テストが通る。
 - Login画面のfield切替、Password伏字、Submit、Cancel、Password消去の単体テストが通る。
+- Login画面のポインタ操作、controller相当のfocus移動、失敗時のUsername維持と
+  Password消去、Submit pending中の二重送信防止、pending中のCancel不可、
+  pointer target判定の単体テストが通る。
 - Phase 4のRA service、media store、memory map関連テストが引き続き通る。
 
 ## 4. 検証結果
 
-2026-07-01時点で次を確認した。
+2026-07-02時点で次を確認した。
 
 ```sh
 cmake -S . -B build-ra -DXM8_ENABLE_RETROACHIEVEMENTS=ON
@@ -82,7 +97,7 @@ git diff --check
 - RAホーム画面の常設表示。
 - ASCIIオンスクリーンキーボード。
 - 既存softkeyはVMへのPC-88キー入力経路であり、RA Login文字列入力へ渡す変換層は未接続。
-- マウス、タッチ、ゲームコントローラによるLogin画面操作。
+- Login画面の視覚確認とスクリーンショット比較。
 - 実績一覧と詳細表示。
 - バッジ、アバター画像cacheの描画接続。
 - Leaderboard一覧、送信結果、順位表示。

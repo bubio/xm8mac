@@ -233,6 +233,11 @@ App::App()
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
 	ra_session_disabled = false;
+	ra_overlay_joystick_prev = 0;
+	ra_overlay_mouse_target_valid = false;
+	ra_overlay_mouse_target = Xm8Ra::RaOverlayLoginTarget::Username;
+	ra_overlay_finger_target_valid = false;
+	ra_overlay_finger_target = Xm8Ra::RaOverlayLoginTarget::Username;
 #endif
 
 	// flags
@@ -851,6 +856,12 @@ void App::ProcessRaService(bool emulation_frame)
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
 		if (login.state == Xm8Ra::RaLoginState::LoggedIn) {
 			ra_manual_login_started = false;
+			if (ra_overlay != NULL &&
+				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
+				ra_overlay->CloseScreen();
+				SDL_StopTextInput();
+				ClearRaOverlayPointerState();
+			}
 			const std::string name = login.display_name.empty() ?
 				login.username : login.display_name;
 			AddRaNotice(name.empty() ? "RA: logged in" :
@@ -858,6 +869,12 @@ void App::ProcessRaService(bool emulation_frame)
 		}
 		else if (login.state == Xm8Ra::RaLoginState::Failed) {
 			ra_manual_login_started = false;
+			if (ra_overlay != NULL &&
+				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
+				ra_overlay->SetLoginStatus(login.message.empty() ?
+					"Login failed" : login.message);
+				UpdateRaOverlayTextInput();
+			}
 			AddRaNotice("RA: login failed");
 		}
 	}
@@ -967,6 +984,9 @@ bool App::HandleRaOverlayKeyDown(SDL_Event *e)
 		key = Xm8Ra::RaOverlayKey::Enter;
 		break;
 	case SDL_SCANCODE_ESCAPE:
+#ifdef __ANDROID__
+	case SDL_SCANCODE_AC_BACK:
+#endif
 		key = Xm8Ra::RaOverlayKey::Escape;
 		break;
 	case SDL_SCANCODE_UP:
@@ -975,19 +995,70 @@ bool App::HandleRaOverlayKeyDown(SDL_Event *e)
 	case SDL_SCANCODE_DOWN:
 		key = Xm8Ra::RaOverlayKey::Down;
 		break;
+	case SDL_SCANCODE_LEFT:
+		key = Xm8Ra::RaOverlayKey::Left;
+		break;
+	case SDL_SCANCODE_RIGHT:
+		key = Xm8Ra::RaOverlayKey::Right;
+		break;
 	default:
 		return true;
 	}
 
-	const Xm8Ra::RaOverlayAction action = ra_overlay->OnControlKey(key);
+	return HandleRaOverlayAction(ra_overlay->OnControlKey(key));
+}
+
+//
+// HandleRaOverlayAction()
+// handle RA overlay action
+//
+bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
+{
 	if (action == Xm8Ra::RaOverlayAction::SubmitLogin) {
 		SubmitRaOverlayLogin();
 	}
 	else if (action == Xm8Ra::RaOverlayAction::Close) {
 		SDL_StopTextInput();
+		ClearRaOverlayPointerState();
 		AddRaNotice("RA: login canceled");
 	}
+	else {
+		UpdateRaOverlayTextInput();
+	}
 	return true;
+}
+
+//
+// UpdateRaOverlayTextInput()
+// update SDL text input for RA overlay
+//
+void App::UpdateRaOverlayTextInput()
+{
+	if (ra_overlay == NULL ||
+		ra_overlay->Screen() != Xm8Ra::RaOverlayScreen::Login) {
+		SDL_StopTextInput();
+		return;
+	}
+
+	const Xm8Ra::RaOverlayLoginSnapshot login =
+		ra_overlay->LoginSnapshot();
+	if (login.focus == Xm8Ra::RaOverlayLoginTarget::Username ||
+		login.focus == Xm8Ra::RaOverlayLoginTarget::Password) {
+		SDL_StartTextInput();
+	}
+	else {
+		SDL_StopTextInput();
+	}
+}
+
+//
+// ClearRaOverlayPointerState()
+// clear RA overlay pointer state
+//
+void App::ClearRaOverlayPointerState()
+{
+	ra_overlay_mouse_target_valid = false;
+	ra_overlay_finger_target_valid = false;
 }
 
 //
@@ -1001,6 +1072,134 @@ bool App::HandleRaOverlayTextInput(SDL_Event *e)
 	}
 	ra_overlay->OnTextInput(e->text.text);
 	return true;
+}
+
+//
+// HandleRaOverlayMouse()
+// handle RA overlay mouse input
+//
+bool App::HandleRaOverlayMouse(SDL_Event *e)
+{
+	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
+		return false;
+	}
+	if (e->type != SDL_MOUSEBUTTONDOWN && e->type != SDL_MOUSEBUTTONUP) {
+		return true;
+	}
+	if (e->button.button != SDL_BUTTON_LEFT) {
+		return true;
+	}
+
+	int x = e->button.x;
+	int y = e->button.y;
+	if (!video->ConvertPoint(&x, &y)) {
+		if (e->type == SDL_MOUSEBUTTONUP) {
+			ra_overlay_mouse_target_valid = false;
+		}
+		return true;
+	}
+
+	Xm8Ra::RaOverlayLoginTarget target;
+	if (!ra_overlay->LoginTargetAt(x, y, &target)) {
+		if (e->type == SDL_MOUSEBUTTONUP) {
+			ra_overlay_mouse_target_valid = false;
+		}
+		return true;
+	}
+	if (e->type == SDL_MOUSEBUTTONDOWN) {
+		ra_overlay_mouse_target = target;
+		ra_overlay_mouse_target_valid = true;
+		return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+			false));
+	}
+
+	const bool activate = ra_overlay_mouse_target_valid &&
+		ra_overlay_mouse_target == target;
+	ra_overlay_mouse_target_valid = false;
+	return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+		activate));
+}
+
+//
+// HandleRaOverlayFinger()
+// handle RA overlay touch input
+//
+bool App::HandleRaOverlayFinger(SDL_Event *e)
+{
+	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
+		return false;
+	}
+	if (e->type != SDL_FINGERDOWN && e->type != SDL_FINGERUP) {
+		return true;
+	}
+
+	int x = 0;
+	int y = 0;
+	if (!video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y)) {
+		if (e->type == SDL_FINGERUP) {
+			ra_overlay_finger_target_valid = false;
+		}
+		return true;
+	}
+
+	Xm8Ra::RaOverlayLoginTarget target;
+	if (!ra_overlay->LoginTargetAt(x, y, &target)) {
+		if (e->type == SDL_FINGERUP) {
+			ra_overlay_finger_target_valid = false;
+		}
+		return true;
+	}
+	if (e->type == SDL_FINGERDOWN) {
+		ra_overlay_finger_target = target;
+		ra_overlay_finger_target_valid = true;
+		return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+			false));
+	}
+
+	const bool activate = ra_overlay_finger_target_valid &&
+		ra_overlay_finger_target == target;
+	ra_overlay_finger_target_valid = false;
+	return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+		activate));
+}
+
+//
+// HandleRaOverlayJoystick()
+// handle RA overlay joystick input
+//
+bool App::HandleRaOverlayJoystick()
+{
+	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
+		return false;
+	}
+
+	uint32 status[2];
+	input->GetJoystick((uint32*)status);
+	const Uint32 mix = (Uint32)(status[0] | (status[1] << 8));
+	const Uint32 pressed = mix & ~ra_overlay_joystick_prev;
+	ra_overlay_joystick_prev = mix;
+
+	Xm8Ra::RaOverlayAction action = Xm8Ra::RaOverlayAction::None;
+	if ((pressed & 0x0001) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Up);
+	}
+	else if ((pressed & 0x0002) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Down);
+	}
+	else if ((pressed & 0x0004) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Left);
+	}
+	else if ((pressed & 0x0008) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Right);
+	}
+	else if ((pressed & 0x0010) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Enter);
+	}
+	else if ((pressed & 0x0020) != 0 || (pressed & 0x0100) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Escape);
+	}
+
+	return HandleRaOverlayAction(action);
 }
 
 //
@@ -1024,6 +1223,7 @@ bool App::SubmitRaOverlayLogin()
 		ra_overlay->SetLoginStatus("RA service unavailable");
 		AddRaNotice("RA: service unavailable");
 		std::fill(password.begin(), password.end(), '\0');
+		UpdateRaOverlayTextInput();
 		return false;
 	}
 
@@ -1034,14 +1234,15 @@ bool App::SubmitRaOverlayLogin()
 		ra_overlay->SetLoginStatus(error.empty() ?
 			"Login failed to start" : error);
 		AddRaNotice("RA: login failed");
+		UpdateRaOverlayTextInput();
 		return false;
 	}
 
 	ra_session_disabled = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = true;
-	ra_overlay->CloseScreen();
 	SDL_StopTextInput();
+	ClearRaOverlayPointerState();
 	AddRaNotice("RA: login started");
 	return true;
 }
@@ -1080,12 +1281,14 @@ void App::DrawRaOverlay()
 			RGB_COLOR(220, 220, 220));
 
 		const bool user_focus =
-			login.field == Xm8Ra::RaOverlayLoginField::Username;
+			login.focus == Xm8Ra::RaOverlayLoginTarget::Username;
+		const bool pass_focus =
+			login.focus == Xm8Ra::RaOverlayLoginTarget::Password;
 		font->DrawRect(buf, &user_box,
 			user_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
 			RGB_COLOR(0, 0, 0) | 0xe0000000);
 		font->DrawRect(buf, &pass_box,
-			!user_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
+			pass_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
 			RGB_COLOR(0, 0, 0) | 0xe0000000);
 
 		char user[64];
@@ -1101,7 +1304,8 @@ void App::DrawRaOverlay()
 			RGB_COLOR(255, 255, 255));
 		font->DrawSjisLeftOr(buf, &pass_box, pass,
 			RGB_COLOR(255, 255, 255));
-		if (((SDL_GetTicks() / 500) & 1) == 0) {
+		if ((user_focus || pass_focus) &&
+			((SDL_GetTicks() / 500) & 1) == 0) {
 			const char *focused_text = user_focus ? user : pass;
 			SDL_Rect cursor_box = user_focus ? user_box : pass_box;
 			int cursor_x = cursor_box.x +
@@ -1114,16 +1318,34 @@ void App::DrawRaOverlay()
 			font->DrawFillRect(buf, &cursor, RGB_COLOR(255, 255, 255));
 		}
 
-		SDL_Rect hint = {panel.x + 24, panel.y + 138, panel.w - 48, 22};
+		SDL_Rect login_button = {256, 220, 112, 30};
+		SDL_Rect cancel_button = {384, 220, 112, 30};
+		const bool login_focus =
+			login.focus == Xm8Ra::RaOverlayLoginTarget::Login;
+		const bool cancel_focus =
+			login.focus == Xm8Ra::RaOverlayLoginTarget::Cancel;
+		font->DrawRect(buf, &login_button,
+			login_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
+			login.can_submit ? RGB_COLOR(48, 72, 96) | 0xe0000000 :
+				RGB_COLOR(32, 32, 32) | 0xe0000000);
+		font->DrawRect(buf, &cancel_button,
+			cancel_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
+			RGB_COLOR(64, 64, 64) | 0xe0000000);
+		font->DrawSjisCenterOr(buf, &login_button, "Login",
+			login.can_submit ? RGB_COLOR(255, 255, 255) :
+				RGB_COLOR(160, 160, 160));
+		font->DrawSjisCenterOr(buf, &cancel_button, "Cancel",
+			RGB_COLOR(255, 255, 255));
+
+		SDL_Rect hint = {panel.x + 24, panel.y + 178, panel.w - 48, 22};
 		font->DrawSjisLeftOr(buf, &hint,
-			login.can_submit ? "Enter: Login  Esc: Cancel" :
-				"Tab: Switch field  Esc: Cancel",
+			"Tab/Arrows: Move  Enter: Select  Esc: Cancel",
 			RGB_COLOR(200, 200, 200));
 		if (!login.status_message.empty()) {
 			char status[72];
 			std::snprintf(status, sizeof(status), "%s",
 				login.status_message.c_str());
-			SDL_Rect status_rect = {panel.x + 24, panel.y + 170,
+			SDL_Rect status_rect = {panel.x + 24, panel.y + 194,
 				panel.w - 48, 22};
 			font->DrawSjisLeftOr(buf, &status_rect, status,
 				RGB_COLOR(255, 192, 96));
@@ -2010,6 +2232,11 @@ void App::Poll(SDL_Event *e)
 			SDL_ShowCursor(SDL_ENABLE);
 			mouse_tick = SDL_GetTicks();
 		}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (ra_overlay != NULL && ra_overlay->IsBlocking()) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			// menu
 			menu->OnMouseMotion(e);
@@ -2025,6 +2252,11 @@ void App::Poll(SDL_Event *e)
 			SDL_ShowCursor(SDL_ENABLE);
 			mouse_tick = SDL_GetTicks();
 		}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayMouse(e)) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			// menu
 			menu->OnMouseButtonDown(e);
@@ -2047,6 +2279,11 @@ void App::Poll(SDL_Event *e)
 			SDL_ShowCursor(SDL_ENABLE);
 			mouse_tick = SDL_GetTicks();
 		}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayMouse(e)) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			// menu
 			menu->OnMouseButtonUp(e);
@@ -2111,6 +2348,11 @@ void App::Poll(SDL_Event *e)
 		break;
 
 	case SDL_JOYAXISMOTION:
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayJoystick()) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			menu->OnJoystick();
 		}
@@ -2128,6 +2370,11 @@ void App::Poll(SDL_Event *e)
 		break;
 
 	case SDL_JOYBUTTONDOWN:
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayJoystick()) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			menu->OnJoystick();
 		}
@@ -2139,6 +2386,11 @@ void App::Poll(SDL_Event *e)
 		break;
 
 	case SDL_JOYBUTTONUP:
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayJoystick()) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			menu->OnJoystick();
 		}
@@ -2162,6 +2414,11 @@ void App::Poll(SDL_Event *e)
 		break;
 
 	case SDL_FINGERDOWN:
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayFinger(e)) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			menu->OnFingerDown(e);
 		}
@@ -2173,6 +2430,11 @@ void App::Poll(SDL_Event *e)
 		break;
 
 	case SDL_FINGERUP:
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayFinger(e)) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			menu->OnFingerUp(e);
 		}
@@ -2184,6 +2446,11 @@ void App::Poll(SDL_Event *e)
 		break;
 
 	case SDL_FINGERMOTION:
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (ra_overlay != NULL && ra_overlay->IsBlocking()) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			menu->OnFingerMotion(e);
 		}
@@ -3169,6 +3436,8 @@ bool App::OpenRaLoginOverlay()
 		username = login.display_name;
 	}
 	ra_overlay->OpenLogin(username);
+	ra_overlay_joystick_prev = 0;
+	ClearRaOverlayPointerState();
 	SDL_StartTextInput();
 	if (app_menu == true) {
 		LeaveMenu(false);

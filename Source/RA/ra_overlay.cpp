@@ -17,9 +17,31 @@ namespace {
 const size_t kMaxUsernameBytes = 256;
 const size_t kMaxPasswordBytes = 1024;
 
+const int kLoginUserBoxX = 232;
+const int kLoginUserBoxY = 130;
+const int kLoginUserBoxW = 272;
+const int kLoginUserBoxH = 28;
+const int kLoginPassBoxX = 232;
+const int kLoginPassBoxY = 170;
+const int kLoginPassBoxW = 272;
+const int kLoginPassBoxH = 28;
+const int kLoginButtonX = 256;
+const int kLoginButtonY = 220;
+const int kLoginButtonW = 112;
+const int kLoginButtonH = 30;
+const int kCancelButtonX = 384;
+const int kCancelButtonY = 220;
+const int kCancelButtonW = 112;
+const int kCancelButtonH = 30;
+
 bool IsAllowedLoginByte(unsigned char ch)
 {
 	return ch >= 0x20 && ch <= 0x7e;
+}
+
+bool HitRect(int x, int y, int rx, int ry, int rw, int rh)
+{
+	return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
 }
 
 } // namespace
@@ -69,6 +91,8 @@ void RaOverlay::OpenLogin(const std::string& username)
 	screen_ = RaOverlayScreen::Login;
 	login_field_ = username.empty() ? RaOverlayLoginField::Username :
 		RaOverlayLoginField::Password;
+	login_focus_ = username.empty() ? RaOverlayLoginTarget::Username :
+		RaOverlayLoginTarget::Password;
 	login_username_ = username.substr(0, kMaxUsernameBytes);
 	login_status_.clear();
 	login_submit_pending_ = false;
@@ -89,6 +113,7 @@ RaOverlayLoginSnapshot RaOverlay::LoginSnapshot() const
 	RaOverlayLoginSnapshot snapshot;
 	snapshot.active = screen_ == RaOverlayScreen::Login;
 	snapshot.field = login_field_;
+	snapshot.focus = login_focus_;
 	snapshot.username = login_username_;
 	snapshot.masked_password.assign(login_password_.size(), '*');
 	snapshot.status_message = login_status_;
@@ -98,7 +123,8 @@ RaOverlayLoginSnapshot RaOverlay::LoginSnapshot() const
 
 RaOverlayAction RaOverlay::OnTextInput(const char *text)
 {
-	if (screen_ != RaOverlayScreen::Login || login_submit_pending_) {
+	if (screen_ != RaOverlayScreen::Login || login_submit_pending_ ||
+		!IsLoginTextFocused()) {
 		return RaOverlayAction::None;
 	}
 	AppendLoginText(text);
@@ -110,38 +136,95 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 	if (screen_ != RaOverlayScreen::Login) {
 		return RaOverlayAction::None;
 	}
-	if (login_submit_pending_ && key != RaOverlayKey::Escape) {
+	if (login_submit_pending_) {
 		return RaOverlayAction::None;
 	}
 
 	switch (key) {
 	case RaOverlayKey::Tab:
-	case RaOverlayKey::Up:
 	case RaOverlayKey::Down:
-		ToggleLoginField();
+	case RaOverlayKey::Right:
+		MoveLoginFocus(1);
+		break;
+	case RaOverlayKey::Up:
+	case RaOverlayKey::Left:
+		MoveLoginFocus(-1);
 		break;
 	case RaOverlayKey::Backspace:
-		BackspaceLoginField();
+		if (IsLoginTextFocused()) {
+			BackspaceLoginField();
+		}
 		break;
 	case RaOverlayKey::Enter:
-		if (CanSubmitLogin()) {
-			login_status_ = "Login pending";
-			login_submit_pending_ = true;
-			return RaOverlayAction::SubmitLogin;
-		}
-		if (login_field_ == RaOverlayLoginField::Username &&
-			!login_username_.empty()) {
-			login_field_ = RaOverlayLoginField::Password;
-		}
-		else {
-			login_status_ = "Enter username and password";
-		}
-		break;
+		return ActivateLoginFocus();
 	case RaOverlayKey::Escape:
 		CloseScreen();
 		return RaOverlayAction::Close;
 	}
 	return RaOverlayAction::None;
+}
+
+RaOverlayAction RaOverlay::OnLoginTarget(RaOverlayLoginTarget target,
+	bool activate)
+{
+	if (screen_ != RaOverlayScreen::Login) {
+		return RaOverlayAction::None;
+	}
+	if (login_submit_pending_) {
+		return RaOverlayAction::None;
+	}
+
+	login_focus_ = target;
+	if (target == RaOverlayLoginTarget::Username) {
+		login_field_ = RaOverlayLoginField::Username;
+	}
+	else if (target == RaOverlayLoginTarget::Password) {
+		login_field_ = RaOverlayLoginField::Password;
+	}
+
+	return activate ? ActivateLoginFocus() : RaOverlayAction::None;
+}
+
+bool RaOverlay::LoginTargetAt(int x, int y, RaOverlayLoginTarget *target) const
+{
+	if (HitRect(x, y, kLoginUserBoxX, kLoginUserBoxY,
+		kLoginUserBoxW, kLoginUserBoxH)) {
+		if (target != nullptr) {
+			*target = RaOverlayLoginTarget::Username;
+		}
+		return true;
+	}
+	if (HitRect(x, y, kLoginPassBoxX, kLoginPassBoxY,
+		kLoginPassBoxW, kLoginPassBoxH)) {
+		if (target != nullptr) {
+			*target = RaOverlayLoginTarget::Password;
+		}
+		return true;
+	}
+	if (HitRect(x, y, kLoginButtonX, kLoginButtonY,
+		kLoginButtonW, kLoginButtonH)) {
+		if (target != nullptr) {
+			*target = RaOverlayLoginTarget::Login;
+		}
+		return true;
+	}
+	if (HitRect(x, y, kCancelButtonX, kCancelButtonY,
+		kCancelButtonW, kCancelButtonH)) {
+		if (target != nullptr) {
+			*target = RaOverlayLoginTarget::Cancel;
+		}
+		return true;
+	}
+	return false;
+}
+
+RaOverlayAction RaOverlay::OnLoginPointer(int x, int y, bool activate)
+{
+	RaOverlayLoginTarget target;
+	if (!LoginTargetAt(x, y, &target)) {
+		return RaOverlayAction::None;
+	}
+	return OnLoginTarget(target, activate);
 }
 
 bool RaOverlay::ConsumeSubmittedLogin(std::string *username,
@@ -153,13 +236,13 @@ bool RaOverlay::ConsumeSubmittedLogin(std::string *username,
 	*username = login_username_;
 	*password = login_password_;
 	WipeLoginPassword();
-	login_submit_pending_ = false;
 	return true;
 }
 
 void RaOverlay::SetLoginStatus(const std::string& message)
 {
 	login_status_ = message;
+	login_submit_pending_ = false;
 }
 
 void RaOverlay::CloseScreen()
@@ -167,15 +250,33 @@ void RaOverlay::CloseScreen()
 	WipeLoginPassword();
 	screen_ = RaOverlayScreen::None;
 	login_field_ = RaOverlayLoginField::Username;
+	login_focus_ = RaOverlayLoginTarget::Username;
 	login_username_.clear();
 	login_status_.clear();
 	login_submit_pending_ = false;
 }
 
-void RaOverlay::ToggleLoginField()
+void RaOverlay::MoveLoginFocus(int delta)
 {
-	login_field_ = login_field_ == RaOverlayLoginField::Username ?
-		RaOverlayLoginField::Password : RaOverlayLoginField::Username;
+	int focus = static_cast<int>(login_focus_);
+	focus = (focus + delta) % 4;
+	if (focus < 0) {
+		focus += 4;
+	}
+	OnLoginTarget(static_cast<RaOverlayLoginTarget>(focus), false);
+}
+
+bool RaOverlay::IsLoginTextFocused() const
+{
+	return login_focus_ == RaOverlayLoginTarget::Username ||
+		login_focus_ == RaOverlayLoginTarget::Password;
+}
+
+void RaOverlay::SetLoginFieldFocus(RaOverlayLoginField field)
+{
+	login_field_ = field;
+	login_focus_ = field == RaOverlayLoginField::Username ?
+		RaOverlayLoginTarget::Username : RaOverlayLoginTarget::Password;
 }
 
 void RaOverlay::WipeLoginPassword()
@@ -215,6 +316,9 @@ bool RaOverlay::AppendLoginText(const char *text)
 
 bool RaOverlay::BackspaceLoginField()
 {
+	if (!IsLoginTextFocused()) {
+		return false;
+	}
 	std::string *field = login_field_ == RaOverlayLoginField::Username ?
 		&login_username_ : &login_password_;
 	if (field->empty()) {
@@ -223,6 +327,40 @@ bool RaOverlay::BackspaceLoginField()
 	field->pop_back();
 	login_status_.clear();
 	return true;
+}
+
+RaOverlayAction RaOverlay::ActivateLoginFocus()
+{
+	switch (login_focus_) {
+	case RaOverlayLoginTarget::Username:
+		if (!login_username_.empty()) {
+			SetLoginFieldFocus(RaOverlayLoginField::Password);
+		}
+		else {
+			login_status_ = "Enter username";
+		}
+		break;
+	case RaOverlayLoginTarget::Password:
+		if (CanSubmitLogin()) {
+			login_status_ = "Login pending";
+			login_submit_pending_ = true;
+			return RaOverlayAction::SubmitLogin;
+		}
+		login_status_ = "Enter username and password";
+		break;
+	case RaOverlayLoginTarget::Login:
+		if (CanSubmitLogin()) {
+			login_status_ = "Login pending";
+			login_submit_pending_ = true;
+			return RaOverlayAction::SubmitLogin;
+		}
+		login_status_ = "Enter username and password";
+		break;
+	case RaOverlayLoginTarget::Cancel:
+		CloseScreen();
+		return RaOverlayAction::Close;
+	}
+	return RaOverlayAction::None;
 }
 
 bool RaOverlay::CanSubmitLogin() const

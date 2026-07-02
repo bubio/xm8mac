@@ -23,6 +23,13 @@ enum class RaOverlayLoginField {
 	Password,
 };
 
+enum class RaOverlayLoginTarget {
+	Username,
+	Password,
+	Login,
+	Cancel,
+};
+
 enum class RaOverlayKey {
 	Tab,
 	Backspace,
@@ -30,6 +37,8 @@ enum class RaOverlayKey {
 	Escape,
 	Up,
 	Down,
+	Left,
+	Right,
 };
 
 enum class RaOverlayAction {
@@ -50,6 +59,7 @@ struct RaOverlaySnapshot {
 struct RaOverlayLoginSnapshot {
 	bool active = false;
 	RaOverlayLoginField field = RaOverlayLoginField::Username;
+	RaOverlayLoginTarget focus = RaOverlayLoginTarget::Username;
 	std::string username;
 	std::string masked_password;
 	std::string status_message;
@@ -73,15 +83,21 @@ public:
 	RaOverlayLoginSnapshot LoginSnapshot() const;
 	RaOverlayAction OnTextInput(const char *text);
 	RaOverlayAction OnControlKey(RaOverlayKey key);
+	RaOverlayAction OnLoginTarget(RaOverlayLoginTarget target, bool activate);
+	bool LoginTargetAt(int x, int y, RaOverlayLoginTarget *target) const;
+	RaOverlayAction OnLoginPointer(int x, int y, bool activate);
 	bool ConsumeSubmittedLogin(std::string *username, std::string *password);
 	void SetLoginStatus(const std::string& message);
 	void CloseScreen();
 
 private:
-	void ToggleLoginField();
+	void MoveLoginFocus(int delta);
+	bool IsLoginTextFocused() const;
+	void SetLoginFieldFocus(RaOverlayLoginField field);
 	void WipeLoginPassword();
 	bool AppendLoginText(const char *text);
 	bool BackspaceLoginField();
+	RaOverlayAction ActivateLoginFocus();
 	bool CanSubmitLogin() const;
 
 	std::string notice_text_;
@@ -89,6 +105,7 @@ private:
 	RaOverlaySnapshot snapshot_;
 	RaOverlayScreen screen_ = RaOverlayScreen::None;
 	RaOverlayLoginField login_field_ = RaOverlayLoginField::Username;
+	RaOverlayLoginTarget login_focus_ = RaOverlayLoginTarget::Username;
 	std::string login_username_;
 	std::string login_password_;
 	std::string login_status_;

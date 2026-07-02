@@ -197,6 +197,18 @@ private:
 										// handle RA overlay key input
 	bool HandleRaOverlayTextInput(SDL_Event *e);
 										// handle RA overlay text input
+	bool HandleRaOverlayMouse(SDL_Event *e);
+										// handle RA overlay mouse input
+	bool HandleRaOverlayFinger(SDL_Event *e);
+										// handle RA overlay touch input
+	bool HandleRaOverlayJoystick();
+										// handle RA overlay joystick input
+	bool HandleRaOverlayAction(Xm8Ra::RaOverlayAction action);
+										// handle RA overlay action
+	void UpdateRaOverlayTextInput();
+										// update SDL text input for RA overlay
+	void ClearRaOverlayPointerState();
+										// clear RA overlay pointer state
 	bool SubmitRaOverlayLogin();
 										// submit RA overlay login form
 	void DrawRaOverlay();
@@ -271,6 +283,16 @@ private:
 										// manual password login started
 	bool ra_session_disabled;
 										// RA disabled for current launch session
+	Uint32 ra_overlay_joystick_prev;
+										// RA overlay joystick previous state
+	bool ra_overlay_mouse_target_valid;
+										// RA mouse pressed target valid
+	Xm8Ra::RaOverlayLoginTarget ra_overlay_mouse_target;
+										// RA mouse pressed target
+	bool ra_overlay_finger_target_valid;
+										// RA touch pressed target valid
+	Xm8Ra::RaOverlayLoginTarget ra_overlay_finger_target;
+										// RA touch pressed target
 	std::string ra_pending_game_hash;
 										// media hash pending RA load
 	std::string ra_loaded_game_hash;

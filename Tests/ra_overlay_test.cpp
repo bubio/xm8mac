@@ -58,6 +58,13 @@ int main()
 	overlay.OnTextInput("t");
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
 		Xm8Ra::RaOverlayAction::SubmitLogin);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.OnLoginTarget(Xm8Ra::RaOverlayLoginTarget::Cancel,
+		true) == Xm8Ra::RaOverlayAction::None);
+	assert(overlay.IsBlocking());
 
 	std::string username;
 	std::string password;
@@ -65,12 +72,65 @@ int main()
 	assert(username == "player");
 	assert(password == "secret");
 	assert(overlay.LoginSnapshot().masked_password.empty());
+	assert(overlay.LoginSnapshot().username == "player");
+	overlay.SetLoginStatus("Invalid username or password");
+	assert(overlay.LoginSnapshot().status_message ==
+		"Invalid username or password");
+	assert(overlay.LoginSnapshot().username == "player");
+	assert(overlay.LoginSnapshot().masked_password.empty());
 
 	overlay.OpenLogin("saved-user");
 	assert(overlay.LoginSnapshot().username == "saved-user");
 	assert(overlay.LoginSnapshot().field ==
 		Xm8Ra::RaOverlayLoginField::Password);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::Close);
+	assert(!overlay.IsBlocking());
+
+	overlay.OpenLogin();
+	assert(overlay.OnLoginPointer(240, 136, true) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Username);
+	overlay.OnTextInput("paduser");
+	assert(overlay.OnLoginPointer(240, 176, true) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Password);
+	overlay.OnTextInput("padpass");
+	Xm8Ra::RaOverlayLoginTarget target =
+		Xm8Ra::RaOverlayLoginTarget::Username;
+	assert(overlay.LoginTargetAt(260, 224, &target));
+	assert(target == Xm8Ra::RaOverlayLoginTarget::Login);
+	assert(overlay.LoginTargetAt(390, 224, &target));
+	assert(target == Xm8Ra::RaOverlayLoginTarget::Cancel);
+	assert(!overlay.LoginTargetAt(10, 10, &target));
+	assert(overlay.OnLoginPointer(260, 224, false) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Login);
+	assert(overlay.OnLoginPointer(260, 224, true) ==
+		Xm8Ra::RaOverlayAction::SubmitLogin);
+	assert(overlay.ConsumeSubmittedLogin(&username, &password));
+	assert(username == "paduser");
+	assert(password == "padpass");
+	overlay.SetLoginStatus("retry");
+
+	overlay.OpenLogin();
+	overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Password);
+	overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Login);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LoginSnapshot().status_message ==
+		"Enter username and password");
+	overlay.OnControlKey(Xm8Ra::RaOverlayKey::Right);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Cancel);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
 		Xm8Ra::RaOverlayAction::Close);
 	assert(!overlay.IsBlocking());
 
