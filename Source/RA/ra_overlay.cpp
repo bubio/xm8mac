@@ -102,6 +102,8 @@ void RaOverlay::OpenAchievements(
 	achievements_.first_visible_index = 0;
 	leaderboards_ = RaOverlayLeaderboardListSnapshot();
 	screen_ = RaOverlayScreen::Achievements;
+	achievement_detail_scroll_ = 0;
+	++achievement_selection_revision_;
 	NormalizeListSelection();
 	login_status_.clear();
 	login_submit_pending_ = false;
@@ -117,6 +119,7 @@ void RaOverlay::OpenLeaderboards(
 	leaderboards_.first_visible_index = 0;
 	achievements_ = RaOverlayAchievementListSnapshot();
 	screen_ = RaOverlayScreen::Leaderboards;
+	achievement_detail_scroll_ = 0;
 	NormalizeListSelection();
 	login_status_.clear();
 	login_submit_pending_ = false;
@@ -149,6 +152,23 @@ RaOverlayAchievementListSnapshot RaOverlay::AchievementListSnapshot() const
 {
 	RaOverlayAchievementListSnapshot snapshot = achievements_;
 	snapshot.active = screen_ == RaOverlayScreen::Achievements;
+	snapshot.selection_revision = achievement_selection_revision_;
+	return snapshot;
+}
+
+RaOverlayAchievementDetailSnapshot RaOverlay::AchievementDetailSnapshot() const
+{
+	RaOverlayAchievementDetailSnapshot snapshot;
+	snapshot.active = screen_ == RaOverlayScreen::AchievementDetail;
+	snapshot.selected_index = achievements_.selected_index;
+	snapshot.item_count = achievements_.achievements.size();
+	snapshot.scroll_offset = achievement_detail_scroll_;
+	snapshot.selection_revision = achievement_selection_revision_;
+	snapshot.game_title = achievements_.game_title;
+	if (achievements_.selected_index < achievements_.achievements.size()) {
+		snapshot.achievement =
+			achievements_.achievements[achievements_.selected_index];
+	}
 	return snapshot;
 }
 
@@ -184,6 +204,27 @@ RaOverlayAction RaOverlay::OnTextInput(const char *text)
 
 RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 {
+	if (screen_ == RaOverlayScreen::AchievementDetail) {
+		switch (key) {
+		case RaOverlayKey::Escape:
+		case RaOverlayKey::Backspace:
+			CloseAchievementDetail();
+			break;
+		case RaOverlayKey::Up:
+		case RaOverlayKey::Left:
+			MoveAchievementDetailScroll(-1);
+			break;
+		case RaOverlayKey::Down:
+		case RaOverlayKey::Right:
+		case RaOverlayKey::Tab:
+			MoveAchievementDetailScroll(1);
+			break;
+		case RaOverlayKey::Enter:
+			break;
+		}
+		return RaOverlayAction::None;
+	}
+
 	if (screen_ == RaOverlayScreen::Achievements ||
 		screen_ == RaOverlayScreen::Leaderboards) {
 		switch (key) {
@@ -204,6 +245,10 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 			MoveListSelection(-1);
 			break;
 		case RaOverlayKey::Enter:
+			if (screen_ == RaOverlayScreen::Achievements) {
+				OpenAchievementDetail();
+			}
+			break;
 		case RaOverlayKey::Backspace:
 			break;
 		}
@@ -257,7 +302,16 @@ RaOverlayAction RaOverlay::OnListPointer(int x, int y, bool activate)
 	size_t index = 0;
 	if (ListIndexAt(x, y, &index)) {
 		if (screen_ == RaOverlayScreen::Achievements) {
-			achievements_.selected_index = index;
+			if (achievements_.selected_index != index) {
+				achievements_.selected_index = index;
+				achievement_detail_scroll_ = 0;
+				++achievement_selection_revision_;
+			}
+			if (activate) {
+				NormalizeListSelection();
+				OpenAchievementDetail();
+				return RaOverlayAction::None;
+			}
 		}
 		else {
 			leaderboards_.selected_index = index;
@@ -279,6 +333,10 @@ RaOverlayAction RaOverlay::OnListPointer(int x, int y, bool activate)
 
 RaOverlayAction RaOverlay::OnListScroll(int delta)
 {
+	if (screen_ == RaOverlayScreen::AchievementDetail) {
+		MoveAchievementDetailScroll(delta);
+		return RaOverlayAction::None;
+	}
 	if (screen_ != RaOverlayScreen::Achievements &&
 		screen_ != RaOverlayScreen::Leaderboards) {
 		return RaOverlayAction::None;
@@ -374,6 +432,7 @@ void RaOverlay::CloseScreen()
 	screen_ = RaOverlayScreen::None;
 	achievements_ = RaOverlayAchievementListSnapshot();
 	leaderboards_ = RaOverlayLeaderboardListSnapshot();
+	achievement_detail_scroll_ = 0;
 	login_field_ = RaOverlayLoginField::Username;
 	login_focus_ = RaOverlayLoginTarget::Username;
 	login_username_.clear();
@@ -390,6 +449,7 @@ void RaOverlay::MoveListSelection(int delta)
 
 	size_t *selected = screen_ == RaOverlayScreen::Achievements ?
 		&achievements_.selected_index : &leaderboards_.selected_index;
+	const size_t previous = *selected;
 	const size_t last = count - 1;
 	if (delta < 0) {
 		const size_t amount = static_cast<size_t>(-delta);
@@ -401,7 +461,39 @@ void RaOverlay::MoveListSelection(int delta)
 			*selected = last;
 		}
 	}
+	if (screen_ == RaOverlayScreen::Achievements && *selected != previous) {
+		achievement_detail_scroll_ = 0;
+		++achievement_selection_revision_;
+	}
 	NormalizeListSelection();
+}
+
+void RaOverlay::OpenAchievementDetail()
+{
+	if (screen_ != RaOverlayScreen::Achievements ||
+		achievements_.selected_index >= achievements_.achievements.size()) {
+		return;
+	}
+	achievement_detail_scroll_ = 0;
+	screen_ = RaOverlayScreen::AchievementDetail;
+}
+
+void RaOverlay::CloseAchievementDetail()
+{
+	if (screen_ == RaOverlayScreen::AchievementDetail) {
+		screen_ = RaOverlayScreen::Achievements;
+	}
+}
+
+void RaOverlay::MoveAchievementDetailScroll(int delta)
+{
+	if (screen_ != RaOverlayScreen::AchievementDetail) {
+		return;
+	}
+	achievement_detail_scroll_ += delta;
+	if (achievement_detail_scroll_ < 0) {
+		achievement_detail_scroll_ = 0;
+	}
 }
 
 bool RaOverlay::ListIndexAt(int x, int y, size_t *index) const

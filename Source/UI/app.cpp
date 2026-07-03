@@ -242,6 +242,8 @@ App::App()
 	ra_overlay_finger_scroll_valid = false;
 	ra_overlay_finger_scrolled = false;
 	ra_overlay_finger_scroll_y = 0;
+	ra_overlay_auto_scroll_revision = 0;
+	ra_overlay_auto_scroll_started = 0;
 #endif
 
 	// flags
@@ -1208,6 +1210,8 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	}
 	if (e->type == SDL_MOUSEWHEEL) {
 		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+			ra_overlay->Screen() ==
+				Xm8Ra::RaOverlayScreen::AchievementDetail ||
 			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
 			return HandleRaOverlayAction(
 				ra_overlay->OnListScroll(-e->wheel.y));
@@ -1221,8 +1225,8 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 		if ((e->button.button == SDL_BUTTON_RIGHT ||
 			e->button.button == SDL_BUTTON_X1) &&
 			e->type == SDL_MOUSEBUTTONUP) {
-			CloseRaOverlayToMenu();
-			return true;
+			return HandleRaOverlayAction(
+				ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Escape));
 		}
 		return true;
 	}
@@ -1240,6 +1244,10 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
 		return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
 			e->type == SDL_MOUSEBUTTONUP));
+	}
+	if (ra_overlay->Screen() ==
+		Xm8Ra::RaOverlayScreen::AchievementDetail) {
+		return true;
 	}
 
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
@@ -1292,6 +1300,8 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 	}
 
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+		ra_overlay->Screen() ==
+			Xm8Ra::RaOverlayScreen::AchievementDetail ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
 		if (e->type == SDL_FINGERDOWN) {
 			ra_overlay_finger_scroll_valid = true;
@@ -1318,6 +1328,10 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 		const bool activate = !ra_overlay_finger_scrolled;
 		ra_overlay_finger_scroll_valid = false;
 		ra_overlay_finger_scrolled = false;
+		if (ra_overlay->Screen() ==
+			Xm8Ra::RaOverlayScreen::AchievementDetail) {
+			return true;
+		}
 		return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
 			activate));
 	}
@@ -1432,8 +1446,19 @@ bool App::SubmitRaOverlayLogin()
 
 namespace {
 
+std::string ToSjisMenuText(Converter *converter, const std::string& text);
+bool IsSjisLeadByte(unsigned char ch);
+size_t SjisCharBytes(const char *source, size_t offset);
+int SjisCharWidth(const char *source, size_t offset);
+int SjisTextWidth(const char *source);
+size_t SjisCharCount(const char *source);
+size_t SjisByteOffsetForChar(const char *source, size_t char_index);
 void CopyClippedMenuText(char *target, size_t target_size,
 	const char *source, int width);
+void CopyAutoScrollMenuText(char *target, size_t target_size,
+	const char *source, int width, Uint32 elapsed_ms);
+void WrapSjisMenuText(std::vector<std::string> *lines, const char *source,
+	int width);
 
 } // namespace
 
@@ -1464,6 +1489,13 @@ void App::DrawRaOverlay()
 			achievements.achievements.size() : leaderboards.leaderboards.size();
 		const std::string status_message = achievements_screen ?
 			achievements.status_message : leaderboards.status_message;
+		const uint32_t selection_revision = achievements_screen ?
+			achievements.selection_revision : 0;
+		if (achievements_screen &&
+			ra_overlay_auto_scroll_revision != selection_revision) {
+			ra_overlay_auto_scroll_revision = selection_revision;
+			ra_overlay_auto_scroll_started = SDL_GetTicks();
+		}
 
 		video->SetMenuMode(true);
 		Uint32 *buf = video->GetMenuFrame();
@@ -1524,7 +1556,7 @@ void App::DrawRaOverlay()
 			}
 			font->DrawFillRect(buf, &row, row_back);
 
-			char line[160];
+			char line[256];
 			if (show_status) {
 				std::snprintf(line, sizeof(line), "%s",
 					status_message.empty() ? "No items" :
@@ -1542,10 +1574,19 @@ void App::DrawRaOverlay()
 					leaderboards.leaderboards[item_index].c_str());
 			}
 			SDL_Rect text_rect = {row.x + 24, row.y, row.w - 48, row.h};
-			char clipped_line[160];
-			CopyClippedMenuText(clipped_line, sizeof(clipped_line), line,
-				text_rect.w);
-			font->DrawSjisBoldOr(buf, &text_rect, clipped_line, row_fore);
+			const std::string sjis_line = ToSjisMenuText(converter, line);
+			char display_line[256];
+			if (achievements_screen && !show_status &&
+				item_index == selected_index) {
+				CopyAutoScrollMenuText(display_line, sizeof(display_line),
+					sjis_line.c_str(), text_rect.w,
+					SDL_GetTicks() - ra_overlay_auto_scroll_started);
+			}
+			else {
+				CopyClippedMenuText(display_line, sizeof(display_line),
+					sjis_line.c_str(), text_rect.w);
+			}
+			font->DrawSjisBoldOr(buf, &text_rect, display_line, row_fore);
 
 			unsigned char arrow[3] = {0, 0, 0};
 			if (!show_status && first_visible_index > 0 && i == 0) {
@@ -1599,10 +1640,21 @@ void App::DrawRaOverlay()
 			font->DrawFillRect(buf, &detail_rect, MENUITEM_BACK | alpha);
 			detail_rect.x += 8;
 			detail_rect.w -= 16;
-			char clipped_detail[192];
-			CopyClippedMenuText(clipped_detail, sizeof(clipped_detail),
-				detail, detail_rect.w);
-			font->DrawSjisLeftOr(buf, &detail_rect, clipped_detail, fore);
+			const std::string sjis_detail =
+				ToSjisMenuText(converter, detail);
+			char display_detail[256];
+			if (achievements_screen) {
+				CopyAutoScrollMenuText(display_detail,
+					sizeof(display_detail), sjis_detail.c_str(),
+					detail_rect.w,
+					SDL_GetTicks() - ra_overlay_auto_scroll_started);
+			}
+			else {
+				CopyClippedMenuText(display_detail,
+					sizeof(display_detail), sjis_detail.c_str(),
+					detail_rect.w);
+			}
+			font->DrawSjisLeftOr(buf, &detail_rect, display_detail, fore);
 		}
 		else {
 			const std::string game_title = achievements_screen ?
@@ -1614,12 +1666,141 @@ void App::DrawRaOverlay()
 					MENUITEM_BACK | alpha);
 				detail_rect.x += 8;
 				detail_rect.w -= 16;
+				const std::string sjis_title =
+					ToSjisMenuText(converter, game_title);
 				char clipped_title[192];
 				CopyClippedMenuText(clipped_title, sizeof(clipped_title),
-					game_title.c_str(), detail_rect.w);
+					sjis_title.c_str(), detail_rect.w);
 				font->DrawSjisLeftOr(buf, &detail_rect, clipped_title,
 					fore);
 			}
+		}
+		video->DrawCtrl();
+	}
+	else if (ra_overlay->Screen() ==
+		Xm8Ra::RaOverlayScreen::AchievementDetail) {
+		const Xm8Ra::RaOverlayAchievementDetailSnapshot detail =
+			ra_overlay->AchievementDetailSnapshot();
+		video->SetMenuMode(true);
+		Uint32 *buf = video->GetMenuFrame();
+		const Uint32 alpha = (Uint32)setting->GetMenuAlpha() << 24;
+		const Uint32 fore = MENUITEM_FORE | alpha;
+		const Uint32 back = MENUITEM_BACK | alpha;
+		SDL_Rect rect = {
+			(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
+			(SCREEN_HEIGHT / 2) - ((MENUITEM_HEIGHT * MENUITEM_LINES) / 2),
+			MENUITEM_WIDTH,
+			MENUITEM_HEIGHT * MENUITEM_LINES
+		};
+		font->DrawFillRect(buf, &rect, MENUITEM_BACK | 0x00000000);
+
+		SDL_Rect title_rect = {rect.x, rect.y, rect.w, MENUITEM_HEIGHT};
+		font->DrawFillRect(buf, &title_rect, fore);
+		title_rect.x++;
+		title_rect.y++;
+		title_rect.w -= 2;
+		title_rect.h -= 2;
+		font->DrawFillRect(buf, &title_rect, MENUITEM_TITLE | alpha);
+		font->DrawSjisCenterOr(buf, &title_rect,
+			"<< Achievement Detail >>", fore);
+
+		SDL_Rect body = {rect.x, rect.y + MENUITEM_HEIGHT, rect.w,
+			rect.h - MENUITEM_HEIGHT};
+		font->DrawFillRect(buf, &body, fore);
+		body.x++;
+		body.y++;
+		body.w -= 2;
+		body.h -= 2;
+		font->DrawFillRect(buf, &body, back);
+
+		SDL_Rect badge_outer = {body.x + 16, body.y + 14, 72, 72};
+		font->DrawFillRect(buf, &badge_outer, fore);
+		SDL_Rect badge_inner = {badge_outer.x + 2, badge_outer.y + 2,
+			badge_outer.w - 4, badge_outer.h - 4};
+		font->DrawFillRect(buf, &badge_inner, MENUITEM_BACK | alpha);
+		font->DrawSjisCenterOr(buf, &badge_inner, "Badge", fore);
+
+		char summary[128];
+		const char *state = detail.achievement.unlocked != 0 ?
+			"Unlocked" : "Locked";
+		std::snprintf(summary, sizeof(summary), "%s  %u pts  %u/%u",
+			state, detail.achievement.points,
+			static_cast<unsigned int>(detail.selected_index + 1),
+			static_cast<unsigned int>(detail.item_count));
+		std::vector<std::string> lines;
+		lines.push_back(ToSjisMenuText(converter, "Title"));
+		WrapSjisMenuText(&lines,
+			ToSjisMenuText(converter,
+				detail.achievement.title).c_str(),
+			body.w - 32);
+		if (!detail.achievement.bucket_label.empty()) {
+			lines.push_back(ToSjisMenuText(converter,
+				detail.achievement.bucket_label));
+		}
+		if (!detail.achievement.measured_progress.empty()) {
+			lines.push_back(ToSjisMenuText(converter,
+				detail.achievement.measured_progress));
+		}
+		std::vector<std::string> description_lines;
+		WrapSjisMenuText(&description_lines,
+			ToSjisMenuText(converter,
+				detail.achievement.description).c_str(),
+			body.w - 32);
+		if (!description_lines.empty()) {
+			lines.push_back("");
+			lines.push_back(ToSjisMenuText(converter, "Description"));
+			lines.insert(lines.end(), description_lines.begin(),
+				description_lines.end());
+		}
+
+		const int line_height = 20;
+		const int text_x = body.x + 104;
+		const int header_width = body.w - 120;
+		SDL_Rect summary_rect = {text_x, body.y + 14,
+			header_width, line_height};
+		const std::string sjis_summary = ToSjisMenuText(converter, summary);
+		font->DrawSjisLeftOr(buf, &summary_rect, sjis_summary.c_str(),
+			fore);
+
+		const int detail_top = body.y + 98;
+		const int detail_lines = (body.y + body.h - detail_top - 8) /
+			line_height;
+		const int scrollable_count =
+			static_cast<int>(lines.size());
+		const int max_detail_scroll =
+			scrollable_count > detail_lines ? scrollable_count - detail_lines :
+				0;
+		const int detail_scroll =
+			detail.scroll_offset > max_detail_scroll ? max_detail_scroll :
+				detail.scroll_offset;
+		const int content_offset = detail_scroll;
+		for (int row = 0; row < detail_lines; ++row) {
+			const int source_index = content_offset + row;
+			if (source_index < 0 ||
+				source_index >= static_cast<int>(lines.size())) {
+				break;
+			}
+			SDL_Rect line_rect = {body.x + 16,
+				detail_top + row * line_height, body.w - 32,
+				line_height};
+			font->DrawSjisLeftOr(buf, &line_rect,
+				lines[source_index].c_str(), fore);
+		}
+
+		if (detail_scroll > 0) {
+			unsigned char arrow[3] = {0x81, 0xaa, 0};
+			SDL_Rect arrow_rect = {body.x + body.w - 20, detail_top,
+				16, line_height};
+			font->DrawSjisBoldOr(buf, &arrow_rect, (const char*)arrow,
+				fore);
+		}
+		if (detail_scroll < max_detail_scroll) {
+			unsigned char arrow[3] = {0x81, 0xab, 0};
+			SDL_Rect arrow_rect = {body.x + body.w - 20,
+				detail_top + (detail_lines - 1) * line_height,
+				16, line_height};
+			font->DrawSjisBoldOr(buf, &arrow_rect, (const char*)arrow,
+				fore);
 		}
 		video->DrawCtrl();
 	}
@@ -3853,29 +4034,201 @@ void CopyClippedMenuText(char *target, size_t target_size,
 		return;
 	}
 
-	const size_t max_chars = static_cast<size_t>(width / 8);
-	if (max_chars == 0) {
+	const int max_width = width;
+	if (max_width <= 0) {
 		return;
 	}
-	const size_t length = std::strlen(source);
-	if (length <= max_chars && length < target_size) {
+	if (SjisTextWidth(source) <= max_width &&
+		std::strlen(source) < target_size) {
 		std::snprintf(target, target_size, "%s", source);
 		return;
 	}
 
 	const char *ellipsis = "...";
-	if (max_chars <= 3 || target_size <= 4) {
-		const size_t copy =
-			max_chars < target_size - 1 ? max_chars : target_size - 1;
-		std::memcpy(target, source, copy);
-		target[copy] = '\0';
+	const int ellipsis_width = 24;
+	const int available = max_width > ellipsis_width ?
+		max_width - ellipsis_width : max_width;
+	size_t source_offset = 0;
+	size_t target_offset = 0;
+	int used_width = 0;
+	while (source[source_offset] != '\0' && target_offset + 1 < target_size) {
+		const int char_width = SjisCharWidth(source, source_offset);
+		const size_t char_bytes = SjisCharBytes(source, source_offset);
+		if (used_width + char_width > available ||
+			target_offset + char_bytes >= target_size) {
+			break;
+		}
+		std::memcpy(target + target_offset, source + source_offset,
+			char_bytes);
+		target_offset += char_bytes;
+		source_offset += char_bytes;
+		used_width += char_width;
+	}
+	target[target_offset] = '\0';
+	if (target_offset + 4 <= target_size && max_width > ellipsis_width) {
+		std::snprintf(target + target_offset, target_size - target_offset,
+			"%s", ellipsis);
+		return;
+	}
+}
+
+std::string ToSjisMenuText(Converter *converter, const std::string& text)
+{
+	if (text.empty() || converter == NULL) {
+		return text;
+	}
+	std::vector<char> sjis(text.size() * 3 + 1);
+	converter->UtfToSjis(text.c_str(), sjis.data());
+	return std::string(sjis.data());
+}
+
+bool IsSjisLeadByte(unsigned char ch)
+{
+	return ((ch >= 0x80 && ch < 0xa0) || ch >= 0xe0);
+}
+
+size_t SjisCharBytes(const char *source, size_t offset)
+{
+	if (source == nullptr || source[offset] == '\0') {
+		return 0;
+	}
+	const unsigned char ch = static_cast<unsigned char>(source[offset]);
+	if (IsSjisLeadByte(ch) && source[offset + 1] != '\0') {
+		return 2;
+	}
+	return 1;
+}
+
+int SjisCharWidth(const char *source, size_t offset)
+{
+	if (source == nullptr || source[offset] == '\0') {
+		return 0;
+	}
+	const unsigned char ch = static_cast<unsigned char>(source[offset]);
+	return IsSjisLeadByte(ch) && source[offset + 1] != '\0' ? 16 : 8;
+}
+
+int SjisTextWidth(const char *source)
+{
+	if (source == nullptr) {
+		return 0;
+	}
+	int width = 0;
+	for (size_t offset = 0; source[offset] != '\0';) {
+		width += SjisCharWidth(source, offset);
+		offset += SjisCharBytes(source, offset);
+	}
+	return width;
+}
+
+size_t SjisCharCount(const char *source)
+{
+	if (source == nullptr) {
+		return 0;
+	}
+	size_t count = 0;
+	for (size_t offset = 0; source[offset] != '\0';) {
+		offset += SjisCharBytes(source, offset);
+		++count;
+	}
+	return count;
+}
+
+size_t SjisByteOffsetForChar(const char *source, size_t char_index)
+{
+	if (source == nullptr) {
+		return 0;
+	}
+	size_t offset = 0;
+	for (size_t index = 0; index < char_index && source[offset] != '\0';
+		++index) {
+		offset += SjisCharBytes(source, offset);
+	}
+	return offset;
+}
+
+void CopyAutoScrollMenuText(char *target, size_t target_size,
+	const char *source, int width, Uint32 elapsed_ms)
+{
+	if (target == nullptr || target_size == 0) {
+		return;
+	}
+	target[0] = '\0';
+	if (source == nullptr || width <= 0) {
+		return;
+	}
+	if (SjisTextWidth(source) <= width) {
+		std::snprintf(target, target_size, "%s", source);
 		return;
 	}
 
-	const size_t copy =
-		max_chars - 3 < target_size - 4 ? max_chars - 3 : target_size - 4;
-	std::memcpy(target, source, copy);
-	std::snprintf(target + copy, target_size - copy, "%s", ellipsis);
+	const size_t char_count = SjisCharCount(source);
+	size_t max_start = 0;
+	for (size_t start = 0; start < char_count; ++start) {
+		const size_t byte_offset = SjisByteOffsetForChar(source, start);
+		if (SjisTextWidth(source + byte_offset) <= width) {
+			max_start = start;
+			break;
+		}
+	}
+	if (max_start == 0) {
+		max_start = char_count > 0 ? char_count - 1 : 0;
+	}
+
+	const Uint32 hold_ms = 1000;
+	const Uint32 step_ms = 200;
+	const Uint32 cycle_ms = hold_ms + static_cast<Uint32>(max_start) *
+		step_ms + hold_ms;
+	Uint32 position_ms = cycle_ms == 0 ? 0 : elapsed_ms % cycle_ms;
+	size_t start_char = 0;
+	if (position_ms >= hold_ms) {
+		position_ms -= hold_ms;
+		const size_t step = static_cast<size_t>(position_ms / step_ms);
+		start_char = step > max_start ? max_start : step;
+	}
+
+	size_t source_offset = SjisByteOffsetForChar(source, start_char);
+	size_t target_offset = 0;
+	int used_width = 0;
+	while (source[source_offset] != '\0' && target_offset + 1 < target_size) {
+		const int char_width = SjisCharWidth(source, source_offset);
+		const size_t char_bytes = SjisCharBytes(source, source_offset);
+		if (used_width + char_width > width ||
+			target_offset + char_bytes >= target_size) {
+			break;
+		}
+		std::memcpy(target + target_offset, source + source_offset,
+			char_bytes);
+		target_offset += char_bytes;
+		source_offset += char_bytes;
+		used_width += char_width;
+	}
+	target[target_offset] = '\0';
+}
+
+void WrapSjisMenuText(std::vector<std::string> *lines, const char *source,
+	int width)
+{
+	if (lines == nullptr || source == nullptr || *source == '\0') {
+		return;
+	}
+	std::string line;
+	int line_width = 0;
+	for (size_t offset = 0; source[offset] != '\0';) {
+		const int char_width = SjisCharWidth(source, offset);
+		const size_t char_bytes = SjisCharBytes(source, offset);
+		if (!line.empty() && line_width + char_width > width) {
+			lines->push_back(line);
+			line.clear();
+			line_width = 0;
+		}
+		line.append(source + offset, char_bytes);
+		line_width += char_width;
+		offset += char_bytes;
+	}
+	if (!line.empty()) {
+		lines->push_back(line);
+	}
 }
 
 } // namespace

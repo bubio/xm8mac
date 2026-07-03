@@ -18,6 +18,7 @@ namespace Xm8Ra {
 enum class RaOverlayScreen {
 	None,
 	Achievements,
+	AchievementDetail,
 	Leaderboards,
 	Login,
 };
@@ -86,9 +87,20 @@ struct RaOverlayAchievementListSnapshot {
 	bool has_achievements = false;
 	size_t selected_index = 0;
 	size_t first_visible_index = 0;
+	uint32_t selection_revision = 0;
 	std::string game_title;
 	std::string status_message;
 	std::vector<RaOverlayAchievementItem> achievements;
+};
+
+struct RaOverlayAchievementDetailSnapshot {
+	bool active = false;
+	size_t selected_index = 0;
+	size_t item_count = 0;
+	int scroll_offset = 0;
+	uint32_t selection_revision = 0;
+	std::string game_title;
+	RaOverlayAchievementItem achievement;
 };
 
 struct RaOverlayLeaderboardListSnapshot {
@@ -118,6 +130,7 @@ public:
 	bool IsBlocking() const;
 	RaOverlayScreen Screen() const;
 	RaOverlayAchievementListSnapshot AchievementListSnapshot() const;
+	RaOverlayAchievementDetailSnapshot AchievementDetailSnapshot() const;
 	RaOverlayLeaderboardListSnapshot LeaderboardListSnapshot() const;
 	RaOverlayLoginSnapshot LoginSnapshot() const;
 	RaOverlayAction OnTextInput(const char *text);
@@ -134,6 +147,9 @@ public:
 
 private:
 	void MoveListSelection(int delta);
+	void OpenAchievementDetail();
+	void CloseAchievementDetail();
+	void MoveAchievementDetailScroll(int delta);
 	bool ListIndexAt(int x, int y, size_t *index) const;
 	void NormalizeListSelection();
 	size_t ListItemCount() const;
@@ -152,6 +168,8 @@ private:
 	RaOverlayAchievementListSnapshot achievements_;
 	RaOverlayLeaderboardListSnapshot leaderboards_;
 	RaOverlayScreen screen_ = RaOverlayScreen::None;
+	uint32_t achievement_selection_revision_ = 0;
+	int achievement_detail_scroll_ = 0;
 	RaOverlayLoginField login_field_ = RaOverlayLoginField::Username;
 	RaOverlayLoginTarget login_focus_ = RaOverlayLoginTarget::Username;
 	std::string login_username_;

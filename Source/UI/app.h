@@ -318,6 +318,10 @@ private:
 										// RA touch moved enough to scroll
 	int ra_overlay_finger_scroll_y;
 										// RA touch scroll anchor y
+	uint32_t ra_overlay_auto_scroll_revision;
+										// RA auto-scroll selected text revision
+	Uint32 ra_overlay_auto_scroll_started;
+										// RA auto-scroll selected text start tick
 	std::string ra_pending_game_hash;
 										// media hash pending RA load
 	std::string ra_loaded_game_hash;
