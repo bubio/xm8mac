@@ -983,6 +983,7 @@ void App::ProcessRaService(bool emulation_frame)
 				ra_overlay->CloseScreen();
 				SDL_StopTextInput();
 				ClearRaOverlayPointerState();
+				CtrlAudio();
 			}
 			const std::string name = login.display_name.empty() ?
 				login.username : login.display_name;
@@ -2448,6 +2449,19 @@ TapeManager* App::GetTapeManager()
 }
 
 //
+// IsRaOverlayBlocking()
+// check blocking RA overlay
+//
+bool App::IsRaOverlayBlocking() const
+{
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	return ra_overlay != NULL && ra_overlay->IsBlocking();
+#else
+	return false;
+#endif
+}
+
+//
 // Run()
 // running application
 //
@@ -2505,8 +2519,11 @@ void App::Run()
 
 	// main loop
 	while (app_quit == false) {
+		const bool ra_overlay_blocking = IsRaOverlayBlocking();
+
 		// stop virtual machine or menu
-		if ((app_menu == true) || (app_background == true) || (app_powerdown == true)) {
+		if ((app_menu == true) || (app_background == true) ||
+			(app_powerdown == true) || ra_overlay_blocking) {
 			// draw
 			if ((app_mobile != true) || (app_background != true)) {
 				// no draw if app_mobile && app_background
@@ -2522,8 +2539,8 @@ void App::Run()
 				ret = SDL_WaitEvent(&e);
 			}
 			else {
-				if (app_menu == true) {
-					// menu
+				if (app_menu == true || ra_overlay_blocking) {
+					// menu or blocking overlay
 					ret = SDL_WaitEventTimeout(&e, SLEEP_MENU);
 				}
 				else {
@@ -2812,7 +2829,9 @@ void App::Draw()
 		}
 	}
 	// inform frame rate of video driver
-	if ((app_menu == true) || (app_background == true) || (app_powerdown == true) || (app_fullspeed == true)) {
+	if ((app_menu == true) || (app_background == true) ||
+		(app_powerdown == true) || (app_fullspeed == true) ||
+		IsRaOverlayBlocking()) {
 		video->SetFrameRate(1000);
 	}
 	else {
@@ -3723,10 +3742,12 @@ void App::LeaveMenu(bool check)
 //
 void App::CtrlAudio()
 {
-	if ((app_background == false) && (app_menu == false) && (app_powerdown == false)) {
+	if ((app_background == false) && (app_menu == false) &&
+		(app_powerdown == false) && !IsRaOverlayBlocking()) {
 		audio->Play();
 	}
-	if ((app_background == true) || (app_menu == true) || (app_powerdown == true)) {
+	if ((app_background == true) || (app_menu == true) ||
+		(app_powerdown == true) || IsRaOverlayBlocking()) {
 		audio->Stop();
 	}
 }
@@ -4486,6 +4507,7 @@ void App::OpenRaAchievementsOverlay()
 	if (app_menu == true) {
 		LeaveMenu(false);
 	}
+	CtrlAudio();
 }
 
 //
@@ -4519,6 +4541,7 @@ void App::OpenRaLeaderboardsOverlay()
 	if (app_menu == true) {
 		LeaveMenu(false);
 	}
+	CtrlAudio();
 }
 
 //
@@ -4575,6 +4598,7 @@ bool App::OpenRaLoginOverlay()
 	if (app_menu == true) {
 		LeaveMenu(false);
 	}
+	CtrlAudio();
 	AddRaNotice("RA: login");
 	return true;
 }

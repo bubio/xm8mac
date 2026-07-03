@@ -245,6 +245,8 @@ private:
 	void DrawRaOverlay();
 										// draw RA notice overlay
 #endif
+	bool IsRaOverlayBlocking() const;
+										// check blocking RA overlay
 	bool OpenStartupDisks(const std::vector<DiskSpec>& disks, std::string *error);
 										// open CLI disks
 	bool OpenDroppedDisk(const char *path, std::string *error);
