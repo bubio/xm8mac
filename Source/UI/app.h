@@ -193,7 +193,7 @@ private:
 										// open one disk
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
-		std::string *error);
+		std::string *ra_hash_to_identify, std::string *error);
 										// resolve disk to RA working copy
 	bool EnsureRaService(std::string *error);
 										// create RA service if needed

@@ -678,7 +678,9 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 {
 	DiskSpec open_spec = spec;
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	if (ResolveDiskForRaMode(spec, &open_spec, error) == false) {
+	std::string ra_hash_to_identify;
+	if (ResolveDiskForRaMode(spec, &open_spec, &ra_hash_to_identify,
+		error) == false) {
 		return false;
 	}
 #endif
@@ -694,6 +696,11 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 		*error = message.str();
 		return false;
 	}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (!ra_hash_to_identify.empty()) {
+		BeginRaSessionForMedia(ra_hash_to_identify);
+	}
+#endif
 	return true;
 }
 
@@ -712,13 +719,16 @@ bool App::OpenDiskFromMenu(const DiskSpec& spec, std::string *error)
 // map original D88 to RA working copy when RA mode is enabled
 //
 bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
-	std::string *error)
+	std::string *ra_hash_to_identify, std::string *error)
 {
 	if (resolved == NULL) {
 		*error = "invalid RA disk target";
 		return false;
 	}
 	*resolved = spec;
+	if (ra_hash_to_identify != NULL) {
+		ra_hash_to_identify->clear();
+	}
 	if (!ra_mode_enabled) {
 		return true;
 	}
@@ -743,7 +753,9 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 			ra_loaded_game_hash.empty() || ra_session_disabled ||
 			ra_loaded_game_hash != ra_hash;
 		if (can_identify) {
-			BeginRaSessionForMedia(ra_hash);
+			if (ra_hash_to_identify != NULL) {
+				*ra_hash_to_identify = ra_hash;
+			}
 		}
 	}
 	return true;

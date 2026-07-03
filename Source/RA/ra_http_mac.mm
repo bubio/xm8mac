@@ -20,6 +20,7 @@ namespace Xm8Ra {
 
 struct MacHttpTaskState {
 	RaHttpRequest request;
+	NSURLSessionDataTask *task = nil;
 	NSMutableData *data = nil;
 	int http_status = 0;
 	bool canceled = false;
@@ -48,6 +49,8 @@ public:
 
 private:
 	MacHttpTaskState *FindTaskLocked(NSUInteger task_id);
+	void ReleaseTaskStateLocked(MacHttpTaskState *state);
+	void ClearTasksLocked();
 	void PushCompletedLocked(const MacHttpTaskState& state,
 		RaHttpTransportResult result, NSString *content_type,
 		NSString *error_message);
@@ -60,6 +63,7 @@ private:
 	std::mutex mutex_;
 	std::string user_agent_;
 	Xm8RaMacHttpDelegate *delegate_ = nil;
+	NSOperationQueue *delegate_queue_ = nil;
 	NSURLSession *session_ = nil;
 	std::map<NSUInteger, MacHttpTaskState> tasks_;
 	std::vector<RaHttpResponse> completed_;
@@ -69,21 +73,29 @@ RaMacHttpClient::RaMacHttpClient(const std::string& user_agent)
 	: user_agent_(user_agent)
 {
 	delegate_ = [[Xm8RaMacHttpDelegate alloc] initWithOwner:this];
+	delegate_queue_ = [[NSOperationQueue alloc] init];
+	[delegate_queue_ setMaxConcurrentOperationCount:1];
 	NSURLSessionConfiguration *configuration =
 		[NSURLSessionConfiguration ephemeralSessionConfiguration];
 	configuration.HTTPShouldSetCookies = NO;
 	configuration.HTTPCookieAcceptPolicy = NSHTTPCookieAcceptPolicyNever;
 	session_ = [[NSURLSession sessionWithConfiguration:configuration
 		delegate:delegate_
-		delegateQueue:nil] retain];
+		delegateQueue:delegate_queue_] retain];
 }
 
 RaMacHttpClient::~RaMacHttpClient()
 {
 	CancelAll();
-	[delegate_ detachOwner];
 	[session_ invalidateAndCancel];
+	[delegate_queue_ waitUntilAllOperationsAreFinished];
+	[delegate_ detachOwner];
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		ClearTasksLocked();
+	}
 	[session_ release];
+	[delegate_queue_ release];
 	[delegate_ release];
 }
 
@@ -124,6 +136,7 @@ void RaMacHttpClient::Send(const RaHttpRequest& request)
 		std::lock_guard<std::mutex> lock(mutex_);
 		MacHttpTaskState state;
 		state.request = request;
+		state.task = [task retain];
 		state.data = [[NSMutableData alloc] init];
 		tasks_[task.taskIdentifier] = state;
 	}
@@ -136,47 +149,19 @@ void RaMacHttpClient::Cancel(uint64_t request_id)
 	for (auto& entry : tasks_) {
 		if (entry.second.request.request_id == request_id) {
 			entry.second.canceled = true;
+			[entry.second.task cancel];
 			break;
 		}
 	}
-
-	[session_ getTasksWithCompletionHandler:
-		^(NSArray<NSURLSessionDataTask *> *dataTasks,
-		  NSArray<NSURLSessionUploadTask *> *,
-		  NSArray<NSURLSessionDownloadTask *> *) {
-			for (NSURLSessionDataTask *task in dataTasks) {
-				std::lock_guard<std::mutex> callback_lock(mutex_);
-				auto it = tasks_.find(task.taskIdentifier);
-				if (it != tasks_.end() &&
-					it->second.request.request_id == request_id) {
-					[task cancel];
-				}
-			}
-		}];
 }
 
 void RaMacHttpClient::CancelAll()
 {
-	{
-		std::lock_guard<std::mutex> lock(mutex_);
-		for (auto& entry : tasks_) {
-			entry.second.canceled = true;
-		}
+	std::lock_guard<std::mutex> lock(mutex_);
+	for (auto& entry : tasks_) {
+		entry.second.canceled = true;
+		[entry.second.task cancel];
 	}
-	[session_ getTasksWithCompletionHandler:
-		^(NSArray<NSURLSessionDataTask *> *dataTasks,
-		  NSArray<NSURLSessionUploadTask *> *uploadTasks,
-		  NSArray<NSURLSessionDownloadTask *> *downloadTasks) {
-			for (NSURLSessionTask *task in dataTasks) {
-				[task cancel];
-			}
-			for (NSURLSessionTask *task in uploadTasks) {
-				[task cancel];
-			}
-			for (NSURLSessionTask *task in downloadTasks) {
-				[task cancel];
-			}
-		}];
 }
 
 void RaMacHttpClient::DrainCompleted(std::vector<RaHttpResponse> *output)
@@ -244,7 +229,7 @@ void RaMacHttpClient::DidComplete(NSURLSessionTask *task, NSError *error)
 		RaHttpTransportResult::Success : ClassifyError(state, error);
 	PushCompletedLocked(state, result, content_type,
 		error == nil ? nil : [error localizedDescription]);
-	[state.data release];
+	ReleaseTaskStateLocked(&state);
 }
 
 void RaMacHttpClient::WillRedirect(NSURLSessionTask *task,
@@ -266,6 +251,25 @@ MacHttpTaskState *RaMacHttpClient::FindTaskLocked(NSUInteger task_id)
 {
 	auto it = tasks_.find(task_id);
 	return it == tasks_.end() ? nullptr : &it->second;
+}
+
+void RaMacHttpClient::ReleaseTaskStateLocked(MacHttpTaskState *state)
+{
+	if (state == nullptr) {
+		return;
+	}
+	[state->data release];
+	state->data = nil;
+	[state->task release];
+	state->task = nil;
+}
+
+void RaMacHttpClient::ClearTasksLocked()
+{
+	for (auto& entry : tasks_) {
+		ReleaseTaskStateLocked(&entry.second);
+	}
+	tasks_.clear();
 }
 
 void RaMacHttpClient::PushCompletedLocked(const MacHttpTaskState& state,
@@ -363,7 +367,9 @@ std::unique_ptr<RaHttpClient> CreateMacRaHttpClient(
 
 - (void)detachOwner
 {
-	owner_ = nullptr;
+	@synchronized (self) {
+		owner_ = nullptr;
+	}
 }
 
 - (void)URLSession:(NSURLSession *)session
@@ -372,8 +378,10 @@ std::unique_ptr<RaHttpClient> CreateMacRaHttpClient(
 	completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler
 {
 	(void)session;
-	if (owner_ != nullptr) {
-		owner_->DidReceiveResponse(dataTask, response);
+	@synchronized (self) {
+		if (owner_ != nullptr) {
+			owner_->DidReceiveResponse(dataTask, response);
+		}
 	}
 	completionHandler(NSURLSessionResponseAllow);
 }
@@ -383,8 +391,10 @@ std::unique_ptr<RaHttpClient> CreateMacRaHttpClient(
 	didReceiveData:(NSData *)data
 {
 	(void)session;
-	if (owner_ != nullptr) {
-		owner_->DidReceiveData(dataTask, data);
+	@synchronized (self) {
+		if (owner_ != nullptr) {
+			owner_->DidReceiveData(dataTask, data);
+		}
 	}
 }
 
@@ -395,11 +405,13 @@ std::unique_ptr<RaHttpClient> CreateMacRaHttpClient(
 	completionHandler:(void (^)(NSURLRequest *))completionHandler
 {
 	(void)session;
-	if (owner_ != nullptr) {
-		owner_->WillRedirect(task, response, request, completionHandler);
-	} else {
-		completionHandler(nil);
+	@synchronized (self) {
+		if (owner_ != nullptr) {
+			owner_->WillRedirect(task, response, request, completionHandler);
+			return;
+		}
 	}
+	completionHandler(nil);
 }
 
 - (void)URLSession:(NSURLSession *)session
@@ -407,8 +419,10 @@ std::unique_ptr<RaHttpClient> CreateMacRaHttpClient(
 	didCompleteWithError:(NSError *)error
 {
 	(void)session;
-	if (owner_ != nullptr) {
-		owner_->DidComplete(task, error);
+	@synchronized (self) {
+		if (owner_ != nullptr) {
+			owner_->DidComplete(task, error);
+		}
 	}
 }
 
