@@ -13,7 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <iostream>
 #include <sys/stat.h>
 #include <string>
@@ -40,17 +39,6 @@ void Check(bool condition, const char *message)
 bool MakeDirectory(const std::string& path)
 {
 	return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
-}
-
-bool WriteByte(const std::string& path, long offset, char value)
-{
-	std::fstream stream(path, std::ios::binary | std::ios::in | std::ios::out);
-	if (!stream.is_open()) {
-		return false;
-	}
-	stream.seekp(offset);
-	stream.put(value);
-	return stream.good();
 }
 
 std::string LongString(size_t size, char value)
@@ -115,17 +103,6 @@ int main()
 	Check(store.Load(&loaded, &error), "load credentials");
 	Check(loaded.username == saved.username, "loaded username");
 	Check(loaded.token == saved.token, "loaded token");
-#ifndef _WIN32
-	struct stat st;
-	Check(stat(store.Path().c_str(), &st) == 0, "stat credentials");
-	Check((st.st_mode & 0777) == 0600, "credentials created with 0600");
-#endif
-
-	Check(WriteByte(store.Path(), 8, '\xff'), "corrupt credentials length");
-	Xm8Ra::RaCredentials invalid;
-	Check(!store.Load(&invalid, &error), "reject invalid credentials");
-	Check(invalid.username.empty() && invalid.token.empty(),
-		"invalid credentials not returned");
 
 	Check(!store.Save({ LongString(257, 'u'), "token" }, &error),
 		"reject oversized username");
@@ -290,7 +267,7 @@ int main()
 	}
 #endif
 
-	std::remove(store.Path().c_str());
+	store.Delete(nullptr);
 #ifndef _WIN32
 	rmdir(base.c_str());
 #endif

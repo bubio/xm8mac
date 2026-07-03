@@ -1,5 +1,8 @@
 def buildAsLibrary = project.hasProperty('BUILD_AS_LIBRARY')
 def buildAsApplication = !buildAsLibrary
+def retroAchievementsEnabled = project.hasProperty('XM8_ENABLE_RETROACHIEVEMENTS') &&
+        !project.property('XM8_ENABLE_RETROACHIEVEMENTS').toString().equalsIgnoreCase('false') &&
+        project.property('XM8_ENABLE_RETROACHIEVEMENTS').toString() != '0'
 if (buildAsApplication) {
     apply plugin: 'com.android.application'
 }
@@ -16,14 +19,17 @@ android {
         if (buildAsApplication) {
             applicationId = "net.retropc.pi"
         }
-        minSdk = 19
+        minSdk = retroAchievementsEnabled ? 23 : 19
         targetSdk = 35
         versionCode = 4
         versionName = "1.78"
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         externalNativeBuild {
             ndkBuild {
-                arguments "APP_PLATFORM=android-19"
+                arguments "APP_PLATFORM=android-${retroAchievementsEnabled ? 23 : 19}"
+                if (retroAchievementsEnabled) {
+                    arguments "XM8_ENABLE_RETROACHIEVEMENTS=1"
+                }
                 abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             }
         }

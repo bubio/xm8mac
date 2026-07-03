@@ -8,14 +8,14 @@ Phase 4として、macOS HTTP adapter、`rc_client`認証サービス層、
 
 - `RaHttpClient`契約を追加した。
 - fake HTTP backendを追加した。
-- `credentials.bin`の保存、読込、削除を追加した。
+- 保存tokenの保存、読込、削除を追加した。当時の`credentials.bin`保存は現在廃止済み。
 - `rc_client_server_call_t`から`RaHttpClient`へ変換するbridgeを追加した。
 - macOS用`NSURLSession` backendを追加した。
 - `RaService`を追加し、`rc_client`所有、password login、保存token login、logout、
   shutdown順序を接続した。
-- password login成功時はRAから返されたtokenを`credentials.bin`へ保存する。
-- 保存token login失敗時は`credentials.bin`を削除する。
-- logout時は`rc_client_logout()`後に`credentials.bin`を削除する。
+- password login成功時はRAから返されたtokenを保存する。
+- 保存token login失敗時は保存tokenを削除する。
+- logout時は`rc_client_logout()`後に保存tokenを削除する。
 - Phase 4初期実装ではD88全体MD5を`rc_client_begin_load_game()`へ渡してゲーム識別、
   実績定義取得、RA session開始を`rc_client`へ委譲していた。Phase 5中にRAの
   Supported Game Hashes実運用に合わせ、マルチイメージD88では起動bank単位の
@@ -54,32 +54,18 @@ Phase 5以降で実装する。
 
 ## 2. 認証情報ファイル
 
-`Source/RA/ra_credentials.*`を追加した。形式は
-[02_ゲームライブラリとD88保存仕様.md](02_ゲームライブラリとD88保存仕様.md) の
-`credentials.bin`仕様に従う。
+`Source/RA/ra_credentials.*`を追加した。当時は`credentials.bin`へusername/tokenを
+保存する仕様だったが、現在は廃止済みである。
 
-```text
-4 bytes  magic "XMR1"
-4 bytes  little-endian format version (=1)
-4 bytes  username UTF-8 byte length
-4 bytes  token UTF-8 byte length
-N bytes  username
-M bytes  token
-4 bytes  CRC32 of all preceding bytes
-```
+現在の実装規則:
 
-実装規則:
-
-- usernameは256 byte以下、tokenは4096 byte以下だけ保存する。
-- CRC不一致、不正長、未知versionは削除せず、load失敗として扱う。
-- 保存は`credentials.bin.tmp`へ書き、成功後にatomic renameする。
-- Unix系では一時ファイル作成時点から0600で作成する。
+- tokenは`RetroAchivementsIntegrationHandbook/docs/credential-storage.md`に従い、
+  OSのcredential storeへ保存する。
+- usernameは保存済みtoken loginのaccount hintとして通常ファイルへ保存する。
+- password、token、POST body、認証付きURLをログや通常ファイルへ保存しない。
 - logout相当の削除APIを持つ。
 - メモリ上のtokenを上書きしてから破棄するAPIを持つ。
-
-この実装は、RetroAchievementsIntegrationHandbookの「password/tokenをログへ出さない」
-「保存tokenでのlogin失敗時はtokenを削除する」という方針と矛盾しない。ただし、保存先は
-XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`である。
+- 保存token loginが資格情報拒否になった場合はcredential storeからtokenを削除する。
 
 ## 3. HTTP契約
 
@@ -139,11 +125,11 @@ XM8の確定仕様どおりOS credential storeではなく`ra/credentials.bin`�
 - アプリ統合時は`RaHostReadMemoryFunc`からVMの
   `read_ra_inspection_memory()`を呼び、`rc_client` userdataは`RaService`本体のままにする。
 - password loginを`rc_client_begin_login_with_password()`へ渡す。
-- 保存済みtoken loginを`credentials.bin`読込後に
+- 保存済みtoken loginをcredential storeからの読込後に
   `rc_client_begin_login_with_token()`へ渡す。
 - HTTP完了は`DrainHttp()`からbridgeをdrainし、`rc_client` callbackをメイン側で実行する。
 - password login成功時は、`rc_client_get_user_info()`から取得したusername/tokenを保存する。
-- 保存済みtoken login失敗時は`credentials.bin`を削除し、当該tokenを再利用しない。
+- 保存済みtoken login失敗時は保存tokenを削除し、当該tokenを再利用しない。
 - logout時は`rc_client_logout()`を呼び、保存tokenも削除する。
 - shutdown時は`CancelAll()`、drain、`rc_client_destroy()`、bridge破棄の順で処理する。
 - `BeginLoadGameByHash()`で32文字MD5 hexだけを受け付ける。
@@ -219,8 +205,8 @@ RA ON buildの`Source/UI/app.*`と`Source/UI/menu.*`にmacOS向けの最小統�
 - macOS `NSURLSession` backendを生成し、空drainとcancel allができること。
 - `RaService`がpassword loginを`rc_client`へ渡し、成功時に返却tokenを保存すること。
 - `RaService`が保存token loginを`rc_client`へ渡し、password fieldを送信しないこと。
-- 保存token拒否時に`credentials.bin`を削除すること。
-- logout時に`credentials.bin`を削除すること。
+- 保存token拒否時にcredential storeからtokenを削除すること。
+- logout時にcredential storeからtokenを削除すること。
 - `BeginLoadGameByHash()`がRA識別hashを`achievementsets` requestへ渡すこと。
 - `achievementsets`成功後に`startsession` requestが発行されること。
 - load成功時にGame ID、console ID、title、hashがsnapshotへ反映されること。

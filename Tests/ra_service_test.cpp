@@ -170,7 +170,7 @@ int main()
 
 		Xm8Ra::RaCredentials loaded;
 		Check(!credential_store.Load(&loaded, &error),
-			"credentials file removed after rejected token");
+			"stored token removed after rejected token");
 	}
 
 	{
@@ -494,7 +494,7 @@ int main()
 			"shutdown drains canceled request");
 	}
 
-	std::remove(credential_store.Path().c_str());
+	credential_store.Delete(nullptr);
 #ifndef _WIN32
 	rmdir(base.c_str());
 #endif

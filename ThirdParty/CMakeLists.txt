@@ -102,7 +102,15 @@ target_include_directories(xm8_ra_core
 target_link_libraries(xm8_ra_core PRIVATE xm8_ra_dependencies)
 target_compile_definitions(xm8_ra_core PUBLIC XM8_ENABLE_RETROACHIEVEMENTS=1)
 if(APPLE)
-  target_link_libraries(xm8_ra_dependencies INTERFACE "-framework Foundation")
+  target_link_libraries(xm8_ra_dependencies INTERFACE
+    "-framework Foundation"
+    "-framework Security"
+  )
+elseif(UNIX AND NOT ANDROID)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBSECRET REQUIRED IMPORTED_TARGET libsecret-1)
+  target_link_libraries(xm8_ra_dependencies INTERFACE PkgConfig::LIBSECRET)
+  target_compile_definitions(xm8_ra_core PRIVATE XM8_RA_HAS_LIBSECRET=1)
 endif()
 
 function(xm8_enable_ra_for_target target_name)

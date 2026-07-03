@@ -14,14 +14,14 @@ class RaCredentialsStore {
 public:
 	explicit RaCredentialsStore(const std::string& ra_root);
 
-	std::string Path() const;
-
 	bool Save(const RaCredentials& credentials, std::string *error);
 	bool Load(RaCredentials *credentials, std::string *error) const;
 	bool Delete(std::string *error);
 	void ClearSecret(RaCredentials *credentials) const;
 
 private:
+	std::string UsernameHintPath() const;
+
 	std::string ra_root_;
 };
 

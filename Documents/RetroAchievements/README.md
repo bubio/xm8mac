@@ -99,7 +99,9 @@ ePC-8801MAの旧版
 - 最終的にWindows、macOS、Linux、Androidを同じ機能範囲でサポートする。
   これは最終到達点であり、4 OSを同時に実装することを意味しない。
 - 実装と受入は`macOS -> Windows -> Linux -> Android`の順で直列に進める。
-- Androidの最低APIは既存方針どおりAPI 19、検証上限はAPI 36とする。
+- Androidの通常build最低APIは既存方針どおりAPI 19、検証上限はAPI 36とする。
+  RetroAchievements有効buildは安全なtoken保存のためAPI 23以上を必須とし、
+  API 23未満ではRetroAchievements自体を無効にする。
 
 ### 3.5 オフライン
 

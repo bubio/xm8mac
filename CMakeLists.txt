@@ -44,10 +44,6 @@ endif()
 include(CTest)
 
 option(XM8_ENABLE_RETROACHIEVEMENTS "Enable RetroAchievements support" OFF)
-if(XM8_ENABLE_RETROACHIEVEMENTS AND NOT APPLE)
-  message(FATAL_ERROR
-    "RetroAchievements is implemented for macOS only through Phase 8")
-endif()
 
 # Packaging options
 option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
@@ -394,6 +390,8 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_credentials_http_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_credentials_http_test COMMAND ra_credentials_http_test)
+    set_tests_properties(ra_credentials_http_test PROPERTIES
+      ENVIRONMENT "XM8_RA_CREDENTIALS_TEST_MEMORY=1")
 
     add_executable(ra_service_test
       Tests/ra_service_test.cpp
@@ -409,6 +407,8 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_service_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_service_test COMMAND ra_service_test)
+    set_tests_properties(ra_service_test PROPERTIES
+      ENVIRONMENT "XM8_RA_CREDENTIALS_TEST_MEMORY=1")
 
     add_executable(ra_overlay_test
       Tests/ra_overlay_test.cpp
