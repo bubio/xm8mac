@@ -30,6 +30,8 @@
 #endif // __ANDROID__
 #include "menu.h"
 
+#include <string>
+
 //
 // Menu()
 // constructor
@@ -701,20 +703,34 @@ void Menu::EnterRa(int id)
 	list->AddCheckButton("RA mode", MENU_RA_MODE);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
 	list->AddButton("Login", MENU_RA_LOGIN);
+	list->AddButton("Achievements", MENU_RA_ACHIEVEMENTS);
+	list->AddButton("Leaderboards", MENU_RA_LEADERBOARDS);
 
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
-	{
-		char ra_status[96];
-		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
-		list->SetText(MENU_RA_STATUS, ra_status);
-	}
-	list->SetText(MENU_RA_LOGIN,
-		app->IsRaLoggedIn() ? "Logout" : "Login");
+	UpdateRaStatus();
 
 	if (id == MENU_BACK) {
 		id = MENU_RA_MODE;
 	}
 	list->SetFocus(id);
+}
+
+//
+// UpdateRaStatus()
+// update RetroAchievements status rows
+//
+void Menu::UpdateRaStatus()
+{
+	if (list->GetID() != MENU_RA) {
+		return;
+	}
+
+	char ra_status[96];
+	app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+	list->SetText(MENU_RA_STATUS, ra_status);
+	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+	list->SetText(MENU_RA_LOGIN,
+		app->IsRaLoggedIn() ? "Logout" : "Login");
 }
 #endif
 
@@ -2248,12 +2264,7 @@ void Menu::CmdSystem(int id)
 void Menu::CmdRa(int id)
 {
 	auto update_status = [this]() {
-		char ra_status[96];
-		app->GetRaMenuStatus(ra_status, sizeof(ra_status));
-		list->SetText(MENU_RA_STATUS, ra_status);
-		list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
-		list->SetText(MENU_RA_LOGIN,
-			app->IsRaLoggedIn() ? "Logout" : "Login");
+		UpdateRaStatus();
 	};
 
 	switch (id) {
@@ -2276,6 +2287,14 @@ void Menu::CmdRa(int id)
 			app->OpenRaLoginOverlay();
 		}
 		update_status();
+		break;
+
+	case MENU_RA_ACHIEVEMENTS:
+		app->OpenRaAchievementsOverlay();
+		break;
+
+	case MENU_RA_LEADERBOARDS:
+		app->OpenRaLeaderboardsOverlay();
 		break;
 
 	default:
@@ -3225,9 +3244,11 @@ void Menu::CmdFile(int id)
 	case MENU_DRIVE1_OPEN:
 	case MENU_DRIVE1_BOTH:
 	case MENU_DRIVE2_BOTH:
+	{
+		std::string error;
 		// drive 1
 		diskmgr[0]->Close();
-		ret = diskmgr[0]->Open(file_target, 0);
+		ret = app->OpenDiskFromMenu({file_target, 0, 0}, &error);
 		drive2 = false;
 
 		// drive 2
@@ -3235,7 +3256,8 @@ void Menu::CmdFile(int id)
 			diskmgr[1]->Close();
 			if (ret == true) {
 				if (diskmgr[0]->GetBanks() > 1) {
-					drive2 = diskmgr[1]->Open(file_target, 1);
+					drive2 = app->OpenDiskFromMenu(
+						{file_target, 1, 1}, &error);
 				}
 			}
 		}
@@ -3254,16 +3276,20 @@ void Menu::CmdFile(int id)
 			}
 		}
 		break;
+	}
 
 	case MENU_DRIVE2_OPEN:
+	{
+		std::string error;
 		// drive 2
 		diskmgr[1]->Close();
-		ret = diskmgr[1]->Open(file_target, 0);
+		ret = app->OpenDiskFromMenu({file_target, 1, 0}, &error);
 
 		if (ret == true) {
 			EnterDrive2(MENU_DRIVE2_BANK0);
 		}
 		break;
+	}
 
 	default:
 		break;

@@ -105,6 +105,8 @@ public:
 										// change system
 	const char* GetDiskDir(int drive = -1);
 										// get disk dir
+	bool OpenDiskFromMenu(const DiskSpec& spec, std::string *error);
+										// open disk from menu
 	const char* GetTapeDir();
 										// get tape dir
 	void Reset();
@@ -124,12 +126,19 @@ public:
 										// toggle RA mode setting
 	bool OpenRaLoginOverlay();
 										// open RA password login overlay
+	void OpenRaAchievementsOverlay();
+										// open RA achievements overlay
+	void OpenRaLeaderboardsOverlay();
+										// open RA leaderboards overlay
 	bool IsRaLoggedIn() const;
 										// get RA login state
 	void LogoutRa();
 										// logout RA
 	void GetRaMenuStatus(char *buffer, size_t capacity) const;
 										// get RA status text for menu
+	uint32_t ReadRaInspectionMemory(uint32_t address, uint8_t *buffer,
+		uint32_t num_bytes) const;
+										// read current VM memory for RA
 #endif
 
 	// misc
@@ -185,10 +194,18 @@ private:
 										// persist RA mode setting
 	bool BeginRaSavedTokenLogin(bool notify_missing_token);
 										// begin saved token login if possible
+	void StartRaAfterBoot();
+										// start RA login and mounted media after boot restore
 	void BeginRaSessionForMedia(const std::string& md5);
 										// begin RA session for media hash
+	void BeginRaSessionForMountedDrive1();
+										// begin RA session for mounted drive 1
 	void ProcessRaService(bool emulation_frame);
 										// progress RA service
+	Xm8Ra::RaOverlayAchievementListSnapshot MakeRaAchievementsOverlaySnapshot() const;
+										// build achievements overlay snapshot
+	void RefreshRaAchievementsOverlay();
+										// refresh achievements overlay if visible
 	void AddRaNotice(const std::string& text);
 										// add RA overlay notice
 	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);

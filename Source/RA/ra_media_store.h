@@ -2,6 +2,7 @@
 #define XM8_RA_MEDIA_STORE_H
 
 #include "ra_library.h"
+#include "ra_media_probe.h"
 
 #include <string>
 #include <vector>
@@ -10,6 +11,7 @@ namespace Xm8Ra {
 
 struct ImportedMedia {
 	MediaRecord record;
+	D88MediaInfo media_info;
 	std::string working_path;
 	bool copied = false;
 };

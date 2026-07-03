@@ -176,6 +176,42 @@ int main()
 	{
 		Xm8Ra::RaCredentials credentials;
 		credentials.username = "player";
+		credentials.token = "pending-token";
+		std::string error;
+		Check(credential_store.Save(credentials, &error),
+			"save credentials for pending token switch");
+
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.http_client = std::move(fake_http);
+		Xm8Ra::RaService service(std::move(options));
+
+		Check(service.BeginLoginWithSavedToken(&error),
+			"begin saved token login before manual switch");
+		Check(service.LoginSnapshot().state ==
+			Xm8Ra::RaLoginState::LoginPending,
+			"saved token login remains pending");
+		Check(service.BeginLoginWithPassword("player", "password", &error),
+			"password login aborts pending token login");
+		Check(fake_http_raw->SentRequests().size() == 2,
+			"manual login sends second HTTP request");
+		Check(fake_http_raw->SentRequests()[1].post_data.find(
+			"p=password") != std::string::npos,
+			"manual switch request sends password");
+
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"User\":\"player\",\"Token\":\"manual-token\","
+			"\"Score\":10,\"SoftcoreScore\":20,\"Messages\":0}"));
+		service.DrainHttp();
+		Check(service.LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn,
+			"manual login succeeds after aborting token login");
+	}
+
+	{
+		Xm8Ra::RaCredentials credentials;
+		credentials.username = "player";
 		credentials.token = "logout-token";
 		std::string error;
 		Check(credential_store.Save(credentials, &error),
@@ -203,6 +239,32 @@ int main()
 		Xm8Ra::RaCredentials loaded;
 		Check(!credential_store.Load(&loaded, &error),
 			"logout deletes saved token");
+	}
+
+	{
+		Xm8Ra::RaCredentials credentials;
+		credentials.username = "player";
+		credentials.token = "resume-token";
+		std::string error;
+		Check(credential_store.Save(credentials, &error),
+			"save credentials for resume login");
+
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.http_client = std::move(fake_http);
+		Xm8Ra::RaService service(std::move(options));
+
+		Check(service.BeginLoginWithSavedToken(&error),
+			"begin saved token login before unload");
+		service.UnloadGame();
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"User\":\"player\",\"Token\":\"resume-token\","
+			"\"Score\":1,\"SoftcoreScore\":2,\"Messages\":0}"));
+		service.DrainHttp();
+		Check(service.LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn,
+			"unload game does not discard pending login");
 	}
 
 	{
@@ -240,7 +302,7 @@ int main()
 			"load game fetches achievement sets through rc_client");
 		Check(fake_http_raw->SentRequests().back().post_data.find(
 			"m=0123456789abcdef0123456789abcdef") != std::string::npos,
-			"load game uses provided D88 MD5 hash");
+			"load game uses provided RA identification hash");
 
 		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
 			MinimalAchievementSetsJson()));
@@ -266,6 +328,27 @@ int main()
 		Check(snapshot.hash == hash, "loaded game hash retained");
 		Check(!snapshot.disabled_for_session,
 			"successful load does not disable RA session");
+		const Xm8Ra::RaAchievementListSnapshot achievements =
+			service.AchievementListSnapshot();
+		Check(achievements.game_loaded,
+			"achievement list reports loaded game");
+		Check(achievements.game_title == "Test Game",
+			"achievement list captures game title");
+		Check(!achievements.has_achievements,
+			"empty achievement set reports no achievements");
+		Check(achievements.achievements.empty(),
+			"empty achievement set has no list items");
+
+		service.UnloadGame();
+		Check(service.GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::NoGame,
+			"unload game resets game session state");
+		Check(service.BeginLoadGameByHash(
+			"11111111111111111111111111111111", &error),
+			"begin reload after unload");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"m=11111111111111111111111111111111") != std::string::npos,
+			"reload uses new RA identification hash");
 	}
 
 	{

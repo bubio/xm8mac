@@ -35,6 +35,60 @@ int main()
 	assert(overlay.Snapshot().game_title == "Sample");
 	assert(overlay.Snapshot().rich_presence == "Playing");
 
+	Xm8Ra::RaOverlayAchievementListSnapshot achievements;
+	achievements.game_loaded = true;
+	achievements.has_achievements = true;
+	achievements.game_title = "Test Game";
+	Xm8Ra::RaOverlayAchievementItem achievement;
+	achievement.id = 42;
+	achievement.points = 5;
+	achievement.unlocked = 1;
+	achievement.title = "First";
+	achievement.description = "Description";
+	achievement.bucket_label = "Unlocked";
+	achievements.achievements.push_back(achievement);
+	for (int i = 0; i < 6; ++i) {
+		Xm8Ra::RaOverlayAchievementItem extra;
+		extra.id = static_cast<uint32_t>(100 + i);
+		extra.points = static_cast<uint32_t>(i + 1);
+		extra.title = "Extra";
+		extra.description = "Extra description";
+		achievements.achievements.push_back(extra);
+	}
+	overlay.OpenAchievements(achievements);
+	assert(overlay.IsBlocking());
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Achievements);
+	assert(overlay.AchievementListSnapshot().active);
+	assert(overlay.AchievementListSnapshot().game_title == "Test Game");
+	assert(overlay.AchievementListSnapshot().achievements.size() == 7);
+	assert(overlay.AchievementListSnapshot().achievements[0].title == "First");
+	assert(overlay.AchievementListSnapshot().selected_index == 0);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.AchievementListSnapshot().selected_index == 1);
+	for (int i = 0; i < 5; ++i) {
+		overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down);
+	}
+	assert(overlay.AchievementListSnapshot().selected_index == 6);
+	assert(overlay.AchievementListSnapshot().first_visible_index == 2);
+	assert(overlay.OnAchievementPointer(90, 126, false) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.AchievementListSnapshot().selected_index == 2);
+	assert(overlay.OnAchievementPointer(10, 10, false) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.IsBlocking());
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.IsBlocking());
+	assert(overlay.OnAchievementPointer(10, 10, true) ==
+		Xm8Ra::RaOverlayAction::Close);
+	assert(!overlay.IsBlocking());
+
+	overlay.OpenAchievements(achievements);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::Close);
+	assert(!overlay.IsBlocking());
+
 	overlay.OpenLogin();
 	assert(overlay.IsBlocking());
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Login);

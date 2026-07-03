@@ -96,6 +96,31 @@ void CopyAchievement(RaAchievementEvent *target,
 	target->badge_locked_url = SafeString(achievement->badge_locked_url);
 }
 
+void CopyAchievementListItem(RaAchievementListItem *target,
+	const rc_client_achievement_t *achievement, const char *bucket_label)
+{
+	if (target == nullptr || achievement == nullptr) {
+		return;
+	}
+
+	target->id = achievement->id;
+	target->points = achievement->points;
+	target->state = achievement->state;
+	target->category = achievement->category;
+	target->bucket = achievement->bucket;
+	target->unlocked = achievement->unlocked;
+	target->type = achievement->type;
+	target->measured_percent = achievement->measured_percent;
+	target->rarity = achievement->rarity;
+	target->rarity_hardcore = achievement->rarity_hardcore;
+	target->title = SafeString(achievement->title);
+	target->description = SafeString(achievement->description);
+	target->measured_progress = achievement->measured_progress;
+	target->badge_url = SafeString(achievement->badge_url);
+	target->badge_locked_url = SafeString(achievement->badge_locked_url);
+	target->bucket_label = SafeString(bucket_label);
+}
+
 void CopyLeaderboard(RaLeaderboardEvent *target,
 	const rc_client_leaderboard_t *leaderboard)
 {
@@ -222,6 +247,7 @@ bool RaService::BeginLoginWithPassword(const std::string& username,
 		return false;
 	}
 
+	AbortLoginInProgress();
 	login_ = RaLoginSnapshot();
 	login_.state = RaLoginState::LoginPending;
 	login_.username = username;
@@ -230,12 +256,14 @@ bool RaService::BeginLoginWithPassword(const std::string& username,
 	rc_client_async_handle_t *handle = rc_client_begin_login_with_password(
 		client_, username.c_str(), password.c_str(), LoginCallback, this);
 	if (handle == nullptr && login_.state == RaLoginState::LoginPending) {
+		login_async_handle_ = nullptr;
 		SetFailed(RC_INVALID_STATE, "Login did not start");
 		if (error != nullptr) {
 			*error = login_.message;
 		}
 		return false;
 	}
+	login_async_handle_ = handle;
 
 	return true;
 }
@@ -249,6 +277,7 @@ bool RaService::BeginLoginWithSavedToken(std::string *error)
 		return false;
 	}
 
+	AbortLoginInProgress();
 	RaCredentials credentials;
 	if (!credentials_.Load(&credentials, error)) {
 		login_ = RaLoginSnapshot();
@@ -266,6 +295,7 @@ bool RaService::BeginLoginWithSavedToken(std::string *error)
 		LoginCallback, this);
 	credentials_.ClearSecret(&credentials);
 	if (handle == nullptr && login_.state == RaLoginState::LoginPending) {
+		login_async_handle_ = nullptr;
 		SetFailed(RC_INVALID_STATE, "Saved token login did not start");
 		DeleteCredentialsForRejectedToken();
 		if (error != nullptr) {
@@ -273,6 +303,7 @@ bool RaService::BeginLoginWithSavedToken(std::string *error)
 		}
 		return false;
 	}
+	login_async_handle_ = handle;
 
 	return true;
 }
@@ -374,15 +405,13 @@ void RaService::UnloadGame()
 	if (client_ != nullptr) {
 		rc_client_unload_game(client_);
 	}
-	if (http_bridge_ != nullptr) {
-		http_bridge_->AdvanceGeneration();
-	}
 	game_session_ = RaGameSessionSnapshot();
 	rich_presence_.clear();
 }
 
 void RaService::Logout()
 {
+	AbortLoginInProgress();
 	UnloadGame();
 	if (client_ != nullptr) {
 		rc_client_logout(client_);
@@ -403,6 +432,7 @@ void RaService::Shutdown()
 	}
 	shutdown_ = true;
 
+	AbortLoginInProgress();
 	if (http_bridge_ != nullptr) {
 		http_bridge_->CancelAll();
 		http_bridge_->DrainCompleted();
@@ -430,6 +460,42 @@ RaLoginSnapshot RaService::LoginSnapshot() const
 RaGameSessionSnapshot RaService::GameSessionSnapshot() const
 {
 	return game_session_;
+}
+
+RaAchievementListSnapshot RaService::AchievementListSnapshot() const
+{
+	RaAchievementListSnapshot snapshot;
+	snapshot.game_loaded = game_session_.state == RaGameSessionState::Loaded;
+	snapshot.game_title = game_session_.title;
+	if (!snapshot.game_loaded || client_ == nullptr ||
+		rc_client_has_achievements(client_) == 0) {
+		return snapshot;
+	}
+
+	rc_client_achievement_list_t *list = rc_client_create_achievement_list(
+		client_, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE_AND_UNOFFICIAL,
+		RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_PROGRESS);
+	if (list == nullptr) {
+		return snapshot;
+	}
+
+	for (uint32_t bucket_index = 0; bucket_index < list->num_buckets;
+		++bucket_index) {
+		const rc_client_achievement_bucket_t& bucket =
+			list->buckets[bucket_index];
+		for (uint32_t achievement_index = 0;
+			achievement_index < bucket.num_achievements;
+			++achievement_index) {
+			RaAchievementListItem item;
+			CopyAchievementListItem(&item,
+				bucket.achievements[achievement_index], bucket.label);
+			snapshot.achievements.push_back(item);
+		}
+	}
+
+	rc_client_destroy_achievement_list(list);
+	snapshot.has_achievements = !snapshot.achievements.empty();
+	return snapshot;
 }
 
 size_t RaService::PendingHttpCount() const
@@ -529,6 +595,10 @@ void RC_CCONV RaService::ServerCall(const rc_api_request_t *request,
 
 void RaService::HandleLoginCallback(int result, const char *error_message)
 {
+	if (result == RC_ABORTED) {
+		return;
+	}
+	login_async_handle_ = nullptr;
 	login_.result = result;
 	login_.message = error_message != nullptr ? error_message : "";
 
@@ -568,6 +638,9 @@ void RaService::HandleLoginCallback(int result, const char *error_message)
 
 void RaService::HandleLoadGameCallback(int result, const char *error_message)
 {
+	if (result == RC_ABORTED) {
+		return;
+	}
 	game_session_.result = result;
 	game_session_.message = error_message != nullptr ? error_message : "";
 	game_session_.load_state = rc_client_get_load_game_state(client_);
@@ -660,6 +733,25 @@ void RaService::DeleteCredentialsForRejectedToken()
 	std::string ignored_error;
 	credentials_.Delete(&ignored_error);
 	login_.credentials_deleted = true;
+}
+
+void RaService::AbortLoginInProgress()
+{
+	const bool reset_client_login =
+		login_.state == RaLoginState::LoginPending ||
+		login_.state == RaLoginState::LoggedIn;
+	if (client_ != nullptr && login_async_handle_ != nullptr) {
+		rc_client_abort_async(client_, login_async_handle_);
+	}
+	if (client_ != nullptr && reset_client_login) {
+		rc_client_logout(client_);
+	}
+	login_async_handle_ = nullptr;
+	if (login_.state == RaLoginState::LoginPending) {
+		login_ = RaLoginSnapshot();
+		login_.state = RaLoginState::LoggedOut;
+	}
+	login_kind_ = LoginKind::None;
 }
 
 } // namespace Xm8Ra

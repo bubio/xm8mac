@@ -92,6 +92,32 @@ struct RaAchievementEvent {
 	std::string badge_locked_url;
 };
 
+struct RaAchievementListItem {
+	uint32_t id = 0;
+	uint32_t points = 0;
+	uint8_t state = 0;
+	uint8_t category = 0;
+	uint8_t bucket = 0;
+	uint8_t unlocked = 0;
+	uint8_t type = 0;
+	float measured_percent = 0.0f;
+	float rarity = 0.0f;
+	float rarity_hardcore = 0.0f;
+	std::string title;
+	std::string description;
+	std::string measured_progress;
+	std::string badge_url;
+	std::string badge_locked_url;
+	std::string bucket_label;
+};
+
+struct RaAchievementListSnapshot {
+	bool game_loaded = false;
+	bool has_achievements = false;
+	std::string game_title;
+	std::vector<RaAchievementListItem> achievements;
+};
+
 struct RaLeaderboardEvent {
 	uint32_t id = 0;
 	uint8_t state = 0;
@@ -177,6 +203,7 @@ public:
 
 	RaLoginSnapshot LoginSnapshot() const;
 	RaGameSessionSnapshot GameSessionSnapshot() const;
+	RaAchievementListSnapshot AchievementListSnapshot() const;
 	size_t PendingHttpCount() const;
 	uint64_t LastIssuedRequestId() const;
 	const RaHttpClient *HttpClientForTesting() const;
@@ -211,6 +238,7 @@ private:
 	void SetFailed(int result, const std::string& message);
 	void DisableGameSession(int result, const std::string& message);
 	void DeleteCredentialsForRejectedToken();
+	void AbortLoginInProgress();
 
 	std::unique_ptr<RaHttpClient> http_client_;
 	std::unique_ptr<RaRcClientHttpBridge> http_bridge_;
@@ -219,6 +247,7 @@ private:
 	RaHostReadMemoryFunc host_read_memory_ = nullptr;
 	void *host_read_memory_userdata_ = nullptr;
 	LoginKind login_kind_ = LoginKind::None;
+	rc_client_async_handle_t *login_async_handle_ = nullptr;
 	RaLoginSnapshot login_;
 	RaGameSessionSnapshot game_session_;
 	std::vector<RaEvent> events_;

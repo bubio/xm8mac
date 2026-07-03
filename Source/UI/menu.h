@@ -51,6 +51,8 @@ public:
 										// enter system menu
 	void EnterRa(int id);
 										// enter RetroAchievements menu
+	void UpdateRaStatus();
+										// update RetroAchievements status rows
 	void EnterVideo(int id);
 										// enter video menu
 	void EnterAudio();

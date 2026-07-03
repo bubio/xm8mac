@@ -16,6 +16,13 @@ namespace {
 
 const size_t kMaxUsernameBytes = 256;
 const size_t kMaxPasswordBytes = 1024;
+const size_t kAchievementVisibleRows = 5;
+
+const int kAchievementRowX = 88;
+const int kAchievementRowY = 126;
+const int kAchievementRowW = 464;
+const int kAchievementRowH = 28;
+const int kAchievementRowPitch = 32;
 
 const int kLoginUserBoxX = 232;
 const int kLoginUserBoxY = 130;
@@ -85,6 +92,20 @@ const RaOverlaySnapshot& RaOverlay::Snapshot() const
 	return snapshot_;
 }
 
+void RaOverlay::OpenAchievements(
+	const RaOverlayAchievementListSnapshot& snapshot)
+{
+	WipeLoginPassword();
+	achievements_ = snapshot;
+	achievements_.active = true;
+	achievements_.selected_index = 0;
+	achievements_.first_visible_index = 0;
+	NormalizeAchievementSelection();
+	screen_ = RaOverlayScreen::Achievements;
+	login_status_.clear();
+	login_submit_pending_ = false;
+}
+
 void RaOverlay::OpenLogin(const std::string& username)
 {
 	WipeLoginPassword();
@@ -106,6 +127,13 @@ bool RaOverlay::IsBlocking() const
 RaOverlayScreen RaOverlay::Screen() const
 {
 	return screen_;
+}
+
+RaOverlayAchievementListSnapshot RaOverlay::AchievementListSnapshot() const
+{
+	RaOverlayAchievementListSnapshot snapshot = achievements_;
+	snapshot.active = screen_ == RaOverlayScreen::Achievements;
+	return snapshot;
 }
 
 RaOverlayLoginSnapshot RaOverlay::LoginSnapshot() const
@@ -133,6 +161,31 @@ RaOverlayAction RaOverlay::OnTextInput(const char *text)
 
 RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 {
+	if (screen_ == RaOverlayScreen::Achievements) {
+		switch (key) {
+		case RaOverlayKey::Escape:
+			CloseScreen();
+			return RaOverlayAction::Close;
+		case RaOverlayKey::Up:
+			MoveAchievementSelection(-1);
+			break;
+		case RaOverlayKey::Down:
+			MoveAchievementSelection(1);
+			break;
+		case RaOverlayKey::Tab:
+		case RaOverlayKey::Right:
+			MoveAchievementSelection(1);
+			break;
+		case RaOverlayKey::Left:
+			MoveAchievementSelection(-1);
+			break;
+		case RaOverlayKey::Enter:
+		case RaOverlayKey::Backspace:
+			break;
+		}
+		return RaOverlayAction::None;
+	}
+
 	if (screen_ != RaOverlayScreen::Login) {
 		return RaOverlayAction::None;
 	}
@@ -158,6 +211,25 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 	case RaOverlayKey::Enter:
 		return ActivateLoginFocus();
 	case RaOverlayKey::Escape:
+		CloseScreen();
+		return RaOverlayAction::Close;
+	}
+	return RaOverlayAction::None;
+}
+
+RaOverlayAction RaOverlay::OnAchievementPointer(int x, int y, bool activate)
+{
+	if (screen_ != RaOverlayScreen::Achievements) {
+		return RaOverlayAction::None;
+	}
+
+	size_t index = 0;
+	if (AchievementIndexAt(x, y, &index)) {
+		achievements_.selected_index = index;
+		NormalizeAchievementSelection();
+		return RaOverlayAction::None;
+	}
+	if (activate) {
 		CloseScreen();
 		return RaOverlayAction::Close;
 	}
@@ -249,11 +321,82 @@ void RaOverlay::CloseScreen()
 {
 	WipeLoginPassword();
 	screen_ = RaOverlayScreen::None;
+	achievements_ = RaOverlayAchievementListSnapshot();
 	login_field_ = RaOverlayLoginField::Username;
 	login_focus_ = RaOverlayLoginTarget::Username;
 	login_username_.clear();
 	login_status_.clear();
 	login_submit_pending_ = false;
+}
+
+void RaOverlay::MoveAchievementSelection(int delta)
+{
+	if (achievements_.achievements.empty()) {
+		return;
+	}
+
+	const size_t last = achievements_.achievements.size() - 1;
+	if (delta < 0) {
+		const size_t amount = static_cast<size_t>(-delta);
+		achievements_.selected_index = amount > achievements_.selected_index ?
+			0 : achievements_.selected_index - amount;
+	}
+	else {
+		achievements_.selected_index += static_cast<size_t>(delta);
+		if (achievements_.selected_index > last) {
+			achievements_.selected_index = last;
+		}
+	}
+	NormalizeAchievementSelection();
+}
+
+bool RaOverlay::AchievementIndexAt(int x, int y, size_t *index) const
+{
+	if (achievements_.achievements.empty()) {
+		return false;
+	}
+
+	for (size_t row = 0; row < kAchievementVisibleRows; ++row) {
+		const size_t candidate = achievements_.first_visible_index + row;
+		if (candidate >= achievements_.achievements.size()) {
+			break;
+		}
+		const int row_y = kAchievementRowY +
+			static_cast<int>(row) * kAchievementRowPitch;
+		if (HitRect(x, y, kAchievementRowX, row_y, kAchievementRowW,
+			kAchievementRowH)) {
+			if (index != nullptr) {
+				*index = candidate;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+void RaOverlay::NormalizeAchievementSelection()
+{
+	if (achievements_.achievements.empty()) {
+		achievements_.selected_index = 0;
+		achievements_.first_visible_index = 0;
+		return;
+	}
+
+	const size_t last = achievements_.achievements.size() - 1;
+	if (achievements_.selected_index > last) {
+		achievements_.selected_index = last;
+	}
+	if (achievements_.first_visible_index > achievements_.selected_index) {
+		achievements_.first_visible_index = achievements_.selected_index;
+	}
+	if (achievements_.selected_index >=
+		achievements_.first_visible_index + kAchievementVisibleRows) {
+		achievements_.first_visible_index =
+			achievements_.selected_index - kAchievementVisibleRows + 1;
+	}
+	if (achievements_.first_visible_index > last) {
+		achievements_.first_visible_index = last;
+	}
 }
 
 void RaOverlay::MoveLoginFocus(int delta)

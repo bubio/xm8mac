@@ -57,6 +57,8 @@ void CheckProbe(const std::string& path, const char *expected_md5,
 	Check(info.banks == expected_banks, "D88 bank count");
 	Check(static_cast<int>(info.bank_names.size()) == expected_banks,
 		"D88 bank names");
+	Check(static_cast<int>(info.bank_md5s.size()) == expected_banks,
+		"D88 bank MD5 list");
 }
 
 } // namespace
@@ -92,12 +94,21 @@ int main()
 		"ff400f51a2567419b3778691a905952e", 1, "probe second D88");
 	CheckProbe(JoinPath(base, "multi.d88"),
 		"9be57f249da12241c8785db0b195216b", 2, "probe multi D88");
+	Xm8Ra::D88MediaInfo multi;
+	Check(Xm8Ra::ProbeD88File(JoinPath(base, "multi.d88").c_str(), &multi,
+		&error), "probe multi for bank hashes");
+	Check(multi.bank_md5s[0] == "5c50ca4f9e3a7afbe4d6666e8974949d",
+		"multi D88 first bank hash uses single disk image");
+	Check(multi.bank_md5s[1] == "ff400f51a2567419b3778691a905952e",
+		"multi D88 second bank hash uses second disk image");
 
 	char hash[33] = {};
 	Check(Xm8Ra::HashPc8800File(JoinPath(base, "multi.d88").c_str(), hash),
 		"hash multi D88");
 	Check(std::strcmp(hash, "9be57f249da12241c8785db0b195216b") == 0,
 		"hash ignores bank selection outside file bytes");
+	Check(std::strcmp(hash, multi.bank_md5s[0].c_str()) != 0,
+		"multi whole-file hash differs from first bank RA hash");
 
 	const std::string invalid = JoinPath(base, "invalid.d88");
 	Check(WriteBinary(invalid, {'n', 'o', 't', ' ', 'd', '8', '8'}),

@@ -584,6 +584,7 @@ bool RaMediaStore::ImportD88IntoGame(const std::string& source_path,
 	}
 
 	imported->record = record;
+	imported->media_info = media;
 	imported->working_path = working_path;
 	imported->copied = copied;
 	return true;

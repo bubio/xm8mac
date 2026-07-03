@@ -6,7 +6,7 @@ Phase 5の入口として、Phase 4で`App`へ直書きしていたRA通知状�
 `RaOverlay`へ分離した。
 
 - `Source/RA/ra_overlay.*`を追加した。
-- `RaOverlay`は通知本文、通知期限、RAホーム画面で使う状態snapshotを保持する。
+- `RaOverlay`は通知本文、通知期限、Login画面の状態snapshotを保持する。
 - `RaOverlay`はLogin画面の入力状態、focus、submit状態を保持する。
 - 通知の実描画は従来どおり`App::DrawRaOverlay()`が既存`Font`、`Video`を使って行う。
 - `RaOverlay`本体はSDL描画依存を持たないため、RA共通コードの単体テストから利用できる。
@@ -20,6 +20,18 @@ Phase 5の入口として、Phase 4で`App`へ直書きしていたRA通知状�
 - RA modeをOFFからONへ切り替えた場合も、保存済みtokenがあれば自動的にtoken loginを開始する。
 - RAメニューの状態行は、ログイン済みでユーザー名が取得できている場合に
   `RA: logged in <user>`と表示する。
+- RetroAchievementsメニューへ`Achievements`と`Leaderboards`を追加した。
+- 独自デザインの中間RAホームオーバーレイは作らず、既存メニューをRAホーム相当として扱う。
+- Achievementsは、ロード済みRAゲームの実績一覧を5件ずつ表示する最小オーバーレイを開く。
+  RAゲーム未ロード時と実績なしの場合は画面内メッセージを表示する。
+- Achievementsオーバーレイは選択枠、上下スクロール、選択項目の説明表示を持つ。
+  キーボード、コントローラ、マウス、タッチで項目を選択でき、`Esc`または一覧外
+  クリック/タッチで閉じる。
+- Leaderboardsは一覧画面実装まで未実装通知を表示する。
+- RAのSupported Game HashesはPC-88 D88をディスク単位で登録しているため、
+  マルチイメージD88のファイル全体MD5をRA識別へ使う方針を修正した。
+  保存管理用媒体IDは従来どおりD88ファイル全体MD5、RA識別hashは起動bankの
+  D88イメージ範囲MD5とする。
 - Loginオーバーレイは`SDL_TEXTINPUT`、Tab、Backspace、Enter、Escape、上下キーを扱う。
 - LoginオーバーレイはUsername、Password、Login、Cancelへフォーカスを持ち、
   マウス、タッチ、方向キー、controllerでフォーカス移動と実行を行える。
@@ -36,14 +48,14 @@ Phase 5の入口として、Phase 4で`App`へ直書きしていたRA通知状�
 - マウスとタッチは押下開始targetと解放targetが一致した場合だけ`Login`または
   `Cancel`を実行する。解放位置だけで実行しない。
 
-この段階では、ASCIIオンスクリーンキーボード、実績一覧、バッジ画像、Leaderboard画面は
-まだ実装していない。次工程で`RaOverlay`のscreen stackと入力状態を拡張し、
-SDL上のRA専用画面を増やす。
+この段階では、ASCIIオンスクリーンキーボード、Library画面、実績詳細画面、
+バッジ画像、Leaderboard画面はまだ実装していない。
 
 ## 2. 実装意図
 
-Phase 5以降では、RAホーム、ログイン、ライブラリ、実績一覧、Leaderboardなどを
+Phase 5以降では、ログイン、ライブラリ、実績一覧、Leaderboardなどを
 エミュレーション画面上のオーバーレイとして実装する必要がある。
+RAの最上位入口は既存RetroAchievementsメニューを使う。
 
 そのため、通知文字列や画面状態を`App`の一時変数として増やし続けず、
 RA専用の状態オブジェクトへ集約する。描画自体は既存UI資産を使うため、
@@ -51,7 +63,6 @@ RA専用の状態オブジェクトへ集約する。描画自体は既存UI資�
 
 `RaOverlay`へUI状態を集約することで、次の作業単位を分けられる。
 
-- RA状態snapshot生成
 - オーバーレイ画面状態遷移
 - キーボード、コントローラ、マウス、タッチ入力
 - ログインフォームとオンスクリーンキーボード
@@ -68,6 +79,10 @@ RA専用の状態オブジェクトへ集約する。描画自体は既存UI資�
 - Login画面のポインタ操作、controller相当のfocus移動、失敗時のUsername維持と
   Password消去、Submit pending中の二重送信防止、pending中のCancel不可、
   pointer target判定の単体テストが通る。
+- RetroAchievementsメニューにAchievementsとLeaderboardsが表示され、
+  Achievementsは最小一覧オーバーレイ、Leaderboardsは未実装通知を出せる。
+- 実績一覧snapshot、Achievementsオーバーレイの選択、スクロール、一覧外closeの
+  単体テストが通る。
 - Phase 4のRA service、media store、memory map関連テストが引き続き通る。
 
 ## 4. 検証結果
@@ -94,11 +109,11 @@ git diff --check
 
 ## 5. 未完了項目
 
-- RAホーム画面の常設表示。
 - ASCIIオンスクリーンキーボード。
 - 既存softkeyはVMへのPC-88キー入力経路であり、RA Login文字列入力へ渡す変換層は未接続。
-- Login画面の視覚確認とスクリーンショット比較。
-- 実績一覧と詳細表示。
+- RetroAchievementsメニューとLogin画面の視覚確認とスクリーンショット比較。
+- Library画面とゲーム詳細画面。
+- 実績一覧のスクロール、フィルタ、詳細表示。
 - バッジ、アバター画像cacheの描画接続。
 - Leaderboard一覧、送信結果、順位表示。
-- タッチ操作とゲームコントローラ操作の同等化。
+- Login以外のRA専用画面に対するタッチ操作とゲームコントローラ操作の同等化。

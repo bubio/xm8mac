@@ -44,6 +44,7 @@
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_build_info.h"
 #include "ra_http_mac.h"
+#include "ra_media_probe.h"
 #include "ra_paths.h"
 #endif
 #ifdef __ANDROID__
@@ -137,15 +138,14 @@ bool DecodeDropPath(const char *source, char *destination, size_t capacity,
 }
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-uint32_t ReadRaMemoryFromVm(uint32_t address, uint8_t *buffer,
+uint32_t ReadRaMemoryFromApp(uint32_t address, uint8_t *buffer,
 	uint32_t num_bytes, void *userdata)
 {
-	VM *vm = static_cast<VM *>(userdata);
-	if (vm == NULL || buffer == NULL) {
+	App *app = static_cast<App *>(userdata);
+	if (app == NULL || buffer == NULL) {
 		return 0;
 	}
-	return static_cast<uint32_t>(
-		vm->read_ra_inspection_memory(address, buffer, num_bytes));
+	return app->ReadRaInspectionMemory(address, buffer, num_bytes);
 }
 
 std::string MakeRaUserAgent()
@@ -495,9 +495,6 @@ bool App::Init(const CliOptions& options)
 			ra_mode_enabled = false;
 			AddRaNotice("RA: service unavailable");
 		}
-		else {
-			BeginRaSavedTokenLogin(false);
-		}
 	}
 #endif
 
@@ -693,6 +690,15 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 	return true;
 }
 
+//
+// OpenDiskFromMenu()
+// open disk from menu
+//
+bool App::OpenDiskFromMenu(const DiskSpec& spec, std::string *error)
+{
+	return OpenDiskFromUser(spec, error);
+}
+
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 //
 // ResolveDiskForRaMode()
@@ -719,9 +725,19 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		return false;
 	}
 	resolved->path = imported.working_path;
-	if (spec.drive == 0 && ra_pending_game_hash.empty() &&
-		ra_loaded_game_hash.empty()) {
-		BeginRaSessionForMedia(imported.record.md5);
+	if (spec.drive == 0 && ra_pending_game_hash.empty()) {
+		const int bank = spec.bank < 0 ? 0 : spec.bank;
+		if (bank >= static_cast<int>(imported.media_info.bank_md5s.size())) {
+			*error = "RA D88 bank hash is not available";
+			return false;
+		}
+		const std::string& ra_hash = imported.media_info.bank_md5s[bank];
+		const bool can_identify =
+			ra_loaded_game_hash.empty() || ra_session_disabled ||
+			ra_loaded_game_hash != ra_hash;
+		if (can_identify) {
+			BeginRaSessionForMedia(ra_hash);
+		}
 	}
 	return true;
 }
@@ -753,8 +769,8 @@ bool App::EnsureRaService(std::string *error)
 	ra_options.user_agent = MakeRaUserAgent();
 	ra_options.http_client =
 		Xm8Ra::CreateMacRaHttpClient(ra_options.user_agent);
-	ra_options.host_read_memory = ReadRaMemoryFromVm;
-	ra_options.host_read_memory_userdata = vm;
+	ra_options.host_read_memory = ReadRaMemoryFromApp;
+	ra_options.host_read_memory_userdata = this;
 	ra_service = new Xm8Ra::RaService(std::move(ra_options));
 	if (!ra_service->IsReady()) {
 		delete ra_service;
@@ -825,6 +841,29 @@ bool App::BeginRaSavedTokenLogin(bool notify_missing_token)
 }
 
 //
+// StartRaAfterBoot()
+// start RA after startup disks and auto-resume are settled
+//
+void App::StartRaAfterBoot()
+{
+	if (!ra_mode_enabled || ra_library == NULL) {
+		return;
+	}
+
+	std::string error;
+	if (!EnsureRaService(&error)) {
+		ra_mode_enabled = false;
+		AddRaNotice("RA: service unavailable");
+		menu->UpdateRaStatus();
+		return;
+	}
+
+	BeginRaSavedTokenLogin(false);
+	BeginRaSessionForMountedDrive1();
+	menu->UpdateRaStatus();
+}
+
+//
 // BeginRaSessionForMedia()
 // remember the media hash to identify through RA
 //
@@ -835,10 +874,46 @@ void App::BeginRaSessionForMedia(const std::string& md5)
 	}
 
 	ra_session_disabled = false;
-	ra_saved_login_started = false;
+	if (ra_service != NULL) {
+		ra_service->UnloadGame();
+	}
 	ra_pending_game_hash = md5;
 	ra_loaded_game_hash.clear();
-	AddRaNotice("RA: identifying game");
+	AddRaNotice("RA: identifying " + md5.substr(0, 8));
+	RefreshRaAchievementsOverlay();
+}
+
+//
+// BeginRaSessionForMountedDrive1()
+// begin RA session for already-mounted drive 1
+//
+void App::BeginRaSessionForMountedDrive1()
+{
+	if (!ra_mode_enabled || ra_service == NULL || diskmgr[0] == NULL ||
+		!diskmgr[0]->IsOpen() || !ra_pending_game_hash.empty()) {
+		return;
+	}
+
+	Xm8Ra::D88MediaInfo media;
+	std::string error;
+	if (!Xm8Ra::ProbeD88File(diskmgr[0]->GetPath(), &media, &error)) {
+		AddRaNotice("RA: mounted disk probe failed");
+		return;
+	}
+
+	const int bank = diskmgr[0]->GetBank();
+	if (bank < 0 || bank >= static_cast<int>(media.bank_md5s.size())) {
+		AddRaNotice("RA: mounted bank hash missing");
+		return;
+	}
+
+	const std::string& hash = media.bank_md5s[bank];
+	if (ra_loaded_game_hash == hash &&
+		ra_service->GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::Loaded) {
+		return;
+	}
+	BeginRaSessionForMedia(hash);
 }
 
 //
@@ -847,11 +922,37 @@ void App::BeginRaSessionForMedia(const std::string& md5)
 //
 void App::ProcessRaService(bool emulation_frame)
 {
-	if (!ra_mode_enabled || ra_service == NULL || ra_session_disabled) {
+	if (!ra_mode_enabled || ra_service == NULL) {
 		return;
 	}
 
+	const Xm8Ra::RaLoginState login_state_before =
+		ra_service->LoginSnapshot().state;
+	const Xm8Ra::RaGameSessionState game_state_before =
+		ra_service->GameSessionSnapshot().state;
 	ra_service->DrainHttp();
+	const Xm8Ra::RaLoginSnapshot login_after_drain =
+		ra_service->LoginSnapshot();
+	const Xm8Ra::RaGameSessionSnapshot game_after_drain =
+		ra_service->GameSessionSnapshot();
+	if (ra_saved_login_started &&
+		login_after_drain.state != Xm8Ra::RaLoginState::LoginPending) {
+		ra_saved_login_started = false;
+		if (login_after_drain.state == Xm8Ra::RaLoginState::LoggedIn) {
+			const std::string name = login_after_drain.display_name.empty() ?
+				login_after_drain.username : login_after_drain.display_name;
+			AddRaNotice(name.empty() ? "RA: logged in" :
+				"RA: logged in " + name);
+		}
+		else if (login_after_drain.state == Xm8Ra::RaLoginState::Failed) {
+			AddRaNotice("RA: login failed");
+		}
+		RefreshRaAchievementsOverlay();
+	}
+	if (login_after_drain.state != login_state_before ||
+		game_after_drain.state != game_state_before) {
+		menu->UpdateRaStatus();
+	}
 	if (ra_manual_login_started) {
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
 		if (login.state == Xm8Ra::RaLoginState::LoggedIn) {
@@ -866,6 +967,8 @@ void App::ProcessRaService(bool emulation_frame)
 				login.username : login.display_name;
 			AddRaNotice(name.empty() ? "RA: logged in" :
 				"RA: logged in " + name);
+			RefreshRaAchievementsOverlay();
+			menu->UpdateRaStatus();
 		}
 		else if (login.state == Xm8Ra::RaLoginState::Failed) {
 			ra_manual_login_started = false;
@@ -876,10 +979,12 @@ void App::ProcessRaService(bool emulation_frame)
 				UpdateRaOverlayTextInput();
 			}
 			AddRaNotice("RA: login failed");
+			RefreshRaAchievementsOverlay();
+			menu->UpdateRaStatus();
 		}
 	}
 
-	if (!ra_pending_game_hash.empty()) {
+	if (!ra_session_disabled && !ra_pending_game_hash.empty()) {
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
 		const Xm8Ra::RaGameSessionSnapshot game =
 			ra_service->GameSessionSnapshot();
@@ -892,6 +997,8 @@ void App::ProcessRaService(bool emulation_frame)
 			if (!ra_saved_login_started) {
 				ra_session_disabled = true;
 				AddRaNotice("RA: login required");
+				RefreshRaAchievementsOverlay();
+				menu->UpdateRaStatus();
 			}
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&
@@ -901,30 +1008,41 @@ void App::ProcessRaService(bool emulation_frame)
 				&error)) {
 				ra_loaded_game_hash = ra_pending_game_hash;
 				AddRaNotice("RA: loading game");
+				menu->UpdateRaStatus();
 			}
 			else {
 				ra_session_disabled = true;
 				AddRaNotice("RA: game load failed");
+				RefreshRaAchievementsOverlay();
+				menu->UpdateRaStatus();
 			}
 		}
 		else if (game.state == Xm8Ra::RaGameSessionState::Loaded) {
 			ra_pending_game_hash.clear();
 			AddRaNotice(game.title.empty() ? "RA: game loaded" :
 				"RA: " + game.title);
+			RefreshRaAchievementsOverlay();
+			menu->UpdateRaStatus();
 		}
 		else if (login.state == Xm8Ra::RaLoginState::Failed ||
 			game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
 			ra_session_disabled = true;
+			if (game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
+				ra_pending_game_hash.clear();
+			}
+			ra_loaded_game_hash.clear();
 			if (login.state == Xm8Ra::RaLoginState::Failed) {
 				AddRaNotice("RA: login failed");
 			}
 			else {
 				AddRaNotice("RA: disabled for this session");
 			}
+			RefreshRaAchievementsOverlay();
+			menu->UpdateRaStatus();
 		}
 	}
 
-	if (emulation_frame) {
+	if (emulation_frame && !ra_session_disabled) {
 		if (!ra_service->DoFrame()) {
 			ra_service->Idle();
 		}
@@ -1020,7 +1138,6 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 	else if (action == Xm8Ra::RaOverlayAction::Close) {
 		SDL_StopTextInput();
 		ClearRaOverlayPointerState();
-		AddRaNotice("RA: login canceled");
 	}
 	else {
 		UpdateRaOverlayTextInput();
@@ -1099,25 +1216,33 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 		return true;
 	}
 
-	Xm8Ra::RaOverlayLoginTarget target;
-	if (!ra_overlay->LoginTargetAt(x, y, &target)) {
-		if (e->type == SDL_MOUSEBUTTONUP) {
-			ra_overlay_mouse_target_valid = false;
-		}
-		return true;
-	}
-	if (e->type == SDL_MOUSEBUTTONDOWN) {
-		ra_overlay_mouse_target = target;
-		ra_overlay_mouse_target_valid = true;
-		return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
-			false));
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
+		return HandleRaOverlayAction(ra_overlay->OnAchievementPointer(x, y,
+			e->type == SDL_MOUSEBUTTONUP));
 	}
 
-	const bool activate = ra_overlay_mouse_target_valid &&
-		ra_overlay_mouse_target == target;
-	ra_overlay_mouse_target_valid = false;
-	return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
-		activate));
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
+		Xm8Ra::RaOverlayLoginTarget target;
+		if (!ra_overlay->LoginTargetAt(x, y, &target)) {
+			if (e->type == SDL_MOUSEBUTTONUP) {
+				ra_overlay_mouse_target_valid = false;
+			}
+			return true;
+		}
+		if (e->type == SDL_MOUSEBUTTONDOWN) {
+			ra_overlay_mouse_target = target;
+			ra_overlay_mouse_target_valid = true;
+			return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+				false));
+		}
+
+		const bool activate = ra_overlay_mouse_target_valid &&
+			ra_overlay_mouse_target == target;
+		ra_overlay_mouse_target_valid = false;
+		return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+			activate));
+	}
+	return true;
 }
 
 //
@@ -1142,25 +1267,33 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 		return true;
 	}
 
-	Xm8Ra::RaOverlayLoginTarget target;
-	if (!ra_overlay->LoginTargetAt(x, y, &target)) {
-		if (e->type == SDL_FINGERUP) {
-			ra_overlay_finger_target_valid = false;
-		}
-		return true;
-	}
-	if (e->type == SDL_FINGERDOWN) {
-		ra_overlay_finger_target = target;
-		ra_overlay_finger_target_valid = true;
-		return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
-			false));
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
+		return HandleRaOverlayAction(ra_overlay->OnAchievementPointer(x, y,
+			e->type == SDL_FINGERUP));
 	}
 
-	const bool activate = ra_overlay_finger_target_valid &&
-		ra_overlay_finger_target == target;
-	ra_overlay_finger_target_valid = false;
-	return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
-		activate));
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
+		Xm8Ra::RaOverlayLoginTarget target;
+		if (!ra_overlay->LoginTargetAt(x, y, &target)) {
+			if (e->type == SDL_FINGERUP) {
+				ra_overlay_finger_target_valid = false;
+			}
+			return true;
+		}
+		if (e->type == SDL_FINGERDOWN) {
+			ra_overlay_finger_target = target;
+			ra_overlay_finger_target_valid = true;
+			return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+				false));
+		}
+
+		const bool activate = ra_overlay_finger_target_valid &&
+			ra_overlay_finger_target == target;
+		ra_overlay_finger_target_valid = false;
+		return HandleRaOverlayAction(ra_overlay->OnLoginTarget(target,
+			activate));
+	}
+	return true;
 }
 
 //
@@ -1256,7 +1389,108 @@ void App::DrawRaOverlay()
 	if (!ra_mode_enabled || ra_overlay == NULL) {
 		return;
 	}
-	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
+		const Xm8Ra::RaOverlayAchievementListSnapshot achievements =
+			ra_overlay->AchievementListSnapshot();
+		SDL_Rect panel = {64, 54, 512, 292};
+		Uint32 *buf = video->GetFrameBuf(0);
+		font->DrawFillRect(buf, &panel,
+			RGB_COLOR(16, 16, 16) | 0xe0000000);
+		font->DrawRect(buf, &panel,
+			RGB_COLOR(255, 255, 255) | 0xe0000000,
+			RGB_COLOR(16, 16, 16) | 0xe0000000);
+
+		SDL_Rect title = {panel.x, panel.y + 12, panel.w, 24};
+		font->DrawSjisCenterOr(buf, &title, "RetroAchievements",
+			RGB_COLOR(255, 255, 255));
+
+		char subtitle[96];
+		if (!achievements.game_title.empty()) {
+			std::snprintf(subtitle, sizeof(subtitle), "%s",
+				achievements.game_title.c_str());
+		}
+		else {
+			std::snprintf(subtitle, sizeof(subtitle), "%s",
+				"Achievements");
+		}
+		SDL_Rect subtitle_rect = {panel.x + 24, panel.y + 42,
+			panel.w - 48, 22};
+		font->DrawSjisLeftOr(buf, &subtitle_rect, subtitle,
+			RGB_COLOR(220, 220, 220));
+
+		if (!achievements.status_message.empty()) {
+			SDL_Rect status_rect = {panel.x + 24, panel.y + 126,
+				panel.w - 48, 24};
+			font->DrawSjisCenterOr(buf, &status_rect,
+				achievements.status_message.c_str(),
+				RGB_COLOR(255, 192, 96));
+		}
+		else {
+			const size_t max_items = std::min<size_t>(
+				achievements.achievements.size() -
+					achievements.first_visible_index, 5);
+			for (size_t i = 0; i < max_items; ++i) {
+				const size_t item_index =
+					achievements.first_visible_index + i;
+				const Xm8Ra::RaOverlayAchievementItem& item =
+					achievements.achievements[item_index];
+				SDL_Rect row = {panel.x + 24,
+					panel.y + 72 + static_cast<int>(i) * 32,
+					panel.w - 48, 28};
+				const bool selected =
+					item_index == achievements.selected_index;
+				font->DrawRect(buf, &row,
+					selected ? RGB_COLOR(255, 255, 128) :
+						RGB_COLOR(96, 96, 96),
+					RGB_COLOR(32, 32, 32) | 0xe0000000);
+
+				char line[128];
+				const char *mark = item.unlocked != 0 ? "[*]" : "[ ]";
+				std::snprintf(line, sizeof(line), "%s %s  %u pts",
+					mark, item.title.c_str(), item.points);
+				SDL_Rect text_rect = {row.x + 8, row.y + 4,
+					row.w - 16, 20};
+				font->DrawSjisLeftOr(buf, &text_rect, line,
+					item.unlocked != 0 ? RGB_COLOR(200, 255, 200) :
+						RGB_COLOR(255, 255, 255));
+			}
+			char count[64];
+			std::snprintf(count, sizeof(count), "%u/%u",
+				static_cast<unsigned int>(achievements.selected_index + 1),
+				static_cast<unsigned int>(achievements.achievements.size()));
+			SDL_Rect count_rect = {panel.x + panel.w - 96, panel.y + 42,
+				72, 22};
+			font->DrawSjisCenterOr(buf, &count_rect, count,
+				RGB_COLOR(200, 200, 200));
+
+			if (achievements.selected_index <
+				achievements.achievements.size()) {
+				const Xm8Ra::RaOverlayAchievementItem& selected =
+					achievements.achievements[achievements.selected_index];
+				char detail[160];
+				if (!selected.measured_progress.empty()) {
+					std::snprintf(detail, sizeof(detail), "%s  %s",
+						selected.description.c_str(),
+						selected.measured_progress.c_str());
+				}
+				else {
+					std::snprintf(detail, sizeof(detail), "%s",
+						selected.description.c_str());
+				}
+				SDL_Rect detail_rect = {panel.x + 24, panel.y + 232,
+					panel.w - 48, 22};
+				font->DrawSjisLeftOr(buf, &detail_rect, detail,
+					RGB_COLOR(200, 200, 200));
+			}
+		}
+
+		SDL_Rect hint = {panel.x + 24, panel.y + 250, panel.w - 48, 22};
+		font->DrawSjisLeftOr(buf, &hint,
+			"Up/Down: Select  Esc: Close  Click outside: Close",
+			RGB_COLOR(200, 200, 200));
+		video->DrawCtrl();
+	}
+	else if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
 		const Xm8Ra::RaOverlayLoginSnapshot login =
 			ra_overlay->LoginSnapshot();
 		SDL_Rect panel = {104, 78, 432, 218};
@@ -1774,6 +2008,10 @@ void App::Run()
 		EnterMenu(MENU_MAIN);
 	}
 #endif // __ANDROID__
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	StartRaAfterBoot();
+#endif
 
 	// main loop
 	while (app_quit == false) {
@@ -3070,6 +3308,15 @@ void App::ChangeSystem(bool load)
 	play = tapemgr->IsPlay();
 	rec = tapemgr->IsRec();
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_service != NULL) {
+		ra_service->UnloadGame();
+	}
+	ra_session_disabled = false;
+	ra_pending_game_hash.clear();
+	ra_loaded_game_hash.clear();
+#endif
+
 	// delete virtual machine
 	delete vm;
 	vm = NULL;
@@ -3185,6 +3432,17 @@ void App::Reset()
 	// resync rtc
 	upd1990a->resync();
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_service != NULL) {
+		ra_service->UnloadGame();
+	}
+	ra_session_disabled = false;
+	ra_pending_game_hash.clear();
+	ra_loaded_game_hash.clear();
+	RefreshRaAchievementsOverlay();
+	BeginRaSessionForMountedDrive1();
+#endif
+
 	// restart audio
 	if (audio->IsPlay() == true) {
 		audio->Stop();
@@ -3256,6 +3514,10 @@ bool App::Load(int slot)
 
 			// resync rtc
 			upd1990a->resync();
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			BeginRaSessionForMountedDrive1();
+#endif
 
 			// success
 			UnlockVM();
@@ -3386,6 +3648,7 @@ bool App::ToggleRaMode()
 	}
 	else if (enable) {
 		BeginRaSavedTokenLogin(false);
+		BeginRaSessionForMountedDrive1();
 	}
 	AddRaNotice(enable ? "RA: mode enabled" : "RA: mode disabled");
 	return true;
@@ -3401,6 +3664,135 @@ bool App::IsRaLoggedIn() const
 		return false;
 	}
 	return ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn;
+}
+
+namespace {
+
+const char *RaLoginStateText(Xm8Ra::RaLoginState state)
+{
+	switch (state) {
+	case Xm8Ra::RaLoginState::LoggedOut:
+		return "out";
+	case Xm8Ra::RaLoginState::LoginPending:
+		return "pending";
+	case Xm8Ra::RaLoginState::LoggedIn:
+		return "in";
+	case Xm8Ra::RaLoginState::Failed:
+		return "failed";
+	}
+	return "unknown";
+}
+
+const char *RaGameStateText(Xm8Ra::RaGameSessionState state)
+{
+	switch (state) {
+	case Xm8Ra::RaGameSessionState::NoGame:
+		return "none";
+	case Xm8Ra::RaGameSessionState::LoadPending:
+		return "loading";
+	case Xm8Ra::RaGameSessionState::Loaded:
+		return "loaded";
+	case Xm8Ra::RaGameSessionState::DisabledForSession:
+		return "disabled";
+	}
+	return "unknown";
+}
+
+} // namespace
+
+//
+// MakeRaAchievementsOverlaySnapshot()
+// build RA achievements overlay snapshot
+//
+Xm8Ra::RaOverlayAchievementListSnapshot App::MakeRaAchievementsOverlaySnapshot() const
+{
+	Xm8Ra::RaOverlayAchievementListSnapshot overlay_snapshot;
+	if (ra_service == NULL) {
+		overlay_snapshot.status_message = "RA service unavailable";
+	}
+	else {
+		const Xm8Ra::RaAchievementListSnapshot service_snapshot =
+			ra_service->AchievementListSnapshot();
+		overlay_snapshot.game_loaded = service_snapshot.game_loaded;
+		overlay_snapshot.has_achievements =
+			service_snapshot.has_achievements;
+		overlay_snapshot.game_title = service_snapshot.game_title;
+		if (!service_snapshot.game_loaded) {
+			const Xm8Ra::RaLoginSnapshot login =
+				ra_service->LoginSnapshot();
+			const Xm8Ra::RaGameSessionSnapshot game =
+				ra_service->GameSessionSnapshot();
+			char status[160];
+			const std::string pending = ra_pending_game_hash.empty() ?
+				"-" : ra_pending_game_hash.substr(0, 8);
+			std::snprintf(status, sizeof(status),
+				"No RA game loaded  login:%s game:%s pending:%s",
+				RaLoginStateText(login.state), RaGameStateText(game.state),
+				pending.c_str());
+			overlay_snapshot.status_message = status;
+		}
+		else if (!service_snapshot.has_achievements) {
+			overlay_snapshot.status_message = "No achievements";
+		}
+
+		for (const Xm8Ra::RaAchievementListItem& source :
+			service_snapshot.achievements) {
+			Xm8Ra::RaOverlayAchievementItem item;
+			item.id = source.id;
+			item.points = source.points;
+			item.unlocked = source.unlocked;
+			item.title = source.title;
+			item.description = source.description;
+			item.measured_progress = source.measured_progress;
+			item.bucket_label = source.bucket_label;
+			overlay_snapshot.achievements.push_back(item);
+		}
+	}
+	return overlay_snapshot;
+}
+
+//
+// RefreshRaAchievementsOverlay()
+// refresh achievements overlay if it is visible
+//
+void App::RefreshRaAchievementsOverlay()
+{
+	if (ra_overlay != NULL &&
+		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
+		ra_overlay->OpenAchievements(MakeRaAchievementsOverlaySnapshot());
+	}
+}
+
+//
+// OpenRaAchievementsOverlay()
+// open RA achievements overlay
+//
+void App::OpenRaAchievementsOverlay()
+{
+	if (ra_overlay == NULL) {
+		AddRaNotice("RA: overlay unavailable");
+		return;
+	}
+
+	ra_overlay->OpenAchievements(MakeRaAchievementsOverlaySnapshot());
+	ra_overlay_joystick_prev = 0;
+	ClearRaOverlayPointerState();
+	SDL_StopTextInput();
+	if (app_menu == true) {
+		LeaveMenu(false);
+	}
+}
+
+//
+// OpenRaLeaderboardsOverlay()
+// open RA leaderboards overlay
+//
+void App::OpenRaLeaderboardsOverlay()
+{
+	if (app_menu == true) {
+		LeaveMenu(false);
+	}
+	AddRaNotice("RA: leaderboards not implemented");
 }
 
 //
@@ -3492,8 +3884,18 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 				game.title.empty() ? "game loaded" : game.title.c_str());
 			return;
 		}
+		else if (!ra_pending_game_hash.empty()) {
+			std::snprintf(buffer, capacity, "RA: pending %s %s",
+				ra_pending_game_hash.substr(0, 8).c_str(),
+				RaLoginStateText(login.state));
+			return;
+		}
 		else if (game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
-			text = "RA: session disabled";
+			const std::string hash = game.hash.empty() ? "-" :
+				game.hash.substr(0, 8);
+			std::snprintf(buffer, capacity, "RA: disabled %s",
+				hash.c_str());
+			return;
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn) {
 			const std::string name = login.display_name.empty() ?
@@ -3510,6 +3912,20 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 		}
 	}
 	std::snprintf(buffer, capacity, "%s", text);
+}
+
+//
+// ReadRaInspectionMemory()
+// read current VM memory for RA
+//
+uint32_t App::ReadRaInspectionMemory(uint32_t address, uint8_t *buffer,
+	uint32_t num_bytes) const
+{
+	if (vm == NULL || buffer == NULL) {
+		return 0;
+	}
+	return static_cast<uint32_t>(
+		vm->read_ra_inspection_memory(address, buffer, num_bytes));
 }
 #endif
 

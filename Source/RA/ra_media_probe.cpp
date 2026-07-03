@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <vector>
 
 namespace Xm8Ra {
 namespace {
@@ -41,6 +42,15 @@ bool HashPc8800File(const char *path, char hash[33])
 		return false;
 	}
 	return rc_hash_generate_from_file(hash, RC_CONSOLE_PC8800, path) != 0;
+}
+
+bool HashPc8800Buffer(const uint8_t *buffer, size_t buffer_size, char hash[33])
+{
+	if (buffer == nullptr || buffer_size == 0 || hash == nullptr) {
+		return false;
+	}
+	return rc_hash_generate_from_buffer(hash, RC_CONSOLE_PC8800, buffer,
+		buffer_size) != 0;
 }
 
 bool ProbeD88File(const char *path, D88MediaInfo *info, std::string *error)
@@ -108,6 +118,24 @@ bool ProbeD88File(const char *path, D88MediaInfo *info, std::string *error)
 		}
 
 		probed.bank_names.push_back(ReadBankName(header));
+		std::vector<uint8_t> image(image_size);
+		stream.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+		stream.read(reinterpret_cast<char*>(image.data()),
+			static_cast<std::streamsize>(image.size()));
+		if (stream.gcount() != static_cast<std::streamsize>(image.size())) {
+			if (error != nullptr) {
+				*error = "cannot read D88 bank";
+			}
+			return false;
+		}
+		char bank_hash[33] = {};
+		if (!HashPc8800Buffer(image.data(), image.size(), bank_hash)) {
+			if (error != nullptr) {
+				*error = "cannot hash D88 bank";
+			}
+			return false;
+		}
+		probed.bank_md5s.push_back(bank_hash);
 		probed.banks++;
 		offset += image_size;
 	}

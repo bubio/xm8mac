@@ -16,8 +16,10 @@ Phase 4として、macOS HTTP adapter、`rc_client`認証サービス層、
 - password login成功時はRAから返されたtokenを`credentials.bin`へ保存する。
 - 保存token login失敗時は`credentials.bin`を削除する。
 - logout時は`rc_client_logout()`後に`credentials.bin`を削除する。
-- D88全体MD5を`rc_client_begin_load_game()`へ渡してゲーム識別、実績定義取得、
-  RA session開始を`rc_client`へ委譲する。
+- Phase 4初期実装ではD88全体MD5を`rc_client_begin_load_game()`へ渡してゲーム識別、
+  実績定義取得、RA session開始を`rc_client`へ委譲していた。Phase 5中にRAの
+  Supported Game Hashes実運用に合わせ、マルチイメージD88では起動bank単位の
+  RA識別hashを渡す方式へ修正した。
 - ゲームロード成功時は`rc_client_get_game_info()`からGame ID、console ID、title、
   hash、badge URLをsnapshotへ反映する。
 - ゲームロード失敗時は当該起動セッションのRAを
@@ -31,8 +33,8 @@ Phase 4として、macOS HTTP adapter、`rc_client`認証サービス層、
 - `RaService`にVM側メモリ読み出し用のuserdata付きcallbackを追加した。
 - macOS RA ON buildの`App`へ`RaService`生成を接続した。
 - User-AgentへXM8 versionとrcheevos versionを含めるようにした。
-- RAモードでDrive 1のD88を作業コピーへ解決した時点で、媒体MD5を当該セッションの
-  RA識別対象として固定するようにした。
+- RAモードでDrive 1のD88を作業コピーへ解決した時点で、起動bankのRA識別hashを
+  当該セッションのRA識別対象として固定するようにした。
 - 保存済みtokenがある場合、アプリループで自動login、hash指定ゲームロード、
   frame/idle処理まで進行するようにした。
 - 保存済みtokenがない、login失敗、ゲームロード失敗の場合はRAを当該セッションで
@@ -175,7 +177,7 @@ RA ON buildの`Source/UI/app.*`と`Source/UI/menu.*`にmacOS向けの最小統�
 - `RaLibrary`と`RaMediaStore`初期化後、VM生成後に`RaService`を生成する。
 - HTTP backendはmacOS `NSURLSession` adapterを使用する。
 - RA service生成失敗時はRAモードだけを無効化し、Normal起動は継続する。
-- `ResolveDiskForRaMode()`で作業コピーへ差し替えたDrive 1媒体のMD5を
+- `ResolveDiskForRaMode()`で作業コピーへ差し替えたDrive 1媒体/bankのRA識別hashを
   `ra_pending_game_hash`へ保持する。
 - Drive 2や後続媒体の挿入だけではRA active mediaを変更しない。
 - メニュー、バックグラウンド、power down中は`RaService::Idle()`を進める。
@@ -219,7 +221,7 @@ RA ON buildの`Source/UI/app.*`と`Source/UI/menu.*`にmacOS向けの最小統�
 - `RaService`が保存token loginを`rc_client`へ渡し、password fieldを送信しないこと。
 - 保存token拒否時に`credentials.bin`を削除すること。
 - logout時に`credentials.bin`を削除すること。
-- `BeginLoadGameByHash()`がD88全体MD5を`achievementsets` requestへ渡すこと。
+- `BeginLoadGameByHash()`がRA識別hashを`achievementsets` requestへ渡すこと。
 - `achievementsets`成功後に`startsession` requestが発行されること。
 - load成功時にGame ID、console ID、title、hashがsnapshotへ反映されること。
 - background memory read禁止下では、`startsession`応答後に`Idle()`を進めて
