@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <vector>
 
 #ifndef RC_CLIENT_SUPPORTS_HASH
 #error RC_CLIENT_SUPPORTS_HASH must be defined for RA targets
@@ -72,6 +73,13 @@ int main()
 		&components), "stb PNG probe");
 	Check(width == 1 && height == 1 && components == 2,
 		"stb PNG dimensions");
+	std::vector<uint8_t> rgba;
+	width = 0;
+	height = 0;
+	Check(Xm8RaBuildInfo::DecodeImageRgba(png, sizeof(png), &width,
+		&height, &rgba), "stb PNG decode");
+	Check(width == 1 && height == 1 && rgba.size() == 4,
+		"stb PNG RGBA dimensions");
 
 	if (failures != 0) {
 		std::cerr << failures << " test(s) failed\n";

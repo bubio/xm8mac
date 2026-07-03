@@ -230,6 +230,7 @@ App::App()
 	ra_media_store = NULL;
 	ra_service = NULL;
 	ra_overlay = NULL;
+	ra_next_image_request_id = 1000000;
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
@@ -932,6 +933,8 @@ void App::ProcessRaService(bool emulation_frame)
 		return;
 	}
 
+	ProcessRaImages();
+
 	const Xm8Ra::RaLoginState login_state_before =
 		ra_service->LoginSnapshot().state;
 	const Xm8Ra::RaGameSessionState game_state_before =
@@ -1057,6 +1060,152 @@ void App::ProcessRaService(bool emulation_frame)
 		ra_service->Idle();
 	}
 	AddRaEventsAsNotices(ra_service->TakeEvents());
+}
+
+//
+// ProcessRaImages()
+// progress RA badge image HTTP
+//
+void App::ProcessRaImages()
+{
+	if (ra_image_http_client == nullptr) {
+		return;
+	}
+
+	std::vector<Xm8Ra::RaHttpResponse> completed;
+	ra_image_http_client->DrainCompleted(&completed);
+	for (const Xm8Ra::RaHttpResponse& response : completed) {
+		for (auto& entry : ra_badge_images) {
+			RaBadgeImage& image = entry.second;
+			if (image.request_id != response.request_id ||
+				image.state != RaBadgeImage::Pending) {
+				continue;
+			}
+
+			image.request_id = 0;
+			if (response.transport_result !=
+				Xm8Ra::RaHttpTransportResult::Success ||
+				response.http_status < 200 || response.http_status >= 300 ||
+				response.body.empty()) {
+				image.state = RaBadgeImage::Failed;
+				break;
+			}
+
+			int width = 0;
+			int height = 0;
+			std::vector<uint8_t> rgba;
+			if (!Xm8RaBuildInfo::DecodeImageRgba(response.body.data(),
+				response.body.size(), &width, &height, &rgba)) {
+				image.state = RaBadgeImage::Failed;
+				break;
+			}
+
+			image.width = width;
+			image.height = height;
+			image.pixels.clear();
+			image.pixels.reserve(static_cast<size_t>(width) *
+				static_cast<size_t>(height));
+			for (size_t i = 0; i + 3 < rgba.size(); i += 4) {
+				const uint32_t pixel =
+					(static_cast<uint32_t>(rgba[i + 3]) << 24) |
+					RGB_COLOR(rgba[i], rgba[i + 1], rgba[i + 2]);
+				image.pixels.push_back(pixel);
+			}
+			image.state = image.pixels.empty() ? RaBadgeImage::Failed :
+				RaBadgeImage::Ready;
+			break;
+		}
+	}
+}
+
+//
+// RequestRaBadgeImage()
+// request RA badge image if needed
+//
+void App::RequestRaBadgeImage(const std::string& url)
+{
+	if (url.empty()) {
+		return;
+	}
+
+	RaBadgeImage& image = ra_badge_images[url];
+	if (image.state != RaBadgeImage::NotRequested) {
+		return;
+	}
+
+	if (ra_image_http_client == nullptr) {
+		ra_image_http_client = Xm8Ra::CreateMacRaHttpClient(MakeRaUserAgent());
+		if (ra_image_http_client == nullptr) {
+			image.state = RaBadgeImage::Failed;
+			return;
+		}
+	}
+
+	Xm8Ra::RaHttpRequest request;
+	request.request_id = ra_next_image_request_id++;
+	request.purpose = Xm8Ra::RaHttpPurpose::Image;
+	request.url = url;
+	request.max_response_bytes = 1024U * 1024U;
+	request.connect_timeout_ms = 10000;
+	request.total_timeout_ms = 30000;
+	image.request_id = request.request_id;
+	image.state = RaBadgeImage::Pending;
+	ra_image_http_client->Send(request);
+}
+
+//
+// DrawRaBadgeImage()
+// draw RA badge image if cached
+//
+void App::DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
+	const std::string& url)
+{
+	if (buf == NULL || rect == NULL || url.empty()) {
+		return;
+	}
+
+	RequestRaBadgeImage(url);
+	const auto found = ra_badge_images.find(url);
+	if (found == ra_badge_images.end() ||
+		found->second.state != RaBadgeImage::Ready ||
+		found->second.width <= 0 || found->second.height <= 0 ||
+		found->second.pixels.empty()) {
+		return;
+	}
+
+	const RaBadgeImage& image = found->second;
+	for (int y = 0; y < rect->h; ++y) {
+		const int sy = y * image.height / rect->h;
+		for (int x = 0; x < rect->w; ++x) {
+			const int sx = x * image.width / rect->w;
+			const uint32_t source =
+				image.pixels[static_cast<size_t>(sy) *
+					static_cast<size_t>(image.width) +
+					static_cast<size_t>(sx)];
+			const uint32_t alpha = source >> 24;
+			if (alpha == 0) {
+				continue;
+			}
+			Uint32 *dest = buf + (rect->y + y) * SCREEN_WIDTH +
+				rect->x + x;
+			if (alpha >= 255) {
+				*dest = source;
+			}
+			else {
+				const uint32_t inv = 255 - alpha;
+				const uint32_t sr = (source >> 16) & 0xff;
+				const uint32_t sg = (source >> 8) & 0xff;
+				const uint32_t sb = source & 0xff;
+				const uint32_t dr = (*dest >> 16) & 0xff;
+				const uint32_t dg = (*dest >> 8) & 0xff;
+				const uint32_t db = *dest & 0xff;
+				*dest = 0xff000000 |
+					RGB_COLOR((sr * alpha + dr * inv) / 255,
+						(sg * alpha + dg * inv) / 255,
+						(sb * alpha + db * inv) / 255);
+			}
+		}
+	}
 }
 
 //
@@ -1471,6 +1620,7 @@ void App::DrawRaOverlay()
 	if (!ra_mode_enabled || ra_overlay == NULL) {
 		return;
 	}
+	ProcessRaImages();
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
 		const bool achievements_screen =
@@ -1719,6 +1869,15 @@ void App::DrawRaOverlay()
 			badge_outer.w - 4, badge_outer.h - 4};
 		font->DrawFillRect(buf, &badge_inner, MENUITEM_BACK | alpha);
 		font->DrawSjisCenterOr(buf, &badge_inner, "Badge", fore);
+		std::string badge_url = detail.achievement.unlocked != 0 ?
+			detail.achievement.badge_url :
+			detail.achievement.badge_locked_url;
+		if (badge_url.empty()) {
+			badge_url = detail.achievement.unlocked != 0 ?
+				detail.achievement.badge_locked_url :
+				detail.achievement.badge_url;
+		}
+		DrawRaBadgeImage(buf, &badge_inner, badge_url);
 
 		char summary[128];
 		const char *state = detail.achievement.unlocked != 0 ?
@@ -2033,6 +2192,11 @@ void App::Deinit()
 		delete ra_overlay;
 		ra_overlay = NULL;
 	}
+	if (ra_image_http_client != nullptr) {
+		ra_image_http_client->CancelAll();
+		ra_image_http_client.reset();
+	}
+	ra_badge_images.clear();
 #endif
 
 	// virtual machine
@@ -4271,6 +4435,8 @@ Xm8Ra::RaOverlayAchievementListSnapshot App::MakeRaAchievementsOverlaySnapshot()
 			item.title = source.title;
 			item.description = source.description;
 			item.measured_progress = source.measured_progress;
+			item.badge_url = source.badge_url;
+			item.badge_locked_url = source.badge_locked_url;
 			item.bucket_label = source.bucket_label;
 			overlay_snapshot.achievements.push_back(item);
 		}

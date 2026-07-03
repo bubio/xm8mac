@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace Xm8RaBuildInfo {
 
@@ -15,6 +16,8 @@ int SqliteThreadsafe();
 int SqliteCompileOptionUsed(const char *option);
 bool ProbeImage(const uint8_t *data, size_t size, int *width, int *height,
 	int *components);
+bool DecodeImageRgba(const uint8_t *data, size_t size, int *width,
+	int *height, std::vector<uint8_t> *rgba);
 
 } // namespace Xm8RaBuildInfo
 

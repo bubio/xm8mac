@@ -78,6 +78,8 @@ struct RaOverlayAchievementItem {
 	std::string title;
 	std::string description;
 	std::string measured_progress;
+	std::string badge_url;
+	std::string badge_locked_url;
 	std::string bucket_label;
 };
 

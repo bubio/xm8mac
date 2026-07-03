@@ -53,4 +53,29 @@ bool ProbeImage(const uint8_t *data, size_t size, int *width, int *height,
 		components) != 0;
 }
 
+bool DecodeImageRgba(const uint8_t *data, size_t size, int *width,
+	int *height, std::vector<uint8_t> *rgba)
+{
+	if (data == nullptr || size > static_cast<size_t>(INT_MAX) ||
+		width == nullptr || height == nullptr || rgba == nullptr) {
+		return false;
+	}
+
+	int components = 0;
+	unsigned char *decoded = stbi_load_from_memory(data,
+		static_cast<int>(size), width, height, &components, 4);
+	if (decoded == nullptr || *width <= 0 || *height <= 0) {
+		if (decoded != nullptr) {
+			stbi_image_free(decoded);
+		}
+		return false;
+	}
+
+	const size_t decoded_size = static_cast<size_t>(*width) *
+		static_cast<size_t>(*height) * 4U;
+	rgba->assign(decoded, decoded + decoded_size);
+	stbi_image_free(decoded);
+	return true;
+}
+
 } // namespace Xm8RaBuildInfo

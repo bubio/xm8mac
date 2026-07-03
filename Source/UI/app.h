@@ -17,6 +17,11 @@
 #include "clidisk.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_library.h"
@@ -204,6 +209,13 @@ private:
 										// begin RA session for mounted drive 1
 	void ProcessRaService(bool emulation_frame);
 										// progress RA service
+	void ProcessRaImages();
+										// progress RA badge image HTTP
+	void RequestRaBadgeImage(const std::string& url);
+										// request RA badge image if needed
+	void DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
+		const std::string& url);
+										// draw RA badge image if cached
 	Xm8Ra::RaOverlayAchievementListSnapshot MakeRaAchievementsOverlaySnapshot() const;
 										// build achievements overlay snapshot
 	void RefreshRaAchievementsOverlay();
@@ -294,6 +306,25 @@ private:
 										// RA client service
 	Xm8Ra::RaOverlay *ra_overlay;
 										// RA overlay state
+	std::unique_ptr<Xm8Ra::RaHttpClient> ra_image_http_client;
+										// RA image HTTP client
+	struct RaBadgeImage {
+		enum State {
+			NotRequested,
+			Pending,
+			Ready,
+			Failed
+		};
+		State state = NotRequested;
+		uint64_t request_id = 0;
+		int width = 0;
+		int height = 0;
+		std::vector<uint32_t> pixels;
+	};
+	std::map<std::string, RaBadgeImage> ra_badge_images;
+										// RA badge image memory cache
+	uint64_t ra_next_image_request_id;
+										// RA image request id allocator
 	bool ra_mode_enabled;
 										// RA mode setting
 	bool ra_saved_login_started;
