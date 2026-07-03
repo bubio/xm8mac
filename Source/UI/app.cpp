@@ -44,10 +44,8 @@
 #include "clidisk.h"
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_build_info.h"
-#ifdef __APPLE__
-#include "ra_http_mac.h"
-#endif
 #include "ra_media_probe.h"
+#include "ra_platform.h"
 #include "ra_paths.h"
 #endif
 #ifdef __ANDROID__
@@ -788,15 +786,16 @@ bool App::EnsureRaService(std::string *error)
 	Xm8Ra::RaServiceOptions ra_options;
 	ra_options.ra_root = ra_library->Root();
 	ra_options.user_agent = MakeRaUserAgent();
-#ifdef __APPLE__
+	ra_options.credentials_store =
+		Xm8Ra::CreatePlatformRaCredentialsStore(ra_options.ra_root);
 	ra_options.http_client =
-		Xm8Ra::CreateMacRaHttpClient(ra_options.user_agent);
-#else
-	if (error != NULL) {
-		*error = "RA HTTP backend is not available";
+		Xm8Ra::CreatePlatformRaHttpClient(ra_options.user_agent);
+	if (ra_options.http_client == nullptr) {
+		if (error != NULL) {
+			*error = "RA HTTP backend is not available";
+		}
+		return false;
 	}
-	return false;
-#endif
 	ra_options.host_read_memory = ReadRaMemoryFromApp;
 	ra_options.host_read_memory_userdata = this;
 	ra_service = new Xm8Ra::RaService(std::move(ra_options));
@@ -1156,16 +1155,12 @@ void App::RequestRaBadgeImage(const std::string& url)
 	}
 
 	if (ra_image_http_client == nullptr) {
-#ifdef __APPLE__
-		ra_image_http_client = Xm8Ra::CreateMacRaHttpClient(MakeRaUserAgent());
+		ra_image_http_client =
+			Xm8Ra::CreatePlatformRaHttpClient(MakeRaUserAgent());
 		if (ra_image_http_client == nullptr) {
 			image.state = RaBadgeImage::Failed;
 			return;
 		}
-#else
-		image.state = RaBadgeImage::Failed;
-		return;
-#endif
 	}
 
 	Xm8Ra::RaHttpRequest request;

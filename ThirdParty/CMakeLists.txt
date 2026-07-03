@@ -78,29 +78,44 @@ target_link_libraries(xm8_ra_dependencies INTERFACE
 )
 
 add_library(xm8_ra_core OBJECT
-  ${PROJECT_SOURCE_DIR}/Source/RA/ra_build_info.cpp
-  ${PROJECT_SOURCE_DIR}/Source/RA/ra_credentials.cpp
-  ${PROJECT_SOURCE_DIR}/Source/RA/ra_library.cpp
-  ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_probe.cpp
-  ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_store.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_overlay.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_paths.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_rc_client_http.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_service.cpp
 )
+
+add_library(xm8_ra_platform OBJECT
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_credentials.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_platform.cpp
+)
 if(APPLE)
-  target_sources(xm8_ra_core PRIVATE
+  target_sources(xm8_ra_platform PRIVATE
     ${PROJECT_SOURCE_DIR}/Source/RA/ra_http_mac.mm
   )
 endif()
-target_include_directories(xm8_ra_core
+
+add_library(xm8_ra_media_xm8 OBJECT
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_build_info.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_library.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_probe.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_media_store.cpp
+)
+
+foreach(_ra_target xm8_ra_core xm8_ra_platform xm8_ra_media_xm8)
+  target_include_directories(${_ra_target}
+    PUBLIC ${PROJECT_SOURCE_DIR}/Source/RA
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rcheevos/src
+  )
+  target_link_libraries(${_ra_target} PRIVATE xm8_ra_dependencies)
+  target_compile_definitions(${_ra_target} PUBLIC XM8_ENABLE_RETROACHIEVEMENTS=1)
+endforeach()
+
+target_include_directories(xm8_ra_media_xm8
   PUBLIC ${PROJECT_SOURCE_DIR}/Source/RA
   PRIVATE
     ${PROJECT_SOURCE_DIR}/Source/UI
     ${CMAKE_CURRENT_SOURCE_DIR}/rcheevos/src
 )
-target_link_libraries(xm8_ra_core PRIVATE xm8_ra_dependencies)
-target_compile_definitions(xm8_ra_core PUBLIC XM8_ENABLE_RETROACHIEVEMENTS=1)
 if(APPLE)
   target_link_libraries(xm8_ra_dependencies INTERFACE
     "-framework Foundation"
@@ -110,11 +125,13 @@ elseif(UNIX AND NOT ANDROID)
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(LIBSECRET REQUIRED IMPORTED_TARGET libsecret-1)
   target_link_libraries(xm8_ra_dependencies INTERFACE PkgConfig::LIBSECRET)
-  target_compile_definitions(xm8_ra_core PRIVATE XM8_RA_HAS_LIBSECRET=1)
+  target_compile_definitions(xm8_ra_platform PRIVATE XM8_RA_HAS_LIBSECRET=1)
 endif()
 
 function(xm8_enable_ra_for_target target_name)
   target_sources(${target_name} PRIVATE $<TARGET_OBJECTS:xm8_ra_core>)
+  target_sources(${target_name} PRIVATE $<TARGET_OBJECTS:xm8_ra_platform>)
+  target_sources(${target_name} PRIVATE $<TARGET_OBJECTS:xm8_ra_media_xm8>)
   target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/Source/RA)
   target_link_libraries(${target_name} PRIVATE xm8_ra_dependencies)
   target_compile_definitions(${target_name} PRIVATE XM8_ENABLE_RETROACHIEVEMENTS=1)

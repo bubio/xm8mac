@@ -325,6 +325,8 @@ if(BUILD_TESTING)
       Tests/ra_dependency_test.cpp
       Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
     )
     target_link_libraries(ra_dependency_test PRIVATE xm8_ra_dependencies)
     target_include_directories(ra_dependency_test PRIVATE Source/RA Source/UI)
@@ -337,6 +339,8 @@ if(BUILD_TESTING)
       Tests/Fixtures/d88_fixture.cpp
       Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
     )
     target_link_libraries(ra_media_probe_test PRIVATE xm8_ra_dependencies)
     target_include_directories(ra_media_probe_test PRIVATE
@@ -365,6 +369,8 @@ if(BUILD_TESTING)
       Tests/Fixtures/d88_fixture.cpp
       Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
     )
     target_link_libraries(ra_library_store_test PRIVATE xm8_ra_dependencies)
     target_include_directories(ra_library_store_test PRIVATE
@@ -381,6 +387,8 @@ if(BUILD_TESTING)
       Source/RA/ra_http_fake.cpp
       Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
     )
     target_link_libraries(ra_credentials_http_test PRIVATE xm8_ra_dependencies)
     target_include_directories(ra_credentials_http_test PRIVATE
@@ -398,6 +406,8 @@ if(BUILD_TESTING)
       Source/RA/ra_http_fake.cpp
       Source/UI/m3u.cpp
       $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
     )
     target_link_libraries(ra_service_test PRIVATE xm8_ra_dependencies)
     target_include_directories(ra_service_test PRIVATE

@@ -173,6 +173,7 @@ struct RaEvent {
 struct RaServiceOptions {
 	std::string ra_root;
 	std::unique_ptr<RaHttpClient> http_client;
+	std::unique_ptr<RaCredentialsStore> credentials_store;
 	rc_client_read_memory_func_t read_memory = nullptr;
 	RaHostReadMemoryFunc host_read_memory = nullptr;
 	void *host_read_memory_userdata = nullptr;
@@ -241,8 +242,8 @@ private:
 	void AbortLoginInProgress();
 
 	std::unique_ptr<RaHttpClient> http_client_;
+	std::unique_ptr<RaCredentialsStore> credentials_;
 	std::unique_ptr<RaRcClientHttpBridge> http_bridge_;
-	RaCredentialsStore credentials_;
 	rc_client_t *client_ = nullptr;
 	RaHostReadMemoryFunc host_read_memory_ = nullptr;
 	void *host_read_memory_userdata_ = nullptr;

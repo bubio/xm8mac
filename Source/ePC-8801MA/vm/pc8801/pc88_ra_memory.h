@@ -1,13 +1,16 @@
 #ifndef PC88_RA_MEMORY_H
 #define PC88_RA_MEMORY_H
 
-#include "../../common.h"
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 
-#include <cstddef>
-#include <cstring>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-inline size_t ReadPc88RaInspectionMemory(const uint8 *ram, const uint8 *tvram,
-	uint32 addr, uint8 *buffer, size_t count)
+static inline size_t ReadPc88RaInspectionMemory(const uint8_t *ram,
+	const uint8_t *tvram, uint32_t addr, uint8_t *buffer, size_t count)
 {
 	if (ram == NULL || tvram == NULL || buffer == NULL) {
 		return 0;
@@ -19,8 +22,8 @@ inline size_t ReadPc88RaInspectionMemory(const uint8 *ram, const uint8 *tvram,
 			break;
 		}
 
-		const uint32 current = addr + static_cast<uint32>(copied);
-		const uint8 *source = NULL;
+		const uint32_t current = addr + (uint32_t)copied;
+		const uint8_t *source = NULL;
 		size_t available = 0;
 
 		if (current < 0x10000) {
@@ -42,5 +45,9 @@ inline size_t ReadPc88RaInspectionMemory(const uint8 *ram, const uint8 *tvram,
 	}
 	return copied;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

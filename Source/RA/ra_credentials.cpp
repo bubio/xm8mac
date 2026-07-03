@@ -481,17 +481,17 @@ bool DeletePlatformToken(const std::string& username, std::string *error)
 
 } // namespace
 
-RaCredentialsStore::RaCredentialsStore(const std::string& ra_root)
+RaPlatformCredentialsStore::RaPlatformCredentialsStore(const std::string& ra_root)
 	: ra_root_(ra_root)
 {
 }
 
-std::string RaCredentialsStore::UsernameHintPath() const
+std::string RaPlatformCredentialsStore::UsernameHintPath() const
 {
 	return JoinPath(ra_root_, "credentials_user.txt");
 }
 
-bool RaCredentialsStore::Save(const RaCredentials& credentials,
+bool RaPlatformCredentialsStore::Save(const RaCredentials& credentials,
 	std::string *error)
 {
 	if (!ValidateCredentials(credentials, error)) {
@@ -508,7 +508,7 @@ bool RaCredentialsStore::Save(const RaCredentials& credentials,
 	return true;
 }
 
-bool RaCredentialsStore::Load(RaCredentials *credentials,
+bool RaPlatformCredentialsStore::Load(RaCredentials *credentials,
 	std::string *error) const
 {
 	if (credentials == nullptr) {
@@ -530,7 +530,7 @@ bool RaCredentialsStore::Load(RaCredentials *credentials,
 	return true;
 }
 
-bool RaCredentialsStore::Delete(std::string *error)
+bool RaPlatformCredentialsStore::Delete(std::string *error)
 {
 	std::string username;
 	std::string ignored_error;
@@ -544,7 +544,7 @@ bool RaCredentialsStore::Delete(std::string *error)
 	return true;
 }
 
-void RaCredentialsStore::ClearSecret(RaCredentials *credentials) const
+void RaPlatformCredentialsStore::ClearSecret(RaCredentials *credentials) const
 {
 	if (credentials == nullptr) {
 		return;
@@ -555,6 +555,13 @@ void RaCredentialsStore::ClearSecret(RaCredentials *credentials) const
 		token[i] = 0;
 	}
 	credentials->token.clear();
+}
+
+std::unique_ptr<RaCredentialsStore> CreatePlatformRaCredentialsStore(
+	const std::string& ra_root)
+{
+	return std::unique_ptr<RaCredentialsStore>(
+		new RaPlatformCredentialsStore(ra_root));
 }
 
 } // namespace Xm8Ra

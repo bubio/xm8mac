@@ -202,10 +202,14 @@ void CopySubset(RaSubsetEvent *target, const rc_client_subset_t *subset)
 
 RaService::RaService(RaServiceOptions options)
 	: http_client_(std::move(options.http_client)),
-	  credentials_(options.ra_root)
+	  credentials_(std::move(options.credentials_store))
 {
 	if (http_client_ == nullptr) {
 		SetFailed(RC_INVALID_STATE, "HTTP client is required");
+		return;
+	}
+	if (credentials_ == nullptr) {
+		SetFailed(RC_INVALID_STATE, "credentials store is required");
 		return;
 	}
 
@@ -234,7 +238,8 @@ RaService::~RaService()
 
 bool RaService::IsReady() const
 {
-	return client_ != nullptr && http_bridge_ != nullptr;
+	return client_ != nullptr && http_bridge_ != nullptr &&
+		credentials_ != nullptr;
 }
 
 bool RaService::BeginLoginWithPassword(const std::string& username,
@@ -279,7 +284,7 @@ bool RaService::BeginLoginWithSavedToken(std::string *error)
 
 	AbortLoginInProgress();
 	RaCredentials credentials;
-	if (!credentials_.Load(&credentials, error)) {
+	if (!credentials_->Load(&credentials, error)) {
 		login_ = RaLoginSnapshot();
 		login_.state = RaLoginState::LoggedOut;
 		return false;
@@ -293,7 +298,7 @@ bool RaService::BeginLoginWithSavedToken(std::string *error)
 	rc_client_async_handle_t *handle = rc_client_begin_login_with_token(
 		client_, credentials.username.c_str(), credentials.token.c_str(),
 		LoginCallback, this);
-	credentials_.ClearSecret(&credentials);
+	credentials_->ClearSecret(&credentials);
 	if (handle == nullptr && login_.state == RaLoginState::LoginPending) {
 		login_async_handle_ = nullptr;
 		SetFailed(RC_INVALID_STATE, "Saved token login did not start");
@@ -418,7 +423,7 @@ void RaService::Logout()
 	}
 
 	std::string ignored_error;
-	credentials_.Delete(&ignored_error);
+	credentials_->Delete(&ignored_error);
 
 	login_ = RaLoginSnapshot();
 	login_.state = RaLoginState::LoggedOut;
@@ -630,8 +635,10 @@ void RaService::HandleLoginCallback(int result, const char *error_message)
 	credentials.username = user->username;
 	credentials.token = user->token;
 	std::string ignored_error;
-	credentials_.Save(credentials, &ignored_error);
-	credentials_.ClearSecret(&credentials);
+	if (credentials_ != nullptr) {
+		credentials_->Save(credentials, &ignored_error);
+		credentials_->ClearSecret(&credentials);
+	}
 
 	login_kind_ = LoginKind::None;
 }
@@ -731,8 +738,10 @@ void RaService::DisableGameSession(int result, const std::string& message)
 void RaService::DeleteCredentialsForRejectedToken()
 {
 	std::string ignored_error;
-	credentials_.Delete(&ignored_error);
-	login_.credentials_deleted = true;
+	if (credentials_ != nullptr) {
+		credentials_->Delete(&ignored_error);
+		login_.credentials_deleted = true;
+	}
 }
 
 void RaService::AbortLoginInProgress()

@@ -88,7 +88,7 @@ int main()
 	) + "/xm8-ra-credentials-http-" + std::to_string(unique);
 
 	Check(MakeDirectory(base), "create test root");
-	Xm8Ra::RaCredentialsStore store(base);
+	Xm8Ra::RaPlatformCredentialsStore store(base);
 
 	std::string error;
 	Xm8Ra::RaCredentials saved;

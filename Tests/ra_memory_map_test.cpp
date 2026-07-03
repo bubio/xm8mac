@@ -1,4 +1,5 @@
 #include <array>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 
@@ -20,16 +21,16 @@ void Check(bool condition, const char *message)
 
 int main()
 {
-	std::array<uint8, 0x10000> ram{};
-	std::array<uint8, 0x1000> tvram{};
+	std::array<uint8_t, 0x10000> ram{};
+	std::array<uint8_t, 0x1000> tvram{};
 	for (size_t i = 0; i < ram.size(); i++) {
-		ram[i] = static_cast<uint8>(i & 0xff);
+		ram[i] = static_cast<uint8_t>(i & 0xff);
 	}
 	for (size_t i = 0; i < tvram.size(); i++) {
-		tvram[i] = static_cast<uint8>(0x80 | (i & 0x7f));
+		tvram[i] = static_cast<uint8_t>(0x80 | (i & 0x7f));
 	}
 
-	std::array<uint8, 8> buffer{};
+	std::array<uint8_t, 8> buffer{};
 
 	Check(ReadPc88RaInspectionMemory(ram.data(), tvram.data(), 0, buffer.data(),
 		4) == 4, "read RAM start");

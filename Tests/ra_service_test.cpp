@@ -96,14 +96,15 @@ int main()
 {
 	const std::string base = TemporaryRoot("xm8-ra-service");
 	Check(MakeDirectory(base), "create service test root");
-
-	Xm8Ra::RaCredentialsStore credential_store(base);
+	Xm8Ra::RaPlatformCredentialsStore credential_store(base);
 
 	{
 		auto fake_http = MakeFakeHttp();
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -143,6 +144,8 @@ int main()
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -185,6 +188,8 @@ int main()
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -221,6 +226,8 @@ int main()
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -253,6 +260,8 @@ int main()
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -279,6 +288,8 @@ int main()
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -356,6 +367,8 @@ int main()
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -393,6 +406,8 @@ int main()
 		auto fake_http = MakeFakeHttp();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -436,6 +451,8 @@ int main()
 		auto fake_http = MakeFakeHttp();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
@@ -482,6 +499,8 @@ int main()
 		auto fake_http = MakeFakeHttp();
 		Xm8Ra::RaServiceOptions options;
 		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
