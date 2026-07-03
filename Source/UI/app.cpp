@@ -37,6 +37,7 @@
 #include "input.h"
 #include "converter.h"
 #include "menu.h"
+#include "menuitem.h"
 #include "menuid.h"
 #include "diskmgr.h"
 #include "tapemgr.h"
@@ -238,6 +239,9 @@ App::App()
 	ra_overlay_mouse_target = Xm8Ra::RaOverlayLoginTarget::Username;
 	ra_overlay_finger_target_valid = false;
 	ra_overlay_finger_target = Xm8Ra::RaOverlayLoginTarget::Username;
+	ra_overlay_finger_scroll_valid = false;
+	ra_overlay_finger_scrolled = false;
+	ra_overlay_finger_scroll_y = 0;
 #endif
 
 	// flags
@@ -1136,8 +1140,7 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 		SubmitRaOverlayLogin();
 	}
 	else if (action == Xm8Ra::RaOverlayAction::Close) {
-		SDL_StopTextInput();
-		ClearRaOverlayPointerState();
+		CloseRaOverlayToMenu();
 	}
 	else {
 		UpdateRaOverlayTextInput();
@@ -1176,6 +1179,9 @@ void App::ClearRaOverlayPointerState()
 {
 	ra_overlay_mouse_target_valid = false;
 	ra_overlay_finger_target_valid = false;
+	ra_overlay_finger_scroll_valid = false;
+	ra_overlay_finger_scrolled = false;
+	ra_overlay_finger_scroll_y = 0;
 }
 
 //
@@ -1200,10 +1206,24 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
 		return false;
 	}
+	if (e->type == SDL_MOUSEWHEEL) {
+		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
+			return HandleRaOverlayAction(
+				ra_overlay->OnListScroll(-e->wheel.y));
+		}
+		return true;
+	}
 	if (e->type != SDL_MOUSEBUTTONDOWN && e->type != SDL_MOUSEBUTTONUP) {
 		return true;
 	}
 	if (e->button.button != SDL_BUTTON_LEFT) {
+		if ((e->button.button == SDL_BUTTON_RIGHT ||
+			e->button.button == SDL_BUTTON_X1) &&
+			e->type == SDL_MOUSEBUTTONUP) {
+			CloseRaOverlayToMenu();
+			return true;
+		}
 		return true;
 	}
 
@@ -1216,8 +1236,9 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 		return true;
 	}
 
-	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
-		return HandleRaOverlayAction(ra_overlay->OnAchievementPointer(x, y,
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
+		return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
 			e->type == SDL_MOUSEBUTTONUP));
 	}
 
@@ -1254,7 +1275,8 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
 		return false;
 	}
-	if (e->type != SDL_FINGERDOWN && e->type != SDL_FINGERUP) {
+	if (e->type != SDL_FINGERDOWN && e->type != SDL_FINGERUP &&
+		e->type != SDL_FINGERMOTION) {
 		return true;
 	}
 
@@ -1263,13 +1285,41 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 	if (!video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y)) {
 		if (e->type == SDL_FINGERUP) {
 			ra_overlay_finger_target_valid = false;
+			ra_overlay_finger_scroll_valid = false;
+			ra_overlay_finger_scrolled = false;
 		}
 		return true;
 	}
 
-	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
-		return HandleRaOverlayAction(ra_overlay->OnAchievementPointer(x, y,
-			e->type == SDL_FINGERUP));
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
+		if (e->type == SDL_FINGERDOWN) {
+			ra_overlay_finger_scroll_valid = true;
+			ra_overlay_finger_scrolled = false;
+			ra_overlay_finger_scroll_y = y;
+			return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
+				false));
+		}
+		if (e->type == SDL_FINGERMOTION) {
+			if (!ra_overlay_finger_scroll_valid) {
+				ra_overlay_finger_scroll_valid = true;
+				ra_overlay_finger_scroll_y = y;
+			}
+			const int delta_y = ra_overlay_finger_scroll_y - y;
+			const int rows = delta_y / MENUITEM_HEIGHT;
+			if (rows != 0) {
+				ra_overlay_finger_scroll_y += rows * MENUITEM_HEIGHT;
+				ra_overlay_finger_scrolled = true;
+				return HandleRaOverlayAction(
+					ra_overlay->OnListScroll(rows));
+			}
+			return true;
+		}
+		const bool activate = !ra_overlay_finger_scrolled;
+		ra_overlay_finger_scroll_valid = false;
+		ra_overlay_finger_scrolled = false;
+		return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
+			activate));
 	}
 
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
@@ -1380,6 +1430,13 @@ bool App::SubmitRaOverlayLogin()
 	return true;
 }
 
+namespace {
+
+void CopyClippedMenuText(char *target, size_t target_size,
+	const char *source, int width);
+
+} // namespace
+
 //
 // DrawRaOverlay()
 // draw RA notice overlay
@@ -1389,105 +1446,181 @@ void App::DrawRaOverlay()
 	if (!ra_mode_enabled || ra_overlay == NULL) {
 		return;
 	}
-	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
+		const bool achievements_screen =
+			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements;
 		const Xm8Ra::RaOverlayAchievementListSnapshot achievements =
-			ra_overlay->AchievementListSnapshot();
-		SDL_Rect panel = {64, 54, 512, 292};
-		Uint32 *buf = video->GetFrameBuf(0);
-		font->DrawFillRect(buf, &panel,
-			RGB_COLOR(16, 16, 16) | 0xe0000000);
-		font->DrawRect(buf, &panel,
-			RGB_COLOR(255, 255, 255) | 0xe0000000,
-			RGB_COLOR(16, 16, 16) | 0xe0000000);
+			achievements_screen ? ra_overlay->AchievementListSnapshot() :
+				Xm8Ra::RaOverlayAchievementListSnapshot();
+		const Xm8Ra::RaOverlayLeaderboardListSnapshot leaderboards =
+			achievements_screen ? Xm8Ra::RaOverlayLeaderboardListSnapshot() :
+				ra_overlay->LeaderboardListSnapshot();
+		const size_t selected_index = achievements_screen ?
+			achievements.selected_index : leaderboards.selected_index;
+		const size_t first_visible_index = achievements_screen ?
+			achievements.first_visible_index : leaderboards.first_visible_index;
+		const size_t item_count = achievements_screen ?
+			achievements.achievements.size() : leaderboards.leaderboards.size();
+		const std::string status_message = achievements_screen ?
+			achievements.status_message : leaderboards.status_message;
 
-		SDL_Rect title = {panel.x, panel.y + 12, panel.w, 24};
-		font->DrawSjisCenterOr(buf, &title, "RetroAchievements",
-			RGB_COLOR(255, 255, 255));
+		video->SetMenuMode(true);
+		Uint32 *buf = video->GetMenuFrame();
+		const Uint32 alpha = (Uint32)setting->GetMenuAlpha() << 24;
+		Uint32 fore = MENUITEM_FORE | alpha;
+		Uint32 back = MENUITEM_BACK | alpha;
+		SDL_Rect rect = {
+			(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
+			(SCREEN_HEIGHT / 2) - ((MENUITEM_HEIGHT * MENUITEM_LINES) / 2),
+			MENUITEM_WIDTH,
+			MENUITEM_HEIGHT * MENUITEM_LINES
+		};
+		font->DrawFillRect(buf, &rect, MENUITEM_BACK | 0x00000000);
+		SDL_Rect detail_clear = {rect.x, rect.y + rect.h, rect.w,
+			MENUITEM_HEIGHT};
+		font->DrawFillRect(buf, &detail_clear, MENUITEM_BACK | 0x00000000);
 
-		char subtitle[96];
-		if (!achievements.game_title.empty()) {
-			std::snprintf(subtitle, sizeof(subtitle), "%s",
-				achievements.game_title.c_str());
-		}
-		else {
-			std::snprintf(subtitle, sizeof(subtitle), "%s",
-				"Achievements");
-		}
-		SDL_Rect subtitle_rect = {panel.x + 24, panel.y + 42,
-			panel.w - 48, 22};
-		font->DrawSjisLeftOr(buf, &subtitle_rect, subtitle,
-			RGB_COLOR(220, 220, 220));
+		SDL_Rect title_rect = {rect.x, rect.y, rect.w, MENUITEM_HEIGHT};
+		font->DrawFillRect(buf, &title_rect, fore);
+		title_rect.x++;
+		title_rect.y++;
+		title_rect.w -= 2;
+		title_rect.h -= 2;
+		font->DrawFillRect(buf, &title_rect, MENUITEM_TITLE | alpha);
+		font->DrawSjisCenterOr(buf, &title_rect,
+			achievements_screen ? "<< Achievements >>" :
+				"<< Leaderboards >>",
+			fore);
 
-		if (!achievements.status_message.empty()) {
-			SDL_Rect status_rect = {panel.x + 24, panel.y + 126,
-				panel.w - 48, 24};
-			font->DrawSjisCenterOr(buf, &status_rect,
-				achievements.status_message.c_str(),
-				RGB_COLOR(255, 192, 96));
-		}
-		else {
-			const size_t max_items = std::min<size_t>(
-				achievements.achievements.size() -
-					achievements.first_visible_index, 5);
-			for (size_t i = 0; i < max_items; ++i) {
-				const size_t item_index =
-					achievements.first_visible_index + i;
+		const size_t visible_rows = MENUITEM_LINES - 1;
+		const bool show_status = item_count == 0 || !status_message.empty();
+		const size_t remaining_rows = item_count - first_visible_index;
+		const size_t rows = show_status ? 1 :
+			(remaining_rows < visible_rows ? remaining_rows : visible_rows);
+		for (size_t i = 0; i < rows; ++i) {
+			const size_t item_index = first_visible_index + i;
+			SDL_Rect row = {rect.x,
+				rect.y + MENUITEM_HEIGHT * (static_cast<int>(i) + 1),
+				rect.w, MENUITEM_HEIGHT};
+			font->DrawFillRect(buf, &row, fore);
+
+			bool reverse = false;
+			if (!show_status && item_index == selected_index) {
+				const Uint32 diff = SDL_GetTicks();
+				if ((diff & 0x0200) == 0) {
+					reverse = true;
+				}
+			}
+			row.x++;
+			row.y++;
+			row.w -= 2;
+			row.h -= 2;
+			Uint32 row_fore = fore;
+			Uint32 row_back = back;
+			if (reverse) {
+				row_fore = MENUITEM_BACK | alpha;
+				row_back = MENUITEM_FORE | alpha;
+			}
+			font->DrawFillRect(buf, &row, row_back);
+
+			char line[160];
+			if (show_status) {
+				std::snprintf(line, sizeof(line), "%s",
+					status_message.empty() ? "No items" :
+						status_message.c_str());
+			}
+			else if (achievements_screen) {
 				const Xm8Ra::RaOverlayAchievementItem& item =
 					achievements.achievements[item_index];
-				SDL_Rect row = {panel.x + 24,
-					panel.y + 72 + static_cast<int>(i) * 32,
-					panel.w - 48, 28};
-				const bool selected =
-					item_index == achievements.selected_index;
-				font->DrawRect(buf, &row,
-					selected ? RGB_COLOR(255, 255, 128) :
-						RGB_COLOR(96, 96, 96),
-					RGB_COLOR(32, 32, 32) | 0xe0000000);
-
-				char line[128];
 				const char *mark = item.unlocked != 0 ? "[*]" : "[ ]";
 				std::snprintf(line, sizeof(line), "%s %s  %u pts",
 					mark, item.title.c_str(), item.points);
-				SDL_Rect text_rect = {row.x + 8, row.y + 4,
-					row.w - 16, 20};
-				font->DrawSjisLeftOr(buf, &text_rect, line,
-					item.unlocked != 0 ? RGB_COLOR(200, 255, 200) :
-						RGB_COLOR(255, 255, 255));
 			}
-			char count[64];
-			std::snprintf(count, sizeof(count), "%u/%u",
-				static_cast<unsigned int>(achievements.selected_index + 1),
-				static_cast<unsigned int>(achievements.achievements.size()));
-			SDL_Rect count_rect = {panel.x + panel.w - 96, panel.y + 42,
-				72, 22};
-			font->DrawSjisCenterOr(buf, &count_rect, count,
-				RGB_COLOR(200, 200, 200));
+			else {
+				std::snprintf(line, sizeof(line), "%s",
+					leaderboards.leaderboards[item_index].c_str());
+			}
+			SDL_Rect text_rect = {row.x + 24, row.y, row.w - 48, row.h};
+			char clipped_line[160];
+			CopyClippedMenuText(clipped_line, sizeof(clipped_line), line,
+				text_rect.w);
+			font->DrawSjisBoldOr(buf, &text_rect, clipped_line, row_fore);
 
-			if (achievements.selected_index <
-				achievements.achievements.size()) {
+			unsigned char arrow[3] = {0, 0, 0};
+			if (!show_status && first_visible_index > 0 && i == 0) {
+				arrow[0] = 0x81;
+				arrow[1] = 0xaa;
+			}
+			else if (!show_status &&
+				item_count > first_visible_index + visible_rows &&
+				i == visible_rows - 1) {
+				arrow[0] = 0x81;
+				arrow[1] = 0xab;
+			}
+			if (arrow[0] != 0) {
+				SDL_Rect arrow_rect = row;
+				arrow_rect.x = row.x + row.w - 16;
+				font->DrawSjisBoldOr(buf, &arrow_rect,
+					(const char*)arrow, row_fore);
+			}
+		}
+
+		if (!show_status && item_count > 0) {
+			const std::string game_title = achievements_screen ?
+				achievements.game_title : leaderboards.game_title;
+			char detail[192];
+			if (achievements_screen &&
+				selected_index < achievements.achievements.size()) {
 				const Xm8Ra::RaOverlayAchievementItem& selected =
-					achievements.achievements[achievements.selected_index];
-				char detail[160];
+					achievements.achievements[selected_index];
 				if (!selected.measured_progress.empty()) {
-					std::snprintf(detail, sizeof(detail), "%s  %s",
+					std::snprintf(detail, sizeof(detail), "%u/%u  %s  %s",
+						static_cast<unsigned int>(selected_index + 1),
+						static_cast<unsigned int>(item_count),
 						selected.description.c_str(),
 						selected.measured_progress.c_str());
 				}
 				else {
-					std::snprintf(detail, sizeof(detail), "%s",
+					std::snprintf(detail, sizeof(detail), "%u/%u  %s",
+						static_cast<unsigned int>(selected_index + 1),
+						static_cast<unsigned int>(item_count),
 						selected.description.c_str());
 				}
-				SDL_Rect detail_rect = {panel.x + 24, panel.y + 232,
-					panel.w - 48, 22};
-				font->DrawSjisLeftOr(buf, &detail_rect, detail,
-					RGB_COLOR(200, 200, 200));
+			}
+			else {
+				std::snprintf(detail, sizeof(detail), "%u/%u  %s",
+					static_cast<unsigned int>(selected_index + 1),
+					static_cast<unsigned int>(item_count),
+					game_title.c_str());
+			}
+			SDL_Rect detail_rect = {rect.x, rect.y + rect.h + 6,
+				rect.w, 22};
+			font->DrawFillRect(buf, &detail_rect, MENUITEM_BACK | alpha);
+			detail_rect.x += 8;
+			detail_rect.w -= 16;
+			char clipped_detail[192];
+			CopyClippedMenuText(clipped_detail, sizeof(clipped_detail),
+				detail, detail_rect.w);
+			font->DrawSjisLeftOr(buf, &detail_rect, clipped_detail, fore);
+		}
+		else {
+			const std::string game_title = achievements_screen ?
+				achievements.game_title : leaderboards.game_title;
+			if (!game_title.empty()) {
+				SDL_Rect detail_rect = {rect.x, rect.y + rect.h + 6,
+					rect.w, 22};
+				font->DrawFillRect(buf, &detail_rect,
+					MENUITEM_BACK | alpha);
+				detail_rect.x += 8;
+				detail_rect.w -= 16;
+				char clipped_title[192];
+				CopyClippedMenuText(clipped_title, sizeof(clipped_title),
+					game_title.c_str(), detail_rect.w);
+				font->DrawSjisLeftOr(buf, &detail_rect, clipped_title,
+					fore);
 			}
 		}
-
-		SDL_Rect hint = {panel.x + 24, panel.y + 250, panel.w - 48, 22};
-		font->DrawSjisLeftOr(buf, &hint,
-			"Up/Down: Select  Esc: Close  Click outside: Close",
-			RGB_COLOR(200, 200, 200));
 		video->DrawCtrl();
 	}
 	else if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
@@ -2537,6 +2670,11 @@ void App::Poll(SDL_Event *e)
 			SDL_ShowCursor(SDL_ENABLE);
 			mouse_tick = SDL_GetTicks();
 		}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (HandleRaOverlayMouse(e)) {
+			break;
+		}
+#endif
 		if (app_menu == true) {
 			menu->OnMouseWheel(e);
 		}
@@ -2685,7 +2823,7 @@ void App::Poll(SDL_Event *e)
 
 	case SDL_FINGERMOTION:
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-		if (ra_overlay != NULL && ra_overlay->IsBlocking()) {
+		if (HandleRaOverlayFinger(e)) {
 			break;
 		}
 #endif
@@ -3683,19 +3821,61 @@ const char *RaLoginStateText(Xm8Ra::RaLoginState state)
 	return "unknown";
 }
 
-const char *RaGameStateText(Xm8Ra::RaGameSessionState state)
+std::string RaGameStatusMessage(Xm8Ra::RaLoginState login_state,
+	Xm8Ra::RaGameSessionState game_state)
 {
-	switch (state) {
-	case Xm8Ra::RaGameSessionState::NoGame:
-		return "none";
-	case Xm8Ra::RaGameSessionState::LoadPending:
-		return "loading";
-	case Xm8Ra::RaGameSessionState::Loaded:
-		return "loaded";
-	case Xm8Ra::RaGameSessionState::DisabledForSession:
-		return "disabled";
+	if (login_state == Xm8Ra::RaLoginState::LoggedOut) {
+		return "RA login required";
 	}
-	return "unknown";
+	if (login_state == Xm8Ra::RaLoginState::LoginPending) {
+		return "RA login pending";
+	}
+	if (login_state == Xm8Ra::RaLoginState::Failed) {
+		return "RA login failed";
+	}
+	if (game_state == Xm8Ra::RaGameSessionState::LoadPending) {
+		return "RA game loading";
+	}
+	if (game_state == Xm8Ra::RaGameSessionState::DisabledForSession) {
+		return "Unsupported RA game";
+	}
+	return "No RA game loaded";
+}
+
+void CopyClippedMenuText(char *target, size_t target_size,
+	const char *source, int width)
+{
+	if (target == nullptr || target_size == 0) {
+		return;
+	}
+	target[0] = '\0';
+	if (source == nullptr || width <= 0) {
+		return;
+	}
+
+	const size_t max_chars = static_cast<size_t>(width / 8);
+	if (max_chars == 0) {
+		return;
+	}
+	const size_t length = std::strlen(source);
+	if (length <= max_chars && length < target_size) {
+		std::snprintf(target, target_size, "%s", source);
+		return;
+	}
+
+	const char *ellipsis = "...";
+	if (max_chars <= 3 || target_size <= 4) {
+		const size_t copy =
+			max_chars < target_size - 1 ? max_chars : target_size - 1;
+		std::memcpy(target, source, copy);
+		target[copy] = '\0';
+		return;
+	}
+
+	const size_t copy =
+		max_chars - 3 < target_size - 4 ? max_chars - 3 : target_size - 4;
+	std::memcpy(target, source, copy);
+	std::snprintf(target + copy, target_size - copy, "%s", ellipsis);
 }
 
 } // namespace
@@ -3722,14 +3902,8 @@ Xm8Ra::RaOverlayAchievementListSnapshot App::MakeRaAchievementsOverlaySnapshot()
 				ra_service->LoginSnapshot();
 			const Xm8Ra::RaGameSessionSnapshot game =
 				ra_service->GameSessionSnapshot();
-			char status[160];
-			const std::string pending = ra_pending_game_hash.empty() ?
-				"-" : ra_pending_game_hash.substr(0, 8);
-			std::snprintf(status, sizeof(status),
-				"No RA game loaded  login:%s game:%s pending:%s",
-				RaLoginStateText(login.state), RaGameStateText(game.state),
-				pending.c_str());
-			overlay_snapshot.status_message = status;
+			overlay_snapshot.status_message =
+				RaGameStatusMessage(login.state, game.state);
 		}
 		else if (!service_snapshot.has_achievements) {
 			overlay_snapshot.status_message = "No achievements";
@@ -3789,10 +3963,46 @@ void App::OpenRaAchievementsOverlay()
 //
 void App::OpenRaLeaderboardsOverlay()
 {
+	if (ra_overlay == NULL) {
+		AddRaNotice("RA: overlay unavailable");
+		return;
+	}
+
+	Xm8Ra::RaOverlayLeaderboardListSnapshot snapshot;
+	if (ra_service == NULL) {
+		snapshot.status_message = "RA service unavailable";
+	}
+	else {
+		const Xm8Ra::RaAchievementListSnapshot achievements =
+			ra_service->AchievementListSnapshot();
+		snapshot.game_loaded = achievements.game_loaded;
+		snapshot.game_title = achievements.game_title;
+		snapshot.status_message = achievements.game_loaded ?
+			"Leaderboards not implemented" : "No RA game loaded";
+	}
+
+	ra_overlay->OpenLeaderboards(snapshot);
+	ra_overlay_joystick_prev = 0;
+	ClearRaOverlayPointerState();
+	SDL_StopTextInput();
 	if (app_menu == true) {
 		LeaveMenu(false);
 	}
-	AddRaNotice("RA: leaderboards not implemented");
+}
+
+//
+// CloseRaOverlayToMenu()
+// close RA overlay and return to RetroAchievements menu
+//
+void App::CloseRaOverlayToMenu()
+{
+	if (ra_overlay == NULL) {
+		return;
+	}
+	ra_overlay->CloseScreen();
+	SDL_StopTextInput();
+	ClearRaOverlayPointerState();
+	EnterMenu(MENU_RA);
 }
 
 //

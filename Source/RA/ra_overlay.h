@@ -18,6 +18,7 @@ namespace Xm8Ra {
 enum class RaOverlayScreen {
 	None,
 	Achievements,
+	Leaderboards,
 	Login,
 };
 
@@ -90,6 +91,16 @@ struct RaOverlayAchievementListSnapshot {
 	std::vector<RaOverlayAchievementItem> achievements;
 };
 
+struct RaOverlayLeaderboardListSnapshot {
+	bool active = false;
+	bool game_loaded = false;
+	size_t selected_index = 0;
+	size_t first_visible_index = 0;
+	std::string game_title;
+	std::string status_message;
+	std::vector<std::string> leaderboards;
+};
+
 class RaOverlay {
 public:
 	void Clear();
@@ -102,14 +113,18 @@ public:
 	const RaOverlaySnapshot& Snapshot() const;
 
 	void OpenAchievements(const RaOverlayAchievementListSnapshot& snapshot);
+	void OpenLeaderboards(const RaOverlayLeaderboardListSnapshot& snapshot);
 	void OpenLogin(const std::string& username = std::string());
 	bool IsBlocking() const;
 	RaOverlayScreen Screen() const;
 	RaOverlayAchievementListSnapshot AchievementListSnapshot() const;
+	RaOverlayLeaderboardListSnapshot LeaderboardListSnapshot() const;
 	RaOverlayLoginSnapshot LoginSnapshot() const;
 	RaOverlayAction OnTextInput(const char *text);
 	RaOverlayAction OnControlKey(RaOverlayKey key);
 	RaOverlayAction OnAchievementPointer(int x, int y, bool activate);
+	RaOverlayAction OnListPointer(int x, int y, bool activate);
+	RaOverlayAction OnListScroll(int delta);
 	RaOverlayAction OnLoginTarget(RaOverlayLoginTarget target, bool activate);
 	bool LoginTargetAt(int x, int y, RaOverlayLoginTarget *target) const;
 	RaOverlayAction OnLoginPointer(int x, int y, bool activate);
@@ -118,9 +133,10 @@ public:
 	void CloseScreen();
 
 private:
-	void MoveAchievementSelection(int delta);
-	bool AchievementIndexAt(int x, int y, size_t *index) const;
-	void NormalizeAchievementSelection();
+	void MoveListSelection(int delta);
+	bool ListIndexAt(int x, int y, size_t *index) const;
+	void NormalizeListSelection();
+	size_t ListItemCount() const;
 	void MoveLoginFocus(int delta);
 	bool IsLoginTextFocused() const;
 	void SetLoginFieldFocus(RaOverlayLoginField field);
@@ -134,6 +150,7 @@ private:
 	uint32_t notice_until_ms_ = 0;
 	RaOverlaySnapshot snapshot_;
 	RaOverlayAchievementListSnapshot achievements_;
+	RaOverlayLeaderboardListSnapshot leaderboards_;
 	RaOverlayScreen screen_ = RaOverlayScreen::None;
 	RaOverlayLoginField login_field_ = RaOverlayLoginField::Username;
 	RaOverlayLoginTarget login_focus_ = RaOverlayLoginTarget::Username;

@@ -130,6 +130,8 @@ public:
 										// open RA achievements overlay
 	void OpenRaLeaderboardsOverlay();
 										// open RA leaderboards overlay
+	void CloseRaOverlayToMenu();
+										// close RA overlay and return to RA menu
 	bool IsRaLoggedIn() const;
 										// get RA login state
 	void LogoutRa();
@@ -310,6 +312,12 @@ private:
 										// RA touch pressed target valid
 	Xm8Ra::RaOverlayLoginTarget ra_overlay_finger_target;
 										// RA touch pressed target
+	bool ra_overlay_finger_scroll_valid;
+										// RA touch scroll tracking valid
+	bool ra_overlay_finger_scrolled;
+										// RA touch moved enough to scroll
+	int ra_overlay_finger_scroll_y;
+										// RA touch scroll anchor y
 	std::string ra_pending_game_hash;
 										// media hash pending RA load
 	std::string ra_loaded_game_hash;
