@@ -177,41 +177,91 @@ std::wstring Utf8ToWide(const std::string& text)
 #endif
 
 #if defined(__APPLE__)
-const void *DataProtectionKeychainKey()
+bool SetMacStatusError(std::string *error, const char *message,
+	OSStatus status)
 {
-	if (__builtin_available(macOS 10.15, *)) {
-		return kSecUseDataProtectionKeychain;
+	if (error != nullptr) {
+		char buffer[128];
+		std::snprintf(buffer, sizeof(buffer), "%s (%d)", message,
+			static_cast<int>(status));
+		*error = buffer;
 	}
-	return nullptr;
+	return false;
 }
 
-CFDictionaryRef CreateKeychainQuery(const void **keys, const void **values,
-	size_t count, bool data_protection)
+bool SetMacStageStatusError(std::string *error, const char *message,
+	const char *stage, OSStatus status)
 {
-	std::vector<const void *> query_keys(keys, keys + count);
-	std::vector<const void *> query_values(values, values + count);
-	const void *data_protection_key = data_protection ?
-		DataProtectionKeychainKey() : nullptr;
-	if (data_protection_key != nullptr) {
-		query_keys.push_back(data_protection_key);
-		query_values.push_back(kCFBooleanTrue);
+	if (error != nullptr) {
+		char buffer[160];
+		std::snprintf(buffer, sizeof(buffer), "%s at %s (%d)", message,
+			stage, static_cast<int>(status));
+		*error = buffer;
 	}
-	return CFDictionaryCreate(kCFAllocatorDefault, query_keys.data(),
-		query_values.data(), static_cast<CFIndex>(query_keys.size()),
-		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	return false;
 }
 
-void DeleteMacTokenItem(CFStringRef service, CFStringRef account,
-	bool data_protection)
+CFMutableDictionaryRef CreateMacBaseQuery(CFStringRef service, CFStringRef account)
 {
-	const void *delete_keys[] = { kSecClass, kSecAttrService, kSecAttrAccount };
-	const void *delete_values[] = { kSecClassGenericPassword, service, account };
-	CFDictionaryRef delete_query = CreateKeychainQuery(delete_keys,
-		delete_values, 3, data_protection);
-	if (delete_query != nullptr) {
-		SecItemDelete(delete_query);
-		CFRelease(delete_query);
+	CFMutableDictionaryRef query = CFDictionaryCreateMutable(kCFAllocatorDefault,
+		0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	if (query == nullptr) {
+		return nullptr;
 	}
+	CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword);
+	CFDictionarySetValue(query, kSecAttrService, service);
+	CFDictionarySetValue(query, kSecAttrAccount, account);
+	return query;
+}
+
+CFMutableDictionaryRef CreateMacQuery(CFStringRef service, CFStringRef account)
+{
+	CFMutableDictionaryRef query = CreateMacBaseQuery(service, account);
+	if (query == nullptr) {
+		return nullptr;
+	}
+	CFDictionarySetValue(query, kSecAttrSynchronizable,
+		kSecAttrSynchronizableAny);
+	return query;
+}
+
+CFMutableDictionaryRef CreateMacAddQuery(CFStringRef service, CFStringRef account,
+	CFDataRef secret)
+{
+	CFMutableDictionaryRef query = CreateMacBaseQuery(service, account);
+	if (query == nullptr) {
+		return nullptr;
+	}
+	CFDictionarySetValue(query, kSecValueData, secret);
+	CFDictionarySetValue(query, kSecAttrSynchronizable, kCFBooleanFalse);
+	CFDictionarySetValue(query, kSecAttrAccessible,
+		kSecAttrAccessibleAfterFirstUnlock);
+	return query;
+}
+
+CFMutableDictionaryRef CreateMacUpdate(CFDataRef secret)
+{
+	CFMutableDictionaryRef update = CFDictionaryCreateMutable(kCFAllocatorDefault,
+		0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	if (update == nullptr) {
+		return nullptr;
+	}
+	CFDictionarySetValue(update, kSecValueData, secret);
+	CFDictionarySetValue(update, kSecAttrSynchronizable, kCFBooleanFalse);
+	CFDictionarySetValue(update, kSecAttrAccessible,
+		kSecAttrAccessibleAfterFirstUnlock);
+	return update;
+}
+
+CFMutableDictionaryRef CreateMacLoadQuery(CFStringRef service, CFStringRef account)
+{
+	CFMutableDictionaryRef query = CreateMacQuery(service, account);
+	if (query == nullptr) {
+		return nullptr;
+	}
+	CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue);
+	CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne);
+	return query;
 }
 #endif
 
@@ -256,33 +306,26 @@ bool SavePlatformToken(const std::string& username, const std::string& token,
 		return SetError(error, "failed to prepare RA token");
 	}
 
-	DeleteMacTokenItem(service, account, false);
-	DeleteMacTokenItem(service, account, true);
-
-	const void *add_keys[] = {
-		kSecClass,
-		kSecAttrService,
-		kSecAttrAccount,
-		kSecValueData,
-		kSecAttrAccessible
-	};
-	const void *add_values[] = {
-		kSecClassGenericPassword,
-		service,
-		account,
-		secret,
-		kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-	};
-	CFDictionaryRef add_query = CreateKeychainQuery(add_keys, add_values, 5,
-		true);
-	const OSStatus status = add_query == nullptr ? errSecParam :
+	CFDictionaryRef add_query = CreateMacAddQuery(service, account, secret);
+	OSStatus status = add_query == nullptr ? errSecParam :
 		SecItemAdd(add_query, nullptr);
+	const char *failed_stage = "add";
 	if (add_query != nullptr) CFRelease(add_query);
+	if (status == errSecDuplicateItem) {
+		CFDictionaryRef query = CreateMacQuery(service, account);
+		CFDictionaryRef update = CreateMacUpdate(secret);
+		status = query == nullptr || update == nullptr ? errSecParam :
+			SecItemUpdate(query, update);
+		failed_stage = "update";
+		if (update != nullptr) CFRelease(update);
+		if (query != nullptr) CFRelease(query);
+	}
 	CFRelease(secret);
 	CFRelease(service);
 	CFRelease(account);
 	if (status != errSecSuccess) {
-		return SetError(error, "failed to save RA token");
+		return SetMacStageStatusError(error, "failed to save RA token",
+			failed_stage, status);
 	}
 	return true;
 #elif defined(__linux__) && !defined(__ANDROID__) && defined(XM8_RA_HAS_LIBSECRET)
@@ -348,21 +391,7 @@ bool LoadPlatformToken(const std::string& username, std::string *token,
 		return SetError(error, "failed to prepare RA token lookup");
 	}
 
-	const void *keys[] = {
-		kSecClass,
-		kSecAttrService,
-		kSecAttrAccount,
-		kSecReturnData,
-		kSecMatchLimit
-	};
-	const void *values[] = {
-		kSecClassGenericPassword,
-		service,
-		account,
-		kCFBooleanTrue,
-		kSecMatchLimitOne
-	};
-	CFDictionaryRef query = CreateKeychainQuery(keys, values, 5, true);
+	CFDictionaryRef query = CreateMacLoadQuery(service, account);
 	CFTypeRef result = nullptr;
 	const OSStatus status = query == nullptr ? errSecParam :
 		SecItemCopyMatching(query, &result);
@@ -372,7 +401,10 @@ bool LoadPlatformToken(const std::string& username, std::string *token,
 	if (status != errSecSuccess || result == nullptr ||
 		CFGetTypeID(result) != CFDataGetTypeID()) {
 		if (result != nullptr) CFRelease(result);
-		return SetError(error, "RA token is not stored");
+		if (status == errSecItemNotFound) {
+			return SetError(error, "RA token is not stored");
+		}
+		return SetMacStatusError(error, "failed to load RA token", status);
 	}
 	CFDataRef data = static_cast<CFDataRef>(result);
 	const UInt8 *bytes = CFDataGetBytePtr(data);
@@ -437,23 +469,14 @@ bool DeletePlatformToken(const std::string& username, std::string *error)
 		if (account != nullptr) CFRelease(account);
 		return SetError(error, "failed to prepare RA token deletion");
 	}
-	const void *keys[] = { kSecClass, kSecAttrService, kSecAttrAccount };
-	const void *values[] = { kSecClassGenericPassword, service, account };
-	CFDictionaryRef query = CreateKeychainQuery(keys, values, 3, true);
-	const OSStatus data_protection_status = query == nullptr ? errSecParam :
-		SecItemDelete(query);
-	if (query != nullptr) CFRelease(query);
-	query = CreateKeychainQuery(keys, values, 3, false);
-	const OSStatus legacy_status = query == nullptr ? errSecParam :
+	CFDictionaryRef query = CreateMacQuery(service, account);
+	const OSStatus status = query == nullptr ? errSecParam :
 		SecItemDelete(query);
 	if (query != nullptr) CFRelease(query);
 	CFRelease(service);
 	CFRelease(account);
-	if ((data_protection_status != errSecSuccess &&
-		data_protection_status != errSecItemNotFound) ||
-		(legacy_status != errSecSuccess &&
-		legacy_status != errSecItemNotFound)) {
-		return SetError(error, "failed to delete RA token");
+	if (status != errSecSuccess && status != errSecItemNotFound) {
+		return SetMacStatusError(error, "failed to delete RA token", status);
 	}
 	return true;
 #elif defined(__linux__) && !defined(__ANDROID__) && defined(XM8_RA_HAS_LIBSECRET)
