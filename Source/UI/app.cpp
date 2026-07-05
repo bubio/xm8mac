@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -94,6 +95,11 @@
 										// mouse infinite time (ms)
 
 namespace {
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+SDL_Rect RaGameDetailStartButtonRect();
+bool PointInRect(int x, int y, const SDL_Rect& rect);
+#endif
 
 int HexValue(char ch)
 {
@@ -1430,6 +1436,7 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	}
 	if (e->type == SDL_MOUSEWHEEL) {
 		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
+			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail ||
 			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
 			ra_overlay->Screen() ==
 				Xm8Ra::RaOverlayScreen::AchievementDetail ||
@@ -1466,6 +1473,14 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
 		return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
 			e->type == SDL_MOUSEBUTTONUP));
+	}
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
+		if (e->type == SDL_MOUSEBUTTONUP &&
+			PointInRect(x, y, RaGameDetailStartButtonRect())) {
+			return HandleRaOverlayAction(
+				Xm8Ra::RaOverlayAction::OpenLibraryGame);
+		}
+		return true;
 	}
 	if (ra_overlay->Screen() ==
 		Xm8Ra::RaOverlayScreen::AchievementDetail) {
@@ -1523,6 +1538,7 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail ||
 		ra_overlay->Screen() ==
 			Xm8Ra::RaOverlayScreen::AchievementDetail ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
@@ -1551,6 +1567,14 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 		const bool activate = !ra_overlay_finger_scrolled;
 		ra_overlay_finger_scroll_valid = false;
 		ra_overlay_finger_scrolled = false;
+		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
+			if (activate && PointInRect(x, y,
+				RaGameDetailStartButtonRect())) {
+				return HandleRaOverlayAction(
+					Xm8Ra::RaOverlayAction::OpenLibraryGame);
+			}
+			return true;
+		}
 		if (ra_overlay->Screen() ==
 			Xm8Ra::RaOverlayScreen::AchievementDetail) {
 			return true;
@@ -1683,6 +1707,9 @@ void CopyAutoScrollMenuText(char *target, size_t target_size,
 void WrapSjisMenuText(std::vector<std::string> *lines, const char *source,
 	int width);
 const char *RaHealthLabel(int health_state);
+std::string FormatRaUnixTime(int64_t unix_time);
+SDL_Rect RaGameDetailStartButtonRect();
+bool PointInRect(int x, int y, const SDL_Rect& rect);
 
 } // namespace
 
@@ -1954,6 +1981,107 @@ void App::DrawRaOverlay()
 				font->DrawSjisLeftOr(buf, &detail_rect, clipped_title,
 					fore);
 			}
+		}
+		video->DrawCtrl();
+	}
+	else if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
+		const Xm8Ra::RaOverlayLibraryListSnapshot library =
+			ra_overlay->LibraryListSnapshot();
+		video->SetMenuMode(true);
+		Uint32 *buf = video->GetMenuFrame();
+		const Uint32 alpha = (Uint32)setting->GetMenuAlpha() << 24;
+		const Uint32 fore = MENUITEM_FORE | alpha;
+		const Uint32 back = MENUITEM_BACK | alpha;
+		SDL_Rect rect = {
+			(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
+			(SCREEN_HEIGHT / 2) - ((MENUITEM_HEIGHT * MENUITEM_LINES) / 2),
+			MENUITEM_WIDTH,
+			MENUITEM_HEIGHT * MENUITEM_LINES
+		};
+		font->DrawFillRect(buf, &rect, MENUITEM_BACK | 0x00000000);
+
+		SDL_Rect title_rect = {rect.x, rect.y, rect.w, MENUITEM_HEIGHT};
+		font->DrawFillRect(buf, &title_rect, fore);
+		title_rect.x++;
+		title_rect.y++;
+		title_rect.w -= 2;
+		title_rect.h -= 2;
+		font->DrawFillRect(buf, &title_rect, MENUITEM_TITLE | alpha);
+		font->DrawSjisCenterOr(buf, &title_rect, "<< Game Detail >>",
+			fore);
+
+		SDL_Rect body = {rect.x, rect.y + MENUITEM_HEIGHT, rect.w,
+			rect.h - MENUITEM_HEIGHT};
+		font->DrawFillRect(buf, &body, fore);
+		body.x++;
+		body.y++;
+		body.w -= 2;
+		body.h -= 2;
+		font->DrawFillRect(buf, &body, back);
+
+		if (library.selected_index < library.games.size()) {
+			const Xm8Ra::RaOverlayLibraryItem& game =
+				library.games[library.selected_index];
+			SDL_Rect badge_outer = {body.x + 16, body.y + 14, 72, 72};
+			font->DrawFillRect(buf, &badge_outer, fore);
+			SDL_Rect badge_inner = {badge_outer.x + 2,
+				badge_outer.y + 2, badge_outer.w - 4,
+				badge_outer.h - 4};
+			font->DrawFillRect(buf, &badge_inner, MENUITEM_BACK | alpha);
+			font->DrawSjisCenterOr(buf, &badge_inner, "Badge", fore);
+			DrawRaBadgeImage(buf, &badge_inner, game.badge_url);
+
+			char progress[80];
+			if (game.has_progress && game.core_total > 0) {
+				std::snprintf(progress, sizeof(progress),
+					"Progress %d/%d  Points %d/%d",
+					game.core_unlocked, game.core_total,
+					game.points_unlocked, game.points_total);
+			}
+			else {
+				std::snprintf(progress, sizeof(progress),
+					"Progress unknown");
+			}
+
+			char ids[128];
+			std::snprintf(ids, sizeof(ids), "Game ID %lld  RA ID %lld",
+				static_cast<long long>(game.game_id),
+				static_cast<long long>(game.ra_game_id));
+
+			const std::string last_played =
+				"Last played " + FormatRaUnixTime(game.last_played_at);
+			const std::string media =
+				std::string("Media ") +
+				std::to_string(game.media_count) + "  " +
+				RaHealthLabel(game.health_state);
+
+			std::vector<std::string> lines;
+			WrapSjisMenuText(&lines,
+				ToSjisMenuText(converter, game.title).c_str(),
+				body.w - 128);
+			lines.push_back(ToSjisMenuText(converter, progress));
+			lines.push_back(ToSjisMenuText(converter, ids));
+			lines.push_back(ToSjisMenuText(converter, last_played));
+			lines.push_back(ToSjisMenuText(converter, media));
+
+			const int line_height = 20;
+			const int text_x = body.x + 104;
+			for (size_t row = 0; row < lines.size(); ++row) {
+				SDL_Rect line_rect = {text_x,
+					body.y + 16 + static_cast<int>(row) * line_height,
+					body.w - 120, line_height};
+				font->DrawSjisLeftOr(buf, &line_rect,
+					lines[row].c_str(), fore);
+			}
+
+			SDL_Rect start_button = RaGameDetailStartButtonRect();
+			font->DrawFillRect(buf, &start_button, fore);
+			SDL_Rect start_inner = {start_button.x + 2,
+				start_button.y + 2, start_button.w - 4,
+				start_button.h - 4};
+			font->DrawFillRect(buf, &start_inner,
+				MENUITEM_TITLE | alpha);
+			font->DrawSjisCenterOr(buf, &start_inner, "START", fore);
 		}
 		video->DrawCtrl();
 	}
@@ -4565,6 +4693,43 @@ const char *RaHealthLabel(int health_state)
 	default:
 		return "Unknown";
 	}
+}
+
+std::string FormatRaUnixTime(int64_t unix_time)
+{
+	if (unix_time <= 0) {
+		return "Never";
+	}
+	std::time_t time_value = static_cast<std::time_t>(unix_time);
+	std::tm *local = std::localtime(&time_value);
+	if (local == NULL) {
+		return "Unknown";
+	}
+	char buffer[32];
+	if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", local) == 0) {
+		return "Unknown";
+	}
+	return buffer;
+}
+
+SDL_Rect RaGameDetailStartButtonRect()
+{
+	SDL_Rect panel = {
+		(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
+		(SCREEN_HEIGHT / 2) - ((MENUITEM_HEIGHT * MENUITEM_LINES) / 2),
+		MENUITEM_WIDTH,
+		MENUITEM_HEIGHT * MENUITEM_LINES
+	};
+	SDL_Rect body = {panel.x + 1, panel.y + MENUITEM_HEIGHT + 1,
+		panel.w - 2, panel.h - MENUITEM_HEIGHT - 2};
+	SDL_Rect button = {body.x + 104, body.y + 142, body.w - 128, 34};
+	return button;
+}
+
+bool PointInRect(int x, int y, const SDL_Rect& rect)
+{
+	return x >= rect.x && x < rect.x + rect.w &&
+		y >= rect.y && y < rect.y + rect.h;
 }
 
 } // namespace

@@ -231,6 +231,27 @@ RaOverlayAction RaOverlay::OnTextInput(const char *text)
 
 RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 {
+	if (screen_ == RaOverlayScreen::GameDetail) {
+		switch (key) {
+		case RaOverlayKey::Escape:
+		case RaOverlayKey::Backspace:
+		case RaOverlayKey::Left:
+			screen_ = RaOverlayScreen::Library;
+			break;
+		case RaOverlayKey::Enter:
+			if (ListItemCount() > 0) {
+				return RaOverlayAction::OpenLibraryGame;
+			}
+			break;
+		case RaOverlayKey::Up:
+		case RaOverlayKey::Down:
+		case RaOverlayKey::Right:
+		case RaOverlayKey::Tab:
+			break;
+		}
+		return RaOverlayAction::None;
+	}
+
 	if (screen_ == RaOverlayScreen::AchievementDetail) {
 		switch (key) {
 		case RaOverlayKey::Escape:
@@ -266,6 +287,8 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 			MoveListSelection(1);
 			break;
 		case RaOverlayKey::Tab:
+			MoveListSelection(1);
+			break;
 		case RaOverlayKey::Right:
 			MoveListSelection(1);
 			break;
@@ -275,7 +298,7 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 		case RaOverlayKey::Enter:
 			if (screen_ == RaOverlayScreen::Library &&
 				ListItemCount() > 0) {
-				return RaOverlayAction::OpenLibraryGame;
+				screen_ = RaOverlayScreen::GameDetail;
 			}
 			else if (screen_ == RaOverlayScreen::Achievements) {
 				OpenAchievementDetail();
@@ -338,7 +361,8 @@ RaOverlayAction RaOverlay::OnListPointer(int x, int y, bool activate)
 			library_.selected_index = index;
 			if (activate) {
 				NormalizeListSelection();
-				return RaOverlayAction::OpenLibraryGame;
+				screen_ = RaOverlayScreen::GameDetail;
+				return RaOverlayAction::None;
 			}
 		}
 		else if (screen_ == RaOverlayScreen::Achievements) {
@@ -373,6 +397,9 @@ RaOverlayAction RaOverlay::OnListPointer(int x, int y, bool activate)
 
 RaOverlayAction RaOverlay::OnListScroll(int delta)
 {
+	if (screen_ == RaOverlayScreen::GameDetail) {
+		return RaOverlayAction::None;
+	}
 	if (screen_ == RaOverlayScreen::AchievementDetail) {
 		MoveAchievementDetailScroll(delta);
 		return RaOverlayAction::None;
@@ -604,7 +631,8 @@ void RaOverlay::NormalizeListSelection()
 
 size_t RaOverlay::ListItemCount() const
 {
-	if (screen_ == RaOverlayScreen::Library) {
+	if (screen_ == RaOverlayScreen::Library ||
+		screen_ == RaOverlayScreen::GameDetail) {
 		return library_.games.size();
 	}
 	if (screen_ == RaOverlayScreen::Leaderboards) {
@@ -615,12 +643,23 @@ size_t RaOverlay::ListItemCount() const
 
 bool RaOverlay::SelectedLibraryGameId(int64_t *game_id) const
 {
-	if (screen_ != RaOverlayScreen::Library ||
+	if ((screen_ != RaOverlayScreen::Library &&
+		screen_ != RaOverlayScreen::GameDetail) ||
 		library_.selected_index >= library_.games.size() ||
 		game_id == nullptr) {
 		return false;
 	}
 	*game_id = library_.games[library_.selected_index].game_id;
+	return true;
+}
+
+bool RaOverlay::OpenSelectedLibraryGameDetail()
+{
+	if (screen_ != RaOverlayScreen::Library ||
+		library_.selected_index >= library_.games.size()) {
+		return false;
+	}
+	screen_ = RaOverlayScreen::GameDetail;
 	return true;
 }
 

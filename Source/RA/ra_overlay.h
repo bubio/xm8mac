@@ -18,6 +18,7 @@ namespace Xm8Ra {
 enum class RaOverlayScreen {
 	None,
 	Library,
+	GameDetail,
 	Achievements,
 	AchievementDetail,
 	Leaderboards,
@@ -174,6 +175,7 @@ public:
 	RaOverlayAction OnLoginPointer(int x, int y, bool activate);
 	bool ConsumeSubmittedLogin(std::string *username, std::string *password);
 	bool SelectedLibraryGameId(int64_t *game_id) const;
+	bool OpenSelectedLibraryGameDetail();
 	void SetLoginStatus(const std::string& message);
 	void CloseScreen();
 

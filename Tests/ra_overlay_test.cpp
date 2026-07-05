@@ -183,9 +183,33 @@ int main()
 	assert(overlay.SelectedLibraryGameId(&game_id));
 	assert(game_id == 102);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Right) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
+	assert(overlay.OpenSelectedLibraryGameDetail());
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
+	assert(overlay.SelectedLibraryGameId(&game_id));
+	assert(game_id == 103);
+	assert(overlay.OnListScroll(1) == Xm8Ra::RaOverlayAction::None);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
 		Xm8Ra::RaOverlayAction::OpenLibraryGame);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Left) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Right) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
 	assert(overlay.OnListPointer(90, 86, true) ==
-		Xm8Ra::RaOverlayAction::OpenLibraryGame);
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
 		Xm8Ra::RaOverlayAction::Close);
 
