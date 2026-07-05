@@ -133,6 +133,17 @@ struct RaOverlayAchievementDetailSnapshot {
 	RaOverlayAchievementItem achievement;
 };
 
+struct RaOverlayLeaderboardItem {
+	uint32_t id = 0;
+	uint8_t state = 0;
+	uint8_t format = 0;
+	bool lower_is_better = false;
+	std::string title;
+	std::string description;
+	std::string tracker_value;
+	std::string bucket_label;
+};
+
 struct RaOverlayLeaderboardListSnapshot {
 	bool active = false;
 	bool game_loaded = false;
@@ -140,7 +151,7 @@ struct RaOverlayLeaderboardListSnapshot {
 	size_t first_visible_index = 0;
 	std::string game_title;
 	std::string status_message;
-	std::vector<std::string> leaderboards;
+	std::vector<RaOverlayLeaderboardItem> leaderboards;
 };
 
 class RaOverlay {

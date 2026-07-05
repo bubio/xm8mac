@@ -216,20 +216,44 @@ int main()
 	Xm8Ra::RaOverlayLeaderboardListSnapshot leaderboards;
 	leaderboards.game_loaded = true;
 	leaderboards.game_title = "Test Game";
-	leaderboards.status_message = "Leaderboards not implemented";
+	for (int i = 0; i < 8; ++i) {
+		Xm8Ra::RaOverlayLeaderboardItem leaderboard;
+		leaderboard.id = static_cast<uint32_t>(200 + i);
+		leaderboard.title = i == 0 ? "Fastest Clear" : "Extra Board";
+		leaderboard.description = "Finish quickly";
+		leaderboard.lower_is_better = i == 0;
+		leaderboard.bucket_label = i == 0 ? "Active" : "Inactive";
+		leaderboards.leaderboards.push_back(leaderboard);
+	}
 	overlay.OpenLeaderboards(leaderboards);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Leaderboards);
 	assert(overlay.LeaderboardListSnapshot().active);
-	assert(overlay.LeaderboardListSnapshot().status_message ==
-		"Leaderboards not implemented");
+	assert(overlay.LeaderboardListSnapshot().leaderboards.size() == 8);
+	assert(overlay.LeaderboardListSnapshot().leaderboards[0].title ==
+		"Fastest Clear");
 	assert(overlay.OnListPointer(90, 86, true) ==
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.IsBlocking());
 	assert(overlay.OnListScroll(1) == Xm8Ra::RaOverlayAction::None);
-	assert(overlay.LeaderboardListSnapshot().selected_index == 0);
+	assert(overlay.LeaderboardListSnapshot().selected_index == 1);
+	assert(overlay.OnListScroll(7) == Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LeaderboardListSnapshot().selected_index == 7);
+	assert(overlay.LeaderboardListSnapshot().first_visible_index == 1);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
 		Xm8Ra::RaOverlayAction::Close);
 	assert(!overlay.IsBlocking());
+
+	Xm8Ra::RaOverlayLeaderboardListSnapshot empty_leaderboards;
+	empty_leaderboards.game_loaded = true;
+	empty_leaderboards.game_title = "Test Game";
+	empty_leaderboards.status_message = "No leaderboards";
+	overlay.OpenLeaderboards(empty_leaderboards);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Leaderboards);
+	assert(overlay.OnListPointer(90, 86, true) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.IsBlocking());
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::Close);
 
 	overlay.OpenLogin();
 	assert(overlay.IsBlocking());

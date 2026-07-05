@@ -129,6 +129,24 @@ struct RaLeaderboardEvent {
 	std::string display;
 };
 
+struct RaLeaderboardListItem {
+	uint32_t id = 0;
+	uint8_t state = 0;
+	uint8_t format = 0;
+	bool lower_is_better = false;
+	std::string title;
+	std::string description;
+	std::string tracker_value;
+	std::string bucket_label;
+};
+
+struct RaLeaderboardListSnapshot {
+	bool game_loaded = false;
+	bool has_leaderboards = false;
+	std::string game_title;
+	std::vector<RaLeaderboardListItem> leaderboards;
+};
+
 struct RaLeaderboardScoreboardEntry {
 	uint32_t rank = 0;
 	std::string username;
@@ -205,6 +223,7 @@ public:
 	RaLoginSnapshot LoginSnapshot() const;
 	RaGameSessionSnapshot GameSessionSnapshot() const;
 	RaAchievementListSnapshot AchievementListSnapshot() const;
+	RaLeaderboardListSnapshot LeaderboardListSnapshot() const;
 	size_t PendingHttpCount() const;
 	uint64_t LastIssuedRequestId() const;
 	const RaHttpClient *HttpClientForTesting() const;

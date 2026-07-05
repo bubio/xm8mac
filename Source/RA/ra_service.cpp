@@ -137,6 +137,23 @@ void CopyLeaderboard(RaLeaderboardEvent *target,
 	target->tracker_value = SafeString(leaderboard->tracker_value);
 }
 
+void CopyLeaderboardListItem(RaLeaderboardListItem *target,
+	const rc_client_leaderboard_t *leaderboard, const char *bucket_label)
+{
+	if (target == nullptr || leaderboard == nullptr) {
+		return;
+	}
+
+	target->id = leaderboard->id;
+	target->state = leaderboard->state;
+	target->format = leaderboard->format;
+	target->lower_is_better = leaderboard->lower_is_better != 0;
+	target->title = SafeString(leaderboard->title);
+	target->description = SafeString(leaderboard->description);
+	target->tracker_value = SafeString(leaderboard->tracker_value);
+	target->bucket_label = SafeString(bucket_label);
+}
+
 void CopyLeaderboardTracker(RaLeaderboardEvent *target,
 	const rc_client_leaderboard_tracker_t *tracker)
 {
@@ -500,6 +517,41 @@ RaAchievementListSnapshot RaService::AchievementListSnapshot() const
 
 	rc_client_destroy_achievement_list(list);
 	snapshot.has_achievements = !snapshot.achievements.empty();
+	return snapshot;
+}
+
+RaLeaderboardListSnapshot RaService::LeaderboardListSnapshot() const
+{
+	RaLeaderboardListSnapshot snapshot;
+	snapshot.game_loaded = game_session_.state == RaGameSessionState::Loaded;
+	snapshot.game_title = game_session_.title;
+	if (!snapshot.game_loaded || client_ == nullptr ||
+		rc_client_has_leaderboards(client_) == 0) {
+		return snapshot;
+	}
+
+	rc_client_leaderboard_list_t *list = rc_client_create_leaderboard_list(
+		client_, RC_CLIENT_LEADERBOARD_LIST_GROUPING_TRACKING);
+	if (list == nullptr) {
+		return snapshot;
+	}
+
+	for (uint32_t bucket_index = 0; bucket_index < list->num_buckets;
+		++bucket_index) {
+		const rc_client_leaderboard_bucket_t& bucket =
+			list->buckets[bucket_index];
+		for (uint32_t leaderboard_index = 0;
+			leaderboard_index < bucket.num_leaderboards;
+			++leaderboard_index) {
+			RaLeaderboardListItem item;
+			CopyLeaderboardListItem(&item,
+				bucket.leaderboards[leaderboard_index], bucket.label);
+			snapshot.leaderboards.push_back(item);
+		}
+	}
+
+	rc_client_destroy_leaderboard_list(list);
+	snapshot.has_leaderboards = !snapshot.leaderboards.empty();
 	return snapshot;
 }
 

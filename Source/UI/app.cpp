@@ -198,6 +198,23 @@ std::string RaEventNotice(const Xm8Ra::RaEvent& event)
 }
 #endif
 
+std::string DirectoryOfPath(const char *path)
+{
+	if (path == NULL || path[0] == '\0') {
+		return std::string();
+	}
+	const char *last = NULL;
+	for (const char *p = path; *p != '\0'; ++p) {
+		if (*p == '/' || *p == '\\') {
+			last = p;
+		}
+	}
+	if (last == NULL) {
+		return std::string();
+	}
+	return std::string(path, static_cast<size_t>(last - path + 1));
+}
+
 } // namespace
 
 //
@@ -719,7 +736,11 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 //
 bool App::OpenDiskFromMenu(const DiskSpec& spec, std::string *error)
 {
-	return OpenDiskFromUser(spec, error);
+	if (!OpenDiskFromUser(spec, error)) {
+		return false;
+	}
+	RememberDiskOpenDir(spec.path.c_str());
+	return true;
 }
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
@@ -1854,8 +1875,12 @@ void App::DrawRaOverlay()
 					mark, item.title.c_str(), item.points);
 			}
 			else {
-				std::snprintf(line, sizeof(line), "%s",
-					leaderboards.leaderboards[item_index].c_str());
+				const Xm8Ra::RaOverlayLeaderboardItem& item =
+					leaderboards.leaderboards[item_index];
+				const char *direction =
+					item.lower_is_better ? "low" : "high";
+				std::snprintf(line, sizeof(line), "%s  %s",
+					item.title.c_str(), direction);
 			}
 			SDL_Rect text_rect = {row.x + 24, row.y, row.w - 48, row.h};
 			const std::string sjis_line = ToSjisMenuText(converter, line);
@@ -1937,10 +1962,22 @@ void App::DrawRaOverlay()
 				}
 			}
 			else {
-				std::snprintf(detail, sizeof(detail), "%u/%u  %s",
-					static_cast<unsigned int>(selected_index + 1),
-					static_cast<unsigned int>(item_count),
-					game_title.c_str());
+				const Xm8Ra::RaOverlayLeaderboardItem& selected =
+					leaderboards.leaderboards[selected_index];
+				if (!selected.bucket_label.empty()) {
+					std::snprintf(detail, sizeof(detail),
+						"%u/%u  %s  %s",
+						static_cast<unsigned int>(selected_index + 1),
+						static_cast<unsigned int>(item_count),
+						selected.bucket_label.c_str(),
+						selected.description.c_str());
+				}
+				else {
+					std::snprintf(detail, sizeof(detail), "%u/%u  %s",
+						static_cast<unsigned int>(selected_index + 1),
+						static_cast<unsigned int>(item_count),
+						selected.description.c_str());
+				}
 			}
 			SDL_Rect detail_rect = {rect.x, rect.y + rect.h + 6,
 				rect.w, 22};
@@ -1950,7 +1987,9 @@ void App::DrawRaOverlay()
 			const std::string sjis_detail =
 				ToSjisMenuText(converter, detail);
 			char display_detail[256];
-			if (library_screen || achievements_screen) {
+			if (library_screen || achievements_screen ||
+				ra_overlay->Screen() ==
+					Xm8Ra::RaOverlayScreen::Leaderboards) {
 				CopyAutoScrollMenuText(display_detail,
 					sizeof(display_detail), sjis_detail.c_str(),
 					detail_rect.w,
@@ -4137,6 +4176,10 @@ void App::ChangeSystem(bool load)
 //
 const char* App::GetDiskDir(int drive)
 {
+	if (!disk_open_dir.empty()) {
+		return disk_open_dir.c_str();
+	}
+
 	// drive 1
 	if ((drive == -1) || (drive == 0)) {
 		if (diskmgr[0]->IsOpen() == true) {
@@ -4161,6 +4204,18 @@ const char* App::GetDiskDir(int drive)
 
 	// application base path
 	return (const char*)wrapper->get_app_path();
+}
+
+//
+// RememberDiskOpenDir()
+// remember user-selected disk directory
+//
+void App::RememberDiskOpenDir(const char *path)
+{
+	const std::string dir = DirectoryOfPath(path);
+	if (!dir.empty()) {
+		disk_open_dir = dir;
+	}
 }
 
 //
@@ -4827,6 +4882,50 @@ Xm8Ra::RaOverlayAchievementListSnapshot App::MakeRaAchievementsOverlaySnapshot()
 }
 
 //
+// MakeRaLeaderboardsOverlaySnapshot()
+// build RA leaderboards overlay snapshot
+//
+Xm8Ra::RaOverlayLeaderboardListSnapshot App::MakeRaLeaderboardsOverlaySnapshot() const
+{
+	Xm8Ra::RaOverlayLeaderboardListSnapshot overlay_snapshot;
+	if (ra_service == NULL) {
+		overlay_snapshot.status_message = "RA service unavailable";
+	}
+	else {
+		const Xm8Ra::RaLeaderboardListSnapshot service_snapshot =
+			ra_service->LeaderboardListSnapshot();
+		overlay_snapshot.game_loaded = service_snapshot.game_loaded;
+		overlay_snapshot.game_title = service_snapshot.game_title;
+		if (!service_snapshot.game_loaded) {
+			const Xm8Ra::RaLoginSnapshot login =
+				ra_service->LoginSnapshot();
+			const Xm8Ra::RaGameSessionSnapshot game =
+				ra_service->GameSessionSnapshot();
+			overlay_snapshot.status_message =
+				RaGameStatusMessage(login.state, game.state);
+		}
+		else if (!service_snapshot.has_leaderboards) {
+			overlay_snapshot.status_message = "No leaderboards";
+		}
+
+		for (const Xm8Ra::RaLeaderboardListItem& source :
+			service_snapshot.leaderboards) {
+			Xm8Ra::RaOverlayLeaderboardItem item;
+			item.id = source.id;
+			item.state = source.state;
+			item.format = source.format;
+			item.lower_is_better = source.lower_is_better;
+			item.title = source.title;
+			item.description = source.description;
+			item.tracker_value = source.tracker_value;
+			item.bucket_label = source.bucket_label;
+			overlay_snapshot.leaderboards.push_back(item);
+		}
+	}
+	return overlay_snapshot;
+}
+
+//
 // RefreshRaAchievementsOverlay()
 // refresh achievements overlay if it is visible
 //
@@ -5004,20 +5103,7 @@ void App::OpenRaLeaderboardsOverlay()
 		return;
 	}
 
-	Xm8Ra::RaOverlayLeaderboardListSnapshot snapshot;
-	if (ra_service == NULL) {
-		snapshot.status_message = "RA service unavailable";
-	}
-	else {
-		const Xm8Ra::RaAchievementListSnapshot achievements =
-			ra_service->AchievementListSnapshot();
-		snapshot.game_loaded = achievements.game_loaded;
-		snapshot.game_title = achievements.game_title;
-		snapshot.status_message = achievements.game_loaded ?
-			"Leaderboards not implemented" : "No RA game loaded";
-	}
-
-	ra_overlay->OpenLeaderboards(snapshot);
+	ra_overlay->OpenLeaderboards(MakeRaLeaderboardsOverlaySnapshot());
 	ra_overlay_joystick_prev = 0;
 	ClearRaOverlayPointerState();
 	SDL_StopTextInput();

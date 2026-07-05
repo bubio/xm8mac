@@ -110,6 +110,8 @@ public:
 										// change system
 	const char* GetDiskDir(int drive = -1);
 										// get disk dir
+	void RememberDiskOpenDir(const char *path);
+										// remember user-selected disk directory
 	bool OpenDiskFromMenu(const DiskSpec& spec, std::string *error);
 										// open disk from menu
 	const char* GetTapeDir();
@@ -225,6 +227,8 @@ private:
 										// launch registered RA library game
 	Xm8Ra::RaOverlayAchievementListSnapshot MakeRaAchievementsOverlaySnapshot() const;
 										// build achievements overlay snapshot
+	Xm8Ra::RaOverlayLeaderboardListSnapshot MakeRaLeaderboardsOverlaySnapshot() const;
+										// build leaderboards overlay snapshot
 	void RefreshRaAchievementsOverlay();
 										// refresh achievements overlay if visible
 	void AddRaNotice(const std::string& text);
@@ -306,6 +310,8 @@ private:
 										// disk manager
 	TapeManager *tapemgr;
 										// tape manager
+	std::string disk_open_dir;
+										// last user-selected disk directory
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	Xm8Ra::RaLibrary *ra_library;
 										// RA library database
