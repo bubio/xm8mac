@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 struct sqlite3;
 
@@ -58,6 +59,23 @@ struct MediaHealthStatus {
 	int64_t source_mtime = -1;
 };
 
+struct RaLibraryGameListItem {
+	int64_t game_id = 0;
+	int64_t ra_game_id = 0;
+	std::string title;
+	std::string badge_url;
+	int identification_state = 0;
+	int media_count = 0;
+	int health_state = kRaMediaHealthOk;
+	int64_t last_played_at = 0;
+	bool has_progress = false;
+	int core_total = 0;
+	int core_unlocked = 0;
+	int hardcore_unlocked = 0;
+	int points_total = 0;
+	int points_unlocked = 0;
+};
+
 struct LaunchDrive {
 	bool assigned = false;
 	std::string media_md5;
@@ -107,6 +125,12 @@ public:
 		std::string *error);
 	bool MergeGameMedia(int64_t target_game_id, int64_t source_game_id,
 		std::string *error);
+	bool MarkGameIdentified(int64_t game_id, int64_t ra_game_id,
+		const std::string& title, const std::string& badge_url,
+		std::string *error);
+	bool ListGames(std::vector<RaLibraryGameListItem> *games,
+		std::string *error);
+	bool MarkGamePlayed(int64_t game_id, std::string *error);
 
 private:
 	bool Exec(const char *sql, std::string *error);

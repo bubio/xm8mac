@@ -108,6 +108,12 @@ bool StepDone(sqlite3 *db, sqlite3_stmt *stmt, std::string *error)
 	return true;
 }
 
+std::string ColumnText(sqlite3_stmt *stmt, int column)
+{
+	const unsigned char *text = sqlite3_column_text(stmt, column);
+	return text != nullptr ? reinterpret_cast<const char*>(text) : "";
+}
+
 std::string SortTitle(const std::string& title)
 {
 	std::string result = title;
@@ -603,10 +609,9 @@ bool RaLibrary::FindMedia(const std::string& md5, MediaRecord *record,
 		return false;
 	}
 	if (record != nullptr) {
-		record->md5 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+		record->md5 = ColumnText(stmt, 0);
 		record->game_id = sqlite3_column_int64(stmt, 1);
-		record->working_relpath =
-			reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+		record->working_relpath = ColumnText(stmt, 2);
 		record->inserted = false;
 	}
 	sqlite3_finalize(stmt);
@@ -647,15 +652,13 @@ bool RaLibrary::LoadMediaHealthRecord(const std::string& md5,
 		return false;
 	}
 
-	record->md5 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+	record->md5 = ColumnText(stmt, 0);
 	record->game_id = sqlite3_column_int64(stmt, 1);
-	record->source_locator =
-		reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+	record->source_locator = ColumnText(stmt, 2);
 	record->source_size = sqlite3_column_int64(stmt, 3);
 	record->source_mtime = sqlite3_column_type(stmt, 4) == SQLITE_NULL ?
 		-1 : sqlite3_column_int64(stmt, 4);
-	record->working_relpath =
-		reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+	record->working_relpath = ColumnText(stmt, 5);
 	record->health_state = sqlite3_column_int(stmt, 6);
 	sqlite3_finalize(stmt);
 	return true;
@@ -753,8 +756,7 @@ bool RaLibrary::LoadLaunchProfile(int64_t game_id, LaunchProfile *profile,
 		}
 		LaunchDrive& slot = loaded.drives[drive];
 		slot.assigned = true;
-		slot.media_md5 =
-			reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+		slot.media_md5 = ColumnText(stmt, 1);
 		slot.bank_index = sqlite3_column_int(stmt, 2);
 		slot.is_ra_anchor = sqlite3_column_int(stmt, 3) != 0;
 	}
@@ -1005,6 +1007,175 @@ bool RaLibrary::MergeGameMedia(int64_t target_game_id,
 	}
 
 	return Exec("COMMIT", error);
+}
+
+bool RaLibrary::ListGames(std::vector<RaLibraryGameListItem> *games,
+	std::string *error)
+{
+	if (games == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+	games->clear();
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT g.id, g.ra_game_id, g.title, g.badge_url,"
+		" g.identification_state, COUNT(DISTINCT m.md5),"
+		" COALESCE(MAX(m.health_state), 0), g.last_played_at,"
+		" MAX(p.core_total), MAX(p.core_unlocked),"
+		" MAX(p.hardcore_unlocked), MAX(p.points_total),"
+		" MAX(p.points_unlocked)"
+		" FROM games g"
+		" LEFT JOIN media m ON m.game_id = g.id"
+		" LEFT JOIN progress p ON p.ra_game_id = g.ra_game_id"
+		" WHERE g.ra_game_id IS NOT NULL AND g.identification_state = 1"
+		" GROUP BY g.id"
+		" ORDER BY g.last_played_at IS NULL, g.last_played_at DESC,"
+		" g.sort_title ASC, g.id ASC",
+		&stmt, error)) {
+		return false;
+	}
+
+	while (true) {
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_DONE) {
+			break;
+		}
+		if (rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			sqlite3_finalize(stmt);
+			return false;
+		}
+
+		RaLibraryGameListItem item;
+		item.game_id = sqlite3_column_int64(stmt, 0);
+		item.ra_game_id = sqlite3_column_type(stmt, 1) == SQLITE_NULL ?
+			0 : sqlite3_column_int64(stmt, 1);
+		item.title = ColumnText(stmt, 2);
+		item.badge_url = ColumnText(stmt, 3);
+		item.identification_state = sqlite3_column_int(stmt, 4);
+		item.media_count = sqlite3_column_int(stmt, 5);
+		item.health_state = sqlite3_column_int(stmt, 6);
+		item.last_played_at = sqlite3_column_type(stmt, 7) == SQLITE_NULL ?
+			0 : sqlite3_column_int64(stmt, 7);
+		item.has_progress = sqlite3_column_type(stmt, 8) != SQLITE_NULL;
+		if (item.has_progress) {
+			item.core_total = sqlite3_column_int(stmt, 8);
+			item.core_unlocked = sqlite3_column_int(stmt, 9);
+			item.hardcore_unlocked = sqlite3_column_int(stmt, 10);
+			item.points_total = sqlite3_column_type(stmt, 11) == SQLITE_NULL ?
+				0 : sqlite3_column_int(stmt, 11);
+			item.points_unlocked = sqlite3_column_type(stmt, 12) == SQLITE_NULL ?
+				0 : sqlite3_column_int(stmt, 12);
+		}
+		games->push_back(item);
+	}
+	sqlite3_finalize(stmt);
+	return true;
+}
+
+bool RaLibrary::MarkGameIdentified(int64_t game_id, int64_t ra_game_id,
+	const std::string& title, const std::string& badge_url,
+	std::string *error)
+{
+	if (game_id <= 0 || ra_game_id <= 0) {
+		if (error != nullptr) {
+			*error = "invalid RA game";
+		}
+		return false;
+	}
+
+	const std::string saved_title =
+		title.empty() ? "RA Game " + std::to_string(ra_game_id) : title;
+	const std::string sort_title = SortTitle(saved_title);
+
+	if (!Exec("BEGIN IMMEDIATE", error)) {
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"UPDATE games SET ra_game_id = ?,"
+		" title = CASE WHEN title_source = 2 THEN title ELSE ? END,"
+		" sort_title = CASE WHEN title_source = 2 THEN sort_title ELSE ? END,"
+		" title_source = CASE WHEN title_source = 2 THEN title_source ELSE 1 END,"
+		" badge_url = ?, identification_state = 1, updated_at = ?"
+		" WHERE id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	const int64_t now = NowUnixTime();
+	sqlite3_bind_int64(stmt, 1, ra_game_id);
+	sqlite3_bind_text(stmt, 2, saved_title.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 3, sort_title.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 4, badge_url.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(stmt, 5, now);
+	sqlite3_bind_int64(stmt, 6, game_id);
+	if (!StepDone(db_, stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	if (sqlite3_changes(db_) != 1) {
+		Exec("ROLLBACK", nullptr);
+		if (error != nullptr) {
+			*error = "game is not registered";
+		}
+		return false;
+	}
+
+	if (!Prepare(db_,
+		"UPDATE media SET ra_game_id = ?, identification_state = 1,"
+		" verified_at = ? WHERE game_id = ?",
+		&stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, ra_game_id);
+	sqlite3_bind_int64(stmt, 2, now);
+	sqlite3_bind_int64(stmt, 3, game_id);
+	if (!StepDone(db_, stmt, error)) {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	}
+
+	return Exec("COMMIT", error);
+}
+
+bool RaLibrary::MarkGamePlayed(int64_t game_id, std::string *error)
+{
+	if (game_id <= 0) {
+		if (error != nullptr) {
+			*error = "invalid game";
+		}
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"UPDATE games SET last_played_at = ?, updated_at = ? WHERE id = ?",
+		&stmt, error)) {
+		return false;
+	}
+	const int64_t now = NowUnixTime();
+	sqlite3_bind_int64(stmt, 1, now);
+	sqlite3_bind_int64(stmt, 2, now);
+	sqlite3_bind_int64(stmt, 3, game_id);
+	if (!StepDone(db_, stmt, error)) {
+		return false;
+	}
+	if (sqlite3_changes(db_) != 1) {
+		if (error != nullptr) {
+			*error = "game is not registered";
+		}
+		return false;
+	}
+	return true;
 }
 
 bool RaLibrary::RegisterDesktopMedia(const D88MediaInfo& media,

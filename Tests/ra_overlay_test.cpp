@@ -136,6 +136,59 @@ int main()
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
 		Xm8Ra::RaOverlayAction::Close);
 
+	Xm8Ra::RaOverlayLibraryListSnapshot empty_library;
+	empty_library.status_message = "No RetroAchievements games in library";
+	overlay.OpenLibrary(empty_library);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
+	assert(overlay.LibraryListSnapshot().active);
+	assert(overlay.LibraryListSnapshot().status_message ==
+		"No RetroAchievements games in library");
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.OnListPointer(90, 86, true) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.IsBlocking());
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::Close);
+
+	Xm8Ra::RaOverlayLibraryListSnapshot library;
+	for (int i = 0; i < 9; ++i) {
+		Xm8Ra::RaOverlayLibraryItem game;
+		game.game_id = 100 + i;
+		game.ra_game_id = i == 0 ? 1234 : 0;
+		game.title = i == 0 ? "Library First" : "Library Extra";
+		game.media_count = i + 1;
+		game.health_state = 0;
+		game.has_progress = i == 0;
+		game.core_total = 10;
+		game.core_unlocked = 4;
+		library.games.push_back(game);
+	}
+	overlay.OpenLibrary(library);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
+	assert(overlay.LibraryListSnapshot().games.size() == 9);
+	assert(overlay.LibraryListSnapshot().selected_index == 0);
+	int64_t game_id = 0;
+	assert(overlay.SelectedLibraryGameId(&game_id));
+	assert(game_id == 100);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LibraryListSnapshot().selected_index == 1);
+	assert(overlay.OnListScroll(7) == Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LibraryListSnapshot().selected_index == 8);
+	assert(overlay.LibraryListSnapshot().first_visible_index == 2);
+	assert(overlay.OnListPointer(90, 86, false) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LibraryListSnapshot().selected_index == 2);
+	assert(overlay.SelectedLibraryGameId(&game_id));
+	assert(game_id == 102);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::OpenLibraryGame);
+	assert(overlay.OnListPointer(90, 86, true) ==
+		Xm8Ra::RaOverlayAction::OpenLibraryGame);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::Close);
+
 	Xm8Ra::RaOverlayLeaderboardListSnapshot leaderboards;
 	leaderboards.game_loaded = true;
 	leaderboards.game_title = "Test Game";

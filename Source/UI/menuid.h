@@ -259,9 +259,11 @@
 										// RetroAchievements status
 #define MENU_RA_LOGIN			1503
 										// RetroAchievements login/logout
-#define MENU_RA_ACHIEVEMENTS	1504
+#define MENU_RA_LIBRARY			1504
+										// RetroAchievements library
+#define MENU_RA_ACHIEVEMENTS	1505
 										// RetroAchievements achievements
-#define MENU_RA_LEADERBOARDS	1505
+#define MENU_RA_LEADERBOARDS	1506
 										// RetroAchievements leaderboards
 #define MENU_RA_MAX				1599
 										// maximum

@@ -703,6 +703,7 @@ void Menu::EnterRa(int id)
 	list->AddCheckButton("RA mode", MENU_RA_MODE);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
 	list->AddButton("Login", MENU_RA_LOGIN);
+	list->AddButton("Library", MENU_RA_LIBRARY);
 	list->AddButton("Achievements", MENU_RA_ACHIEVEMENTS);
 	list->AddButton("Leaderboards", MENU_RA_LEADERBOARDS);
 
@@ -2287,6 +2288,10 @@ void Menu::CmdRa(int id)
 			app->OpenRaLoginOverlay();
 		}
 		update_status();
+		break;
+
+	case MENU_RA_LIBRARY:
+		app->OpenRaLibraryOverlay();
 		break;
 
 	case MENU_RA_ACHIEVEMENTS:

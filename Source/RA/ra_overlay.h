@@ -17,6 +17,7 @@ namespace Xm8Ra {
 
 enum class RaOverlayScreen {
 	None,
+	Library,
 	Achievements,
 	AchievementDetail,
 	Leaderboards,
@@ -49,6 +50,7 @@ enum class RaOverlayKey {
 enum class RaOverlayAction {
 	None,
 	SubmitLogin,
+	OpenLibraryGame,
 	Close,
 };
 
@@ -95,6 +97,31 @@ struct RaOverlayAchievementListSnapshot {
 	std::vector<RaOverlayAchievementItem> achievements;
 };
 
+struct RaOverlayLibraryItem {
+	int64_t game_id = 0;
+	int64_t ra_game_id = 0;
+	std::string title;
+	int media_count = 0;
+	int health_state = 0;
+	int64_t last_played_at = 0;
+	bool has_progress = false;
+	int core_total = 0;
+	int core_unlocked = 0;
+	int hardcore_unlocked = 0;
+	int points_total = 0;
+	int points_unlocked = 0;
+	std::string badge_url;
+};
+
+struct RaOverlayLibraryListSnapshot {
+	bool active = false;
+	size_t selected_index = 0;
+	size_t first_visible_index = 0;
+	uint32_t selection_revision = 0;
+	std::string status_message;
+	std::vector<RaOverlayLibraryItem> games;
+};
+
 struct RaOverlayAchievementDetailSnapshot {
 	bool active = false;
 	size_t selected_index = 0;
@@ -126,11 +153,13 @@ public:
 	void SetSnapshot(const RaOverlaySnapshot& snapshot);
 	const RaOverlaySnapshot& Snapshot() const;
 
+	void OpenLibrary(const RaOverlayLibraryListSnapshot& snapshot);
 	void OpenAchievements(const RaOverlayAchievementListSnapshot& snapshot);
 	void OpenLeaderboards(const RaOverlayLeaderboardListSnapshot& snapshot);
 	void OpenLogin(const std::string& username = std::string());
 	bool IsBlocking() const;
 	RaOverlayScreen Screen() const;
+	RaOverlayLibraryListSnapshot LibraryListSnapshot() const;
 	RaOverlayAchievementListSnapshot AchievementListSnapshot() const;
 	RaOverlayAchievementDetailSnapshot AchievementDetailSnapshot() const;
 	RaOverlayLeaderboardListSnapshot LeaderboardListSnapshot() const;
@@ -144,6 +173,7 @@ public:
 	bool LoginTargetAt(int x, int y, RaOverlayLoginTarget *target) const;
 	RaOverlayAction OnLoginPointer(int x, int y, bool activate);
 	bool ConsumeSubmittedLogin(std::string *username, std::string *password);
+	bool SelectedLibraryGameId(int64_t *game_id) const;
 	void SetLoginStatus(const std::string& message);
 	void CloseScreen();
 
@@ -167,6 +197,7 @@ private:
 	std::string notice_text_;
 	uint32_t notice_until_ms_ = 0;
 	RaOverlaySnapshot snapshot_;
+	RaOverlayLibraryListSnapshot library_;
 	RaOverlayAchievementListSnapshot achievements_;
 	RaOverlayLeaderboardListSnapshot leaderboards_;
 	RaOverlayScreen screen_ = RaOverlayScreen::None;

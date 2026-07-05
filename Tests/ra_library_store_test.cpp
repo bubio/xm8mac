@@ -2,6 +2,7 @@
 #include "ra_library.h"
 #include "ra_media_store.h"
 #include "ra_paths.h"
+#include "sqlite3.h"
 
 #include <chrono>
 #include <cerrno>
@@ -145,6 +146,34 @@ bool CopyFileBytes(const std::string& source, const std::string& destination)
 	return input.good() && output.good();
 }
 
+bool ExecSql(const std::string& database_path, const char *sql,
+	std::string *error)
+{
+	sqlite3 *db = nullptr;
+	if (sqlite3_open_v2(database_path.c_str(), &db,
+		SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nullptr) != SQLITE_OK) {
+		if (error != nullptr) {
+			*error = db != nullptr ? sqlite3_errmsg(db) : "open sqlite failed";
+		}
+		if (db != nullptr) {
+			sqlite3_close(db);
+		}
+		return false;
+	}
+	char *message = nullptr;
+	const int rc = sqlite3_exec(db, sql, nullptr, nullptr, &message);
+	if (rc != SQLITE_OK) {
+		if (error != nullptr) {
+			*error = message != nullptr ? message : sqlite3_errmsg(db);
+		}
+		sqlite3_free(message);
+		sqlite3_close(db);
+		return false;
+	}
+	sqlite3_close(db);
+	return true;
+}
+
 bool DirectoryHasPrefix(const std::string& path, const char *prefix)
 {
 	DIR *dir = opendir(path.c_str());
@@ -238,6 +267,31 @@ int main()
 	Check(ReadFile(single) == original_single, "original remains unchanged");
 	Check(first.working_path.find("/ra/media/") != std::string::npos,
 		"working copy is under RA media root");
+
+	std::vector<Xm8Ra::RaLibraryGameListItem> games;
+	Check(library.ListGames(&games, &error), "list games after first import");
+	Check(games.empty(), "unidentified import is hidden from RA library");
+	Check(library.MarkGameIdentified(first.record.game_id, 1234,
+		"RA Single Game", "https://media.example/badge.png", &error),
+		"mark first game identified");
+	Check(library.ListGames(&games, &error),
+		"list games after RA identification");
+	Check(games.size() == 1, "library list has identified game");
+	if (!games.empty()) {
+		Check(games[0].game_id == first.record.game_id,
+			"library list game id");
+		Check(games[0].ra_game_id == 1234, "library list RA game id");
+		Check(games[0].title == "RA Single Game",
+			"library list uses RA title");
+		Check(games[0].badge_url == "https://media.example/badge.png",
+			"library list badge URL");
+		Check(games[0].media_count == 1,
+			"library list media count");
+		Check(games[0].health_state == Xm8Ra::kRaMediaHealthOk,
+			"library list health");
+		Check(!games[0].has_progress,
+			"library list progress initially absent");
+	}
 
 	Xm8Ra::ImportedMedia duplicate;
 	Check(store.ImportDesktopD88(single, &duplicate, &error),
@@ -344,6 +398,11 @@ int main()
 		Check(resolved.anchor_md5 == playlist.anchor_md5,
 			"resolved launch profile exposes RA anchor");
 
+		Check(library.ListGames(&games, &error),
+			"list games after M3U import");
+		Check(!games.empty() && games[0].media_count == 2,
+			"library list counts grouped media");
+
 		Check(unlink(resolved.drives[1].working_path.c_str()) == 0,
 			"remove drive 2 working copy before resolve");
 		Check(store.ResolveLaunchProfile(playlist.game_id, &resolved,
@@ -409,11 +468,54 @@ int main()
 		"check modified original health");
 	Check(health.health_state == Xm8Ra::kRaMediaHealthSourceChanged,
 		"modified original health state");
+	const std::string progress_sql =
+		"INSERT OR REPLACE INTO progress(username, ra_game_id, core_total,"
+		" core_unlocked, hardcore_unlocked, points_total, points_unlocked,"
+		" synced_at) VALUES('tester', 1234, 10, 4, 2, 100, 40, 1);";
+	Check(ExecSql(library.DatabasePath(), progress_sql.c_str(), &error),
+		"insert progress fixture");
+	Check(library.ListGames(&games, &error),
+		"list games with progress and health error");
+	bool found_first_game = false;
+	for (const Xm8Ra::RaLibraryGameListItem& item : games) {
+		if (item.game_id == first.record.game_id) {
+			found_first_game = true;
+			Check(item.ra_game_id == 1234, "library list RA game id");
+			Check(item.has_progress, "library list progress present");
+			Check(item.core_total == 10 && item.core_unlocked == 4,
+				"library list progress values");
+			Check(item.hardcore_unlocked == 2,
+				"library list hardcore progress");
+			Check(item.points_total == 100 && item.points_unlocked == 40,
+				"library list points");
+			Check(item.health_state ==
+				Xm8Ra::kRaMediaHealthSourceChanged,
+				"library list reports health error");
+		}
+	}
+	Check(found_first_game, "library list contains first game after progress");
+	Check(library.MarkGamePlayed(first.record.game_id, &error),
+		"mark game played");
+	Check(library.ListGames(&games, &error),
+		"list games after mark played");
+	Check(!games.empty() && games[0].game_id == first.record.game_id,
+		"recently played game sorts first");
+
 	Xm8Ra::ImportedMedia modified;
 	Check(store.ImportDesktopD88(single, &modified, &error),
 		"modified source imports as new medium");
 	Check(modified.record.md5 != first.record.md5,
 		"modified source has distinct md5");
+	Check(library.ListGames(&games, &error),
+		"list games after unidentified modified import");
+	bool found_modified_game = false;
+	for (const Xm8Ra::RaLibraryGameListItem& item : games) {
+		if (item.game_id == modified.record.game_id) {
+			found_modified_game = true;
+		}
+	}
+	Check(!found_modified_game,
+		"unidentified modified import is hidden from RA library");
 	Check(ReadFile(first.working_path) == original_single,
 		"existing working save is not overwritten");
 
@@ -452,6 +554,13 @@ int main()
 		"new settings exist after corrupt DB recovery");
 	Check(!settings.enabled, "recovered DB settings default disabled");
 	recovered.Close();
+
+	const std::string empty_root = JoinPath(base, "empty-ra");
+	Xm8Ra::RaLibrary empty_library;
+	Check(empty_library.Open(empty_root, &error), "open empty library");
+	Check(empty_library.ListGames(&games, &error), "list empty library");
+	Check(games.empty(), "empty library has no games");
+	empty_library.Close();
 
 	RemoveTree(base);
 

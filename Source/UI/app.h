@@ -131,6 +131,8 @@ public:
 										// toggle RA mode setting
 	bool OpenRaLoginOverlay();
 										// open RA password login overlay
+	void OpenRaLibraryOverlay();
+										// open RA library overlay
 	void OpenRaAchievementsOverlay();
 										// open RA achievements overlay
 	void OpenRaLeaderboardsOverlay();
@@ -193,7 +195,8 @@ private:
 										// open one disk
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
-		std::string *ra_hash_to_identify, std::string *error);
+		std::string *ra_hash_to_identify, int64_t *ra_game_to_identify,
+		std::string *error);
 										// resolve disk to RA working copy
 	bool EnsureRaService(std::string *error);
 										// create RA service if needed
@@ -203,7 +206,7 @@ private:
 										// begin saved token login if possible
 	void StartRaAfterBoot();
 										// start RA login and mounted media after boot restore
-	void BeginRaSessionForMedia(const std::string& md5);
+	void BeginRaSessionForMedia(const std::string& md5, int64_t game_id);
 										// begin RA session for media hash
 	void BeginRaSessionForMountedDrive1();
 										// begin RA session for mounted drive 1
@@ -216,6 +219,10 @@ private:
 	void DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
 		const std::string& url);
 										// draw RA badge image if cached
+	Xm8Ra::RaOverlayLibraryListSnapshot MakeRaLibraryOverlaySnapshot() const;
+										// build library overlay snapshot
+	bool LaunchRaLibraryGame(int64_t game_id, std::string *error);
+										// launch registered RA library game
 	Xm8Ra::RaOverlayAchievementListSnapshot MakeRaAchievementsOverlaySnapshot() const;
 										// build achievements overlay snapshot
 	void RefreshRaAchievementsOverlay();
@@ -357,6 +364,8 @@ private:
 										// RA auto-scroll selected text start tick
 	std::string ra_pending_game_hash;
 										// media hash pending RA load
+	int64_t ra_pending_library_game_id;
+										// library game pending RA identification
 	std::string ra_loaded_game_hash;
 										// media hash passed to RA load
 #endif
