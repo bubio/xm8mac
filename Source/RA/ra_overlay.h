@@ -145,15 +145,21 @@ struct RaOverlayLeaderboardItem {
 	uint8_t format = 0;
 	bool lower_is_better = false;
 	bool has_scoreboard = false;
+	bool entries_pending = false;
+	bool entries_failed = false;
+	bool has_entries = false;
 	uint32_t new_rank = 0;
 	uint32_t num_entries = 0;
+	uint32_t entry_total = 0;
 	std::string title;
 	std::string description;
 	std::string tracker_value;
 	std::string bucket_label;
 	std::string submitted_score;
 	std::string best_score;
+	std::string entries_message;
 	std::vector<ScoreboardEntry> top_entries;
+	std::vector<ScoreboardEntry> entries;
 };
 
 struct RaOverlayLeaderboardListSnapshot {

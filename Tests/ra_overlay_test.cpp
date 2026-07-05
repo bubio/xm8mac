@@ -251,9 +251,13 @@ int main()
 	entry.username = "first";
 	entry.score = "1000";
 	updated_leaderboards.leaderboards[7].top_entries.push_back(entry);
+	updated_leaderboards.leaderboards[7].has_entries = true;
+	updated_leaderboards.leaderboards[7].entry_total = 10;
+	updated_leaderboards.leaderboards[7].entries.push_back(entry);
 	overlay.UpdateLeaderboards(updated_leaderboards);
 	assert(overlay.LeaderboardListSnapshot().selected_index == 7);
 	assert(overlay.LeaderboardListSnapshot().leaderboards[7].has_scoreboard);
+	assert(overlay.LeaderboardListSnapshot().leaderboards[7].has_entries);
 	assert(overlay.LeaderboardListSnapshot()
 		.leaderboards[7].top_entries[0].username == "first");
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==

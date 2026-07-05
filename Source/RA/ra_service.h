@@ -162,6 +162,30 @@ struct RaLeaderboardScoreboardEvent {
 	std::vector<RaLeaderboardScoreboardEntry> top_entries;
 };
 
+enum class RaLeaderboardEntriesState {
+	None,
+	FetchPending,
+	Loaded,
+	Failed,
+};
+
+struct RaLeaderboardEntryItem {
+	uint32_t rank = 0;
+	uint32_t index = 0;
+	std::string username;
+	std::string display;
+};
+
+struct RaLeaderboardEntriesSnapshot {
+	RaLeaderboardEntriesState state = RaLeaderboardEntriesState::None;
+	int result = 0;
+	std::string message;
+	uint32_t leaderboard_id = 0;
+	uint32_t total_entries = 0;
+	int32_t user_index = -1;
+	std::vector<RaLeaderboardEntryItem> entries;
+};
+
 struct RaServerErrorEvent {
 	int result = 0;
 	uint32_t related_id = 0;
@@ -211,6 +235,8 @@ public:
 		const std::string& password, std::string *error);
 	bool BeginLoginWithSavedToken(std::string *error);
 	bool BeginLoadGameByHash(const std::string& hash, std::string *error);
+	bool BeginFetchLeaderboardEntries(uint32_t leaderboard_id,
+		uint32_t first_entry, uint32_t count, std::string *error);
 	void DrainHttp();
 	bool DoFrame();
 	bool Idle();
@@ -224,6 +250,7 @@ public:
 	RaGameSessionSnapshot GameSessionSnapshot() const;
 	RaAchievementListSnapshot AchievementListSnapshot() const;
 	RaLeaderboardListSnapshot LeaderboardListSnapshot() const;
+	RaLeaderboardEntriesSnapshot LeaderboardEntriesSnapshot() const;
 	size_t PendingHttpCount() const;
 	uint64_t LastIssuedRequestId() const;
 	const RaHttpClient *HttpClientForTesting() const;
@@ -245,6 +272,9 @@ private:
 		rc_client_t *client, void *userdata);
 	static void RC_CCONV LoadGameCallback(int result, const char *error_message,
 		rc_client_t *client, void *userdata);
+	static void RC_CCONV LeaderboardEntriesCallback(int result,
+		const char *error_message, rc_client_leaderboard_entry_list_t *list,
+		rc_client_t *client, void *userdata);
 	static void RC_CCONV ClientEventHandler(const rc_client_event_t *event,
 		rc_client_t *client);
 	static void RC_CCONV ServerCall(const rc_api_request_t *request,
@@ -253,12 +283,15 @@ private:
 
 	void HandleLoginCallback(int result, const char *error_message);
 	void HandleLoadGameCallback(int result, const char *error_message);
+	void HandleLeaderboardEntriesCallback(int result, const char *error_message,
+		rc_client_leaderboard_entry_list_t *list);
 	void HandleClientEvent(const rc_client_event_t *event);
 	void UpdateRichPresenceEvent();
 	void SetFailed(int result, const std::string& message);
 	void DisableGameSession(int result, const std::string& message);
 	void DeleteCredentialsForRejectedToken();
 	void AbortLoginInProgress();
+	void AbortLeaderboardEntriesInProgress();
 
 	std::unique_ptr<RaHttpClient> http_client_;
 	std::unique_ptr<RaCredentialsStore> credentials_;
@@ -268,8 +301,10 @@ private:
 	void *host_read_memory_userdata_ = nullptr;
 	LoginKind login_kind_ = LoginKind::None;
 	rc_client_async_handle_t *login_async_handle_ = nullptr;
+	rc_client_async_handle_t *leaderboard_entries_async_handle_ = nullptr;
 	RaLoginSnapshot login_;
 	RaGameSessionSnapshot game_session_;
+	RaLeaderboardEntriesSnapshot leaderboard_entries_;
 	std::vector<RaEvent> events_;
 	std::string rich_presence_;
 	bool shutdown_ = false;

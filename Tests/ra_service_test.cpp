@@ -92,6 +92,24 @@ std::string StartSessionJson()
 		"\"ServerNow\":1710000000}";
 }
 
+std::string LeaderboardInfoJson()
+{
+	return "{\"Success\":true,\"LeaderboardData\":{"
+		"\"LBID\":77,\"LBFormat\":\"SCORE\",\"LowerIsBetter\":0,"
+		"\"LBTitle\":\"Fastest Clear\",\"LBDesc\":\"Finish quickly\","
+		"\"LBMem\":\"STA:0xH0000=1::CAN:0xH0001=0::SUB:0xH0002=1::VAL:0xH0003\","
+		"\"GameID\":1234,\"LBAuthor\":\"dev\","
+		"\"LBCreated\":\"2024-03-09 16:00:00\","
+		"\"LBUpdated\":\"2024-03-09 16:00:01\","
+		"\"TotalEntries\":10,"
+		"\"Entries\":["
+		"{\"User\":\"first\",\"Rank\":1,\"Index\":1,\"Score\":1000,"
+		"\"DateSubmitted\":1710000002,\"AvatarUrl\":\"\"},"
+		"{\"User\":\"player\",\"Rank\":2,\"Index\":2,\"Score\":900,"
+		"\"DateSubmitted\":1710000003,\"AvatarUrl\":\"\"}"
+		"]}}";
+}
+
 } // namespace
 
 int main()
@@ -351,6 +369,36 @@ int main()
 			"empty achievement set reports no achievements");
 		Check(achievements.achievements.empty(),
 			"empty achievement set has no list items");
+
+		Check(service.BeginFetchLeaderboardEntries(77, 1, 5, &error),
+			"begin leaderboard entry fetch");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"r=lbinfo") != std::string::npos,
+			"leaderboard entry fetch uses lbinfo API");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"i=77") != std::string::npos,
+			"leaderboard entry fetch sends leaderboard id");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"c=5") != std::string::npos,
+			"leaderboard entry fetch sends entry count");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			LeaderboardInfoJson()));
+		service.DrainHttp();
+		const Xm8Ra::RaLeaderboardEntriesSnapshot leaderboard_entries =
+			service.LeaderboardEntriesSnapshot();
+		Check(leaderboard_entries.state ==
+			Xm8Ra::RaLeaderboardEntriesState::Loaded,
+			"leaderboard entries load succeeds");
+		Check(leaderboard_entries.leaderboard_id == 77,
+			"leaderboard entries retain leaderboard id");
+		Check(leaderboard_entries.total_entries == 10,
+			"leaderboard entries capture total entry count");
+		Check(leaderboard_entries.entries.size() == 2,
+			"leaderboard entries copy returned entries");
+		Check(leaderboard_entries.entries[1].username == "player",
+			"leaderboard entry username is copied");
+		Check(leaderboard_entries.entries[1].display == "000900",
+			"leaderboard entry display is formatted");
 
 		service.UnloadGame();
 		Check(service.GameSessionSnapshot().state ==

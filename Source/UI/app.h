@@ -235,6 +235,8 @@ private:
 										// refresh achievements overlay if visible
 	void RefreshRaLeaderboardsOverlay();
 										// refresh leaderboards overlay if visible
+	void EnsureRaLeaderboardEntriesForSelection();
+										// fetch selected leaderboard entries if needed
 	void AddRaNotice(const std::string& text);
 										// add RA overlay notice
 	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);

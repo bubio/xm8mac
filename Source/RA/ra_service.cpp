@@ -378,6 +378,62 @@ bool RaService::BeginLoadGameByHash(const std::string& hash, std::string *error)
 	return true;
 }
 
+bool RaService::BeginFetchLeaderboardEntries(uint32_t leaderboard_id,
+	uint32_t first_entry, uint32_t count, std::string *error)
+{
+	if (!IsReady()) {
+		if (error != nullptr) {
+			*error = "RA service is not ready";
+		}
+		return false;
+	}
+	if (login_.state != RaLoginState::LoggedIn) {
+		if (error != nullptr) {
+			*error = "RA login is required before loading leaderboard entries";
+		}
+		return false;
+	}
+	if (game_session_.state != RaGameSessionState::Loaded) {
+		if (error != nullptr) {
+			*error = "RA game is required before loading leaderboard entries";
+		}
+		return false;
+	}
+	if (leaderboard_id == 0 || count == 0) {
+		if (error != nullptr) {
+			*error = "invalid RA leaderboard entry request";
+		}
+		return false;
+	}
+	if (leaderboard_entries_.state == RaLeaderboardEntriesState::FetchPending &&
+		leaderboard_entries_.leaderboard_id == leaderboard_id) {
+		return true;
+	}
+
+	AbortLeaderboardEntriesInProgress();
+	leaderboard_entries_ = RaLeaderboardEntriesSnapshot();
+	leaderboard_entries_.state = RaLeaderboardEntriesState::FetchPending;
+	leaderboard_entries_.leaderboard_id = leaderboard_id;
+
+	rc_client_async_handle_t *handle =
+		rc_client_begin_fetch_leaderboard_entries(client_, leaderboard_id,
+			first_entry, count, LeaderboardEntriesCallback, this);
+	leaderboard_entries_async_handle_ = handle;
+	if (handle == nullptr &&
+		leaderboard_entries_.state == RaLeaderboardEntriesState::FetchPending) {
+		leaderboard_entries_async_handle_ = nullptr;
+		leaderboard_entries_.state = RaLeaderboardEntriesState::Failed;
+		leaderboard_entries_.result = RC_INVALID_STATE;
+		leaderboard_entries_.message = "RA leaderboard entry load did not start";
+		if (error != nullptr) {
+			*error = leaderboard_entries_.message;
+		}
+		return false;
+	}
+
+	return true;
+}
+
 void RaService::DrainHttp()
 {
 	if (http_bridge_ != nullptr) {
@@ -424,10 +480,12 @@ std::vector<RaEvent> RaService::TakeEvents()
 
 void RaService::UnloadGame()
 {
+	AbortLeaderboardEntriesInProgress();
 	if (client_ != nullptr) {
 		rc_client_unload_game(client_);
 	}
 	game_session_ = RaGameSessionSnapshot();
+	leaderboard_entries_ = RaLeaderboardEntriesSnapshot();
 	rich_presence_.clear();
 }
 
@@ -455,6 +513,7 @@ void RaService::Shutdown()
 	shutdown_ = true;
 
 	AbortLoginInProgress();
+	AbortLeaderboardEntriesInProgress();
 	if (http_bridge_ != nullptr) {
 		http_bridge_->CancelAll();
 		http_bridge_->DrainCompleted();
@@ -555,6 +614,11 @@ RaLeaderboardListSnapshot RaService::LeaderboardListSnapshot() const
 	return snapshot;
 }
 
+RaLeaderboardEntriesSnapshot RaService::LeaderboardEntriesSnapshot() const
+{
+	return leaderboard_entries_;
+}
+
 size_t RaService::PendingHttpCount() const
 {
 	return http_bridge_ != nullptr ? http_bridge_->PendingCount() : 0;
@@ -619,6 +683,16 @@ void RC_CCONV RaService::LoadGameCallback(int result,
 	RaService *service = static_cast<RaService *>(userdata);
 	if (service != nullptr) {
 		service->HandleLoadGameCallback(result, error_message);
+	}
+}
+
+void RC_CCONV RaService::LeaderboardEntriesCallback(int result,
+	const char *error_message, rc_client_leaderboard_entry_list_t *list,
+	rc_client_t *, void *userdata)
+{
+	RaService *service = static_cast<RaService *>(userdata);
+	if (service != nullptr) {
+		service->HandleLeaderboardEntriesCallback(result, error_message, list);
 	}
 }
 
@@ -725,6 +799,40 @@ void RaService::HandleLoadGameCallback(int result, const char *error_message)
 	UpdateRichPresenceEvent();
 }
 
+void RaService::HandleLeaderboardEntriesCallback(int result,
+	const char *error_message, rc_client_leaderboard_entry_list_t *list)
+{
+	if (result == RC_ABORTED) {
+		return;
+	}
+	leaderboard_entries_async_handle_ = nullptr;
+	leaderboard_entries_.result = result;
+	leaderboard_entries_.message = error_message != nullptr ? error_message : "";
+
+	if (result != RC_OK || list == nullptr) {
+		leaderboard_entries_.state = RaLeaderboardEntriesState::Failed;
+		if (leaderboard_entries_.message.empty()) {
+			leaderboard_entries_.message = rc_error_str(result);
+		}
+		return;
+	}
+
+	leaderboard_entries_.state = RaLeaderboardEntriesState::Loaded;
+	leaderboard_entries_.total_entries = list->total_entries;
+	leaderboard_entries_.user_index = list->user_index;
+	leaderboard_entries_.entries.clear();
+	for (uint32_t i = 0; i < list->num_entries; i++) {
+		const rc_client_leaderboard_entry_t& source = list->entries[i];
+		RaLeaderboardEntryItem item;
+		item.rank = source.rank;
+		item.index = source.index;
+		item.username = SafeString(source.user);
+		item.display = source.display;
+		leaderboard_entries_.entries.push_back(item);
+	}
+	rc_client_destroy_leaderboard_entry_list(list);
+}
+
 void RaService::HandleClientEvent(const rc_client_event_t *event)
 {
 	if (event == nullptr) {
@@ -813,6 +921,17 @@ void RaService::AbortLoginInProgress()
 		login_.state = RaLoginState::LoggedOut;
 	}
 	login_kind_ = LoginKind::None;
+}
+
+void RaService::AbortLeaderboardEntriesInProgress()
+{
+	if (client_ != nullptr && leaderboard_entries_async_handle_ != nullptr) {
+		rc_client_abort_async(client_, leaderboard_entries_async_handle_);
+	}
+	leaderboard_entries_async_handle_ = nullptr;
+	if (leaderboard_entries_.state == RaLeaderboardEntriesState::FetchPending) {
+		leaderboard_entries_ = RaLeaderboardEntriesSnapshot();
+	}
 }
 
 } // namespace Xm8Ra

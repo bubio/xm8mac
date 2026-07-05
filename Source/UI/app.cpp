@@ -232,6 +232,38 @@ std::string RaLeaderboardScoreboardDetail(
 	}
 	return stream.str();
 }
+
+std::string RaLeaderboardEntriesDetail(
+	const Xm8Ra::RaOverlayLeaderboardItem& leaderboard)
+{
+	if (leaderboard.entries_pending) {
+		return "Loading leaderboard entries";
+	}
+	if (leaderboard.entries_failed) {
+		return leaderboard.entries_message.empty() ?
+			"Leaderboard entries unavailable" : leaderboard.entries_message;
+	}
+	if (!leaderboard.has_entries) {
+		return std::string();
+	}
+
+	std::ostringstream stream;
+	stream << "Entries " << leaderboard.entries.size();
+	if (leaderboard.entry_total != 0) {
+		stream << "/" << leaderboard.entry_total;
+	}
+	const size_t count =
+		std::min<size_t>(leaderboard.entries.size(), 3);
+	for (size_t i = 0; i < count; i++) {
+		const Xm8Ra::RaOverlayLeaderboardItem::ScoreboardEntry& entry =
+			leaderboard.entries[i];
+		stream << "  #" << entry.rank << " " << entry.username;
+		if (!entry.score.empty()) {
+			stream << " " << entry.score;
+		}
+	}
+	return stream.str();
+}
 #endif
 
 std::string DirectoryOfPath(const char *path)
@@ -1070,11 +1102,20 @@ void App::ProcessRaService(bool emulation_frame)
 		ra_service->LoginSnapshot().state;
 	const Xm8Ra::RaGameSessionState game_state_before =
 		ra_service->GameSessionSnapshot().state;
+	const Xm8Ra::RaLeaderboardEntriesSnapshot entries_before =
+		ra_service->LeaderboardEntriesSnapshot();
 	ra_service->DrainHttp();
 	const Xm8Ra::RaLoginSnapshot login_after_drain =
 		ra_service->LoginSnapshot();
 	const Xm8Ra::RaGameSessionSnapshot game_after_drain =
 		ra_service->GameSessionSnapshot();
+	const Xm8Ra::RaLeaderboardEntriesSnapshot entries_after_drain =
+		ra_service->LeaderboardEntriesSnapshot();
+	if (entries_before.leaderboard_id != entries_after_drain.leaderboard_id ||
+		entries_before.state != entries_after_drain.state ||
+		entries_before.entries.size() != entries_after_drain.entries.size()) {
+		RefreshRaLeaderboardsOverlay();
+	}
 	if (ra_saved_login_started &&
 		login_after_drain.state != Xm8Ra::RaLoginState::LoginPending) {
 		ra_saved_login_started = false;
@@ -1472,6 +1513,7 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 	else {
 		UpdateRaOverlayTextInput();
 	}
+	EnsureRaLeaderboardEntriesForSelection();
 	return true;
 }
 
@@ -2049,6 +2091,15 @@ void App::DrawRaOverlay()
 						static_cast<unsigned int>(selected_index + 1),
 						static_cast<unsigned int>(item_count),
 						scoreboard_detail.c_str());
+				}
+				else if (selected.entries_pending ||
+					selected.entries_failed || selected.has_entries) {
+					const std::string entries_detail =
+						RaLeaderboardEntriesDetail(selected);
+					std::snprintf(detail, sizeof(detail), "%u/%u  %s",
+						static_cast<unsigned int>(selected_index + 1),
+						static_cast<unsigned int>(item_count),
+						entries_detail.c_str());
 				}
 				else if (!selected.bucket_label.empty()) {
 					std::snprintf(detail, sizeof(detail),
@@ -5005,6 +5056,8 @@ Xm8Ra::RaOverlayLeaderboardListSnapshot App::MakeRaLeaderboardsOverlaySnapshot()
 	else {
 		const Xm8Ra::RaLeaderboardListSnapshot service_snapshot =
 			ra_service->LeaderboardListSnapshot();
+		const Xm8Ra::RaLeaderboardEntriesSnapshot entries_snapshot =
+			ra_service->LeaderboardEntriesSnapshot();
 		overlay_snapshot.game_loaded = service_snapshot.game_loaded;
 		overlay_snapshot.game_title = service_snapshot.game_title;
 		if (!service_snapshot.game_loaded) {
@@ -5048,6 +5101,24 @@ Xm8Ra::RaOverlayLeaderboardListSnapshot App::MakeRaLeaderboardsOverlaySnapshot()
 					item.top_entries.push_back(entry);
 				}
 			}
+			if (entries_snapshot.leaderboard_id == item.id) {
+				item.entries_pending = entries_snapshot.state ==
+					Xm8Ra::RaLeaderboardEntriesState::FetchPending;
+				item.entries_failed = entries_snapshot.state ==
+					Xm8Ra::RaLeaderboardEntriesState::Failed;
+				item.has_entries = entries_snapshot.state ==
+					Xm8Ra::RaLeaderboardEntriesState::Loaded;
+				item.entry_total = entries_snapshot.total_entries;
+				item.entries_message = entries_snapshot.message;
+				for (const auto& source_entry :
+					entries_snapshot.entries) {
+					Xm8Ra::RaOverlayLeaderboardItem::ScoreboardEntry entry;
+					entry.rank = source_entry.rank;
+					entry.username = source_entry.username;
+					entry.score = source_entry.display;
+					item.entries.push_back(entry);
+				}
+			}
 			overlay_snapshot.leaderboards.push_back(item);
 		}
 	}
@@ -5075,6 +5146,50 @@ void App::RefreshRaLeaderboardsOverlay()
 	if (ra_overlay != NULL &&
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
 		ra_overlay->UpdateLeaderboards(MakeRaLeaderboardsOverlaySnapshot());
+	}
+}
+
+//
+// EnsureRaLeaderboardEntriesForSelection()
+// fetch selected leaderboard entries if needed
+//
+void App::EnsureRaLeaderboardEntriesForSelection()
+{
+	if (ra_overlay == NULL || ra_service == NULL ||
+		ra_overlay->Screen() != Xm8Ra::RaOverlayScreen::Leaderboards) {
+		return;
+	}
+
+	const Xm8Ra::RaOverlayLeaderboardListSnapshot leaderboards =
+		ra_overlay->LeaderboardListSnapshot();
+	if (leaderboards.selected_index >= leaderboards.leaderboards.size()) {
+		return;
+	}
+
+	const uint32_t leaderboard_id =
+		leaderboards.leaderboards[leaderboards.selected_index].id;
+	if (leaderboard_id == 0 ||
+		ra_leaderboard_scoreboards.find(leaderboard_id) !=
+			ra_leaderboard_scoreboards.end()) {
+		return;
+	}
+
+	const Xm8Ra::RaLeaderboardEntriesSnapshot entries =
+		ra_service->LeaderboardEntriesSnapshot();
+	if (entries.leaderboard_id == leaderboard_id &&
+		(entries.state == Xm8Ra::RaLeaderboardEntriesState::FetchPending ||
+		 entries.state == Xm8Ra::RaLeaderboardEntriesState::Loaded ||
+		 entries.state == Xm8Ra::RaLeaderboardEntriesState::Failed)) {
+		return;
+	}
+
+	std::string error;
+	if (ra_service->BeginFetchLeaderboardEntries(leaderboard_id, 1, 5,
+		&error)) {
+		RefreshRaLeaderboardsOverlay();
+	}
+	else if (!error.empty()) {
+		AddRaNotice("RA: " + error);
 	}
 }
 
@@ -5246,6 +5361,7 @@ void App::OpenRaLeaderboardsOverlay()
 	}
 
 	ra_overlay->OpenLeaderboards(MakeRaLeaderboardsOverlaySnapshot());
+	EnsureRaLeaderboardEntriesForSelection();
 	ra_overlay_joystick_prev = 0;
 	ClearRaOverlayPointerState();
 	SDL_StopTextInput();
