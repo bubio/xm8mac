@@ -38,7 +38,8 @@ toolは次を行う。
 2. `xm8`を起動する。
 3. `RetroAchievements > Library`を開く。
 4. `RA Test Game`と`RA Test Multi Disk`がRAタイトルで表示されることを確認する。
-5. Libraryから各ゲームを起動し、VMへ`ra/media/<md5>/working.d88`が渡ることを確認する。
+5. Libraryで各ゲームを選択してGame Detailを開き、STARTから起動できることを確認する。
+   その際、VMへ`ra/media/<md5>/working.d88`が渡ることを確認する。
 6. `ra/dev-fixtures/source/`配下の原本fixtureが変更されていないことを確認する。
 
 実RAサーバーとの疎通、実績一覧、badge画像取得はこの手順の目的外である。
