@@ -1353,6 +1353,10 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 			ra_overlay->CloseScreen();
 			SDL_StopTextInput();
 			ClearRaOverlayPointerState();
+			input->LostFocus();
+			input->ResetList();
+			CtrlAudio();
+			video->SetMenuMode(false);
 			video->DrawCtrl();
 			AddRaNotice("RA: game launched");
 		}
@@ -4734,12 +4738,26 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 		return false;
 	}
 
+	for (int drive = 0; drive < MAX_DRIVE; drive++) {
+		const Xm8Ra::ResolvedLaunchDisk& disk = profile.drives[drive];
+		if (!disk.assigned) {
+			continue;
+		}
+		DiskSpec spec = {disk.working_path, drive, disk.bank_index};
+		int banks = 0;
+		if (!ProbeDisk(spec, &banks, error)) {
+			return false;
+		}
+	}
+
 	struct Snapshot {
 		bool open;
 		std::string path;
 		int bank;
 	};
 	Snapshot snapshots[MAX_DRIVE];
+
+	LockVM();
 	for (int drive = 0; drive < MAX_DRIVE; drive++) {
 		snapshots[drive].open = diskmgr[drive]->IsOpen();
 		if (snapshots[drive].open) {
@@ -4765,17 +4783,17 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 			diskmgr[drive]->Close();
 			continue;
 		}
-		DiskSpec spec = {disk.working_path, drive, disk.bank_index};
-		int banks = 0;
-		if (!ProbeDisk(spec, &banks, error) ||
-			!diskmgr[drive]->Open(spec.path.c_str(), spec.bank)) {
+		if (!diskmgr[drive]->Open(disk.working_path.c_str(),
+			disk.bank_index)) {
 			if (error != NULL && error->empty()) {
 				*error = "failed to open RA working copy";
 			}
 			restore();
+			UnlockVM();
 			return false;
 		}
 	}
+	UnlockVM();
 
 	if (ra_service != NULL) {
 		ra_service->UnloadGame();
