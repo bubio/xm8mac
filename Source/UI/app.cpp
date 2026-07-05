@@ -196,6 +196,42 @@ std::string RaEventNotice(const Xm8Ra::RaEvent& event)
 	}
 	return std::string();
 }
+
+std::string RaGameLoadFailureNotice(const Xm8Ra::RaGameSessionSnapshot& game)
+{
+	if (!game.message.empty()) {
+		return "RA: " + game.message;
+	}
+	if (!game.hash.empty()) {
+		return "RA: unsupported " + game.hash.substr(0, 8);
+	}
+	return "RA: unsupported game";
+}
+
+std::string RaLeaderboardScoreboardDetail(
+	const Xm8Ra::RaOverlayLeaderboardItem& leaderboard)
+{
+	std::ostringstream stream;
+	stream << "Rank " << leaderboard.new_rank;
+	if (leaderboard.num_entries != 0) {
+		stream << "/" << leaderboard.num_entries;
+	}
+	if (!leaderboard.submitted_score.empty()) {
+		stream << "  You " << leaderboard.submitted_score;
+	}
+	if (!leaderboard.best_score.empty()) {
+		stream << "  Best " << leaderboard.best_score;
+	}
+	if (!leaderboard.top_entries.empty()) {
+		const Xm8Ra::RaOverlayLeaderboardItem::ScoreboardEntry& top =
+			leaderboard.top_entries[0];
+		stream << "  Top #" << top.rank << " " << top.username;
+		if (!top.score.empty()) {
+			stream << " " << top.score;
+		}
+	}
+	return stream.str();
+}
 #endif
 
 std::string DirectoryOfPath(const char *path)
@@ -972,8 +1008,10 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 	ra_pending_game_hash = md5;
 	ra_pending_library_game_id = game_id;
 	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
 	AddRaNotice("RA: identifying " + md5.substr(0, 8));
 	RefreshRaAchievementsOverlay();
+	RefreshRaLeaderboardsOverlay();
 }
 
 //
@@ -1144,13 +1182,15 @@ void App::ProcessRaService(bool emulation_frame)
 				ra_pending_library_game_id = 0;
 			}
 			ra_loaded_game_hash.clear();
+			ra_leaderboard_scoreboards.clear();
 			if (login.state == Xm8Ra::RaLoginState::Failed) {
 				AddRaNotice("RA: login failed");
 			}
 			else {
-				AddRaNotice("RA: disabled for this session");
+				AddRaNotice(RaGameLoadFailureNotice(game));
 			}
 			RefreshRaAchievementsOverlay();
+			RefreshRaLeaderboardsOverlay();
 			menu->UpdateRaStatus();
 		}
 	}
@@ -1331,11 +1371,21 @@ void App::AddRaNotice(const std::string& text)
 //
 void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 {
+	bool leaderboards_changed = false;
 	for (const Xm8Ra::RaEvent& event : events) {
+		if (event.type == Xm8Ra::RaEventType::LeaderboardScoreboard &&
+			event.scoreboard.leaderboard_id != 0) {
+			ra_leaderboard_scoreboards[event.scoreboard.leaderboard_id] =
+				event.scoreboard;
+			leaderboards_changed = true;
+		}
 		const std::string notice = RaEventNotice(event);
 		if (!notice.empty()) {
 			AddRaNotice(notice);
 		}
+	}
+	if (leaderboards_changed) {
+		RefreshRaLeaderboardsOverlay();
 	}
 }
 
@@ -1992,7 +2042,15 @@ void App::DrawRaOverlay()
 			else {
 				const Xm8Ra::RaOverlayLeaderboardItem& selected =
 					leaderboards.leaderboards[selected_index];
-				if (!selected.bucket_label.empty()) {
+				if (selected.has_scoreboard) {
+					const std::string scoreboard_detail =
+						RaLeaderboardScoreboardDetail(selected);
+					std::snprintf(detail, sizeof(detail), "%u/%u  %s",
+						static_cast<unsigned int>(selected_index + 1),
+						static_cast<unsigned int>(item_count),
+						scoreboard_detail.c_str());
+				}
+				else if (!selected.bucket_label.empty()) {
 					std::snprintf(detail, sizeof(detail),
 						"%u/%u  %s  %s",
 						static_cast<unsigned int>(selected_index + 1),
@@ -2624,6 +2682,7 @@ void App::Deinit()
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
 #endif
 
 	// setting
@@ -4145,6 +4204,7 @@ void App::ChangeSystem(bool load)
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
 #endif
 
 	// delete virtual machine
@@ -4306,7 +4366,9 @@ void App::Reset()
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
 	RefreshRaAchievementsOverlay();
+	RefreshRaLeaderboardsOverlay();
 	BeginRaSessionForMountedDrive1();
 #endif
 
@@ -4511,6 +4573,7 @@ bool App::ToggleRaMode()
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
 	if (!enable && ra_service != NULL) {
 		ra_service->UnloadGame();
 	}
@@ -4967,6 +5030,24 @@ Xm8Ra::RaOverlayLeaderboardListSnapshot App::MakeRaLeaderboardsOverlaySnapshot()
 			item.description = source.description;
 			item.tracker_value = source.tracker_value;
 			item.bucket_label = source.bucket_label;
+			const auto scoreboard =
+				ra_leaderboard_scoreboards.find(item.id);
+			if (scoreboard != ra_leaderboard_scoreboards.end()) {
+				item.has_scoreboard = true;
+				item.new_rank = scoreboard->second.new_rank;
+				item.num_entries = scoreboard->second.num_entries;
+				item.submitted_score =
+					scoreboard->second.submitted_score;
+				item.best_score = scoreboard->second.best_score;
+				for (const auto& source_entry :
+					scoreboard->second.top_entries) {
+					Xm8Ra::RaOverlayLeaderboardItem::ScoreboardEntry entry;
+					entry.rank = source_entry.rank;
+					entry.username = source_entry.username;
+					entry.score = source_entry.score;
+					item.top_entries.push_back(entry);
+				}
+			}
 			overlay_snapshot.leaderboards.push_back(item);
 		}
 	}
@@ -4982,6 +5063,18 @@ void App::RefreshRaAchievementsOverlay()
 	if (ra_overlay != NULL &&
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
 		ra_overlay->OpenAchievements(MakeRaAchievementsOverlaySnapshot());
+	}
+}
+
+//
+// RefreshRaLeaderboardsOverlay()
+// refresh leaderboards overlay if it is visible
+//
+void App::RefreshRaLeaderboardsOverlay()
+{
+	if (ra_overlay != NULL &&
+		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
+		ra_overlay->UpdateLeaderboards(MakeRaLeaderboardsOverlaySnapshot());
 	}
 }
 
@@ -5113,6 +5206,7 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
 	ra_session_disabled = false;
 	BeginRaSessionForMedia(anchor_hash, game_id);
 	ra_library->MarkGamePlayed(game_id, nullptr);
@@ -5235,6 +5329,7 @@ void App::LogoutRa()
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
 	AddRaNotice("RA: logged out");
 }
 

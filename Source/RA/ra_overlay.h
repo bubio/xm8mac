@@ -134,14 +134,26 @@ struct RaOverlayAchievementDetailSnapshot {
 };
 
 struct RaOverlayLeaderboardItem {
+	struct ScoreboardEntry {
+		uint32_t rank = 0;
+		std::string username;
+		std::string score;
+	};
+
 	uint32_t id = 0;
 	uint8_t state = 0;
 	uint8_t format = 0;
 	bool lower_is_better = false;
+	bool has_scoreboard = false;
+	uint32_t new_rank = 0;
+	uint32_t num_entries = 0;
 	std::string title;
 	std::string description;
 	std::string tracker_value;
 	std::string bucket_label;
+	std::string submitted_score;
+	std::string best_score;
+	std::vector<ScoreboardEntry> top_entries;
 };
 
 struct RaOverlayLeaderboardListSnapshot {
@@ -168,6 +180,7 @@ public:
 	void OpenLibrary(const RaOverlayLibraryListSnapshot& snapshot);
 	void OpenAchievements(const RaOverlayAchievementListSnapshot& snapshot);
 	void OpenLeaderboards(const RaOverlayLeaderboardListSnapshot& snapshot);
+	void UpdateLeaderboards(const RaOverlayLeaderboardListSnapshot& snapshot);
 	void OpenLogin(const std::string& username = std::string());
 	bool IsBlocking() const;
 	RaOverlayScreen Screen() const;

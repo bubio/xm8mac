@@ -21,6 +21,8 @@
 namespace {
 
 int failures = 0;
+const char *kKnownSupportedPc8800Hash =
+	"d2bf8ef1abf7bb47e54da38a286f4ac8";
 
 void Check(bool condition, const char *message)
 {
@@ -302,7 +304,7 @@ int main()
 		Check(service.LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn,
 			"saved token login succeeds before load game");
 
-		const std::string hash = "0123456789abcdef0123456789abcdef";
+		const std::string hash = kKnownSupportedPc8800Hash;
 		Check(service.BeginLoadGameByHash(hash, &error),
 			"begin load game by hash");
 		Check(service.GameSessionSnapshot().state ==
@@ -312,8 +314,8 @@ int main()
 			"r=achievementsets") != std::string::npos,
 			"load game fetches achievement sets through rc_client");
 		Check(fake_http_raw->SentRequests().back().post_data.find(
-			"m=0123456789abcdef0123456789abcdef") != std::string::npos,
-			"load game uses provided RA identification hash");
+			std::string("m=") + kKnownSupportedPc8800Hash) != std::string::npos,
+			"load game sends known supported PC-8800 hash");
 
 		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
 			MinimalAchievementSetsJson()));

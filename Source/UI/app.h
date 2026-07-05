@@ -233,6 +233,8 @@ private:
 										// build leaderboards overlay snapshot
 	void RefreshRaAchievementsOverlay();
 										// refresh achievements overlay if visible
+	void RefreshRaLeaderboardsOverlay();
+										// refresh leaderboards overlay if visible
 	void AddRaNotice(const std::string& text);
 										// add RA overlay notice
 	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);
@@ -323,6 +325,9 @@ private:
 										// RA client service
 	Xm8Ra::RaOverlay *ra_overlay;
 										// RA overlay state
+	std::map<uint32_t, Xm8Ra::RaLeaderboardScoreboardEvent>
+		ra_leaderboard_scoreboards;
+										// latest RA leaderboard scoreboards
 	std::unique_ptr<Xm8Ra::RaHttpClient> ra_image_http_client;
 										// RA image HTTP client
 	struct RaBadgeImage {

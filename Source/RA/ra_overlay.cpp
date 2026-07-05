@@ -144,6 +144,22 @@ void RaOverlay::OpenLeaderboards(
 	login_submit_pending_ = false;
 }
 
+void RaOverlay::UpdateLeaderboards(
+	const RaOverlayLeaderboardListSnapshot& snapshot)
+{
+	if (screen_ != RaOverlayScreen::Leaderboards) {
+		return;
+	}
+
+	const size_t selected_index = leaderboards_.selected_index;
+	const size_t first_visible_index = leaderboards_.first_visible_index;
+	leaderboards_ = snapshot;
+	leaderboards_.active = true;
+	leaderboards_.selected_index = selected_index;
+	leaderboards_.first_visible_index = first_visible_index;
+	NormalizeListSelection();
+}
+
 void RaOverlay::OpenLogin(const std::string& username)
 {
 	WipeLoginPassword();

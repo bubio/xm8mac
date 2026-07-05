@@ -239,6 +239,23 @@ int main()
 	assert(overlay.OnListScroll(7) == Xm8Ra::RaOverlayAction::None);
 	assert(overlay.LeaderboardListSnapshot().selected_index == 7);
 	assert(overlay.LeaderboardListSnapshot().first_visible_index == 1);
+	Xm8Ra::RaOverlayLeaderboardListSnapshot updated_leaderboards =
+		leaderboards;
+	updated_leaderboards.leaderboards[7].has_scoreboard = true;
+	updated_leaderboards.leaderboards[7].new_rank = 2;
+	updated_leaderboards.leaderboards[7].num_entries = 10;
+	updated_leaderboards.leaderboards[7].submitted_score = "900";
+	updated_leaderboards.leaderboards[7].best_score = "1000";
+	Xm8Ra::RaOverlayLeaderboardItem::ScoreboardEntry entry;
+	entry.rank = 1;
+	entry.username = "first";
+	entry.score = "1000";
+	updated_leaderboards.leaderboards[7].top_entries.push_back(entry);
+	overlay.UpdateLeaderboards(updated_leaderboards);
+	assert(overlay.LeaderboardListSnapshot().selected_index == 7);
+	assert(overlay.LeaderboardListSnapshot().leaderboards[7].has_scoreboard);
+	assert(overlay.LeaderboardListSnapshot()
+		.leaderboards[7].top_entries[0].username == "first");
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
 		Xm8Ra::RaOverlayAction::Close);
 	assert(!overlay.IsBlocking());
