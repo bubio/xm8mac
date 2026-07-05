@@ -1353,6 +1353,7 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 			ra_overlay->CloseScreen();
 			SDL_StopTextInput();
 			ClearRaOverlayPointerState();
+			video->DrawCtrl();
 			AddRaNotice("RA: game launched");
 		}
 	}

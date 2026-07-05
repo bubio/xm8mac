@@ -382,6 +382,45 @@ if(BUILD_TESTING)
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_library_store_test COMMAND ra_library_store_test)
 
+    add_executable(ra_seed_library_fixture
+      Tests/ra_seed_library_fixture.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      Tests/Fixtures/ra_library_fixture_seed.cpp
+      Source/UI/m3u.cpp
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_seed_library_fixture PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_seed_library_fixture PRIVATE
+      Tests
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_seed_library_fixture PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+
+    add_executable(ra_seed_library_fixture_test
+      Tests/ra_seed_library_fixture_test.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      Tests/Fixtures/ra_library_fixture_seed.cpp
+      Source/UI/m3u.cpp
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_seed_library_fixture_test PRIVATE
+      xm8_ra_dependencies)
+    target_include_directories(ra_seed_library_fixture_test PRIVATE
+      Tests
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_seed_library_fixture_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_seed_library_fixture_test
+      COMMAND ra_seed_library_fixture_test)
+
     add_executable(ra_credentials_http_test
       Tests/ra_credentials_http_test.cpp
       Source/RA/ra_http_fake.cpp

@@ -60,6 +60,7 @@ ePC-8801MAの旧版
 | [10_Phase3実施記録.md](10_Phase3実施記録.md) | macOS SQLiteライブラリ、D88作業コピー、M3U起動構成、検証結果 |
 | [11_Phase4実施記録.md](11_Phase4実施記録.md) | macOS HTTP、認証、RAセッション開始、トップ階層RAメニュー、検証結果 |
 | [12_Phase5実施記録.md](12_Phase5実施記録.md) | macOS RAオーバーレイ基盤、通知状態分離、検証結果 |
+| [13_実ROMなしLibrary検証手順.md](13_実ROMなしLibrary検証手順.md) | 生成fixtureを使うLibrary v1手動確認、seed tool、検証結果 |
 
 ## 3. 確定事項
 
