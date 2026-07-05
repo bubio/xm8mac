@@ -799,6 +799,34 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 }
 
 //
+// RememberRaSourceDirForMountedDisk()
+// remember original source dir for mounted RA working copy
+//
+bool App::RememberRaSourceDirForMountedDisk(int drive)
+{
+	if (drive < 0 || drive >= MAX_DRIVE || ra_library == NULL ||
+		diskmgr[drive] == NULL || !diskmgr[drive]->IsOpen()) {
+		return false;
+	}
+
+	Xm8Ra::D88MediaInfo media;
+	if (!Xm8Ra::ProbeD88File(diskmgr[drive]->GetPath(), &media, nullptr)) {
+		return false;
+	}
+
+	Xm8Ra::MediaHealthRecord record;
+	if (!ra_library->LoadMediaHealthRecord(media.md5, &record, nullptr)) {
+		return false;
+	}
+	const std::string dir = DirectoryOfPath(record.source_locator.c_str());
+	if (dir.empty()) {
+		return false;
+	}
+	disk_open_dir = dir;
+	return true;
+}
+
+//
 // EnsureRaService()
 // create RA service on demand
 //
@@ -4183,6 +4211,11 @@ const char* App::GetDiskDir(int drive)
 	// drive 1
 	if ((drive == -1) || (drive == 0)) {
 		if (diskmgr[0]->IsOpen() == true) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			if (RememberRaSourceDirForMountedDisk(0)) {
+				return disk_open_dir.c_str();
+			}
+#endif
 			return diskmgr[0]->GetDir();
 		}
 	}
@@ -4190,15 +4223,30 @@ const char* App::GetDiskDir(int drive)
 	// drive 2
 	if ((drive == -1) || (drive == 1)) {
 		if (diskmgr[1]->IsOpen() == true) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			if (RememberRaSourceDirForMountedDisk(1)) {
+				return disk_open_dir.c_str();
+			}
+#endif
 			return diskmgr[1]->GetDir();
 		}
 	}
 
 	// no open
 	if (diskmgr[0]->IsOpen() == true) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (RememberRaSourceDirForMountedDisk(0)) {
+			return disk_open_dir.c_str();
+		}
+#endif
 		return diskmgr[0]->GetDir();
 	}
 	if (diskmgr[1]->IsOpen() == true) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (RememberRaSourceDirForMountedDisk(1)) {
+			return disk_open_dir.c_str();
+		}
+#endif
 		return diskmgr[1]->GetDir();
 	}
 

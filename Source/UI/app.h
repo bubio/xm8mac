@@ -200,6 +200,8 @@ private:
 		std::string *ra_hash_to_identify, int64_t *ra_game_to_identify,
 		std::string *error);
 										// resolve disk to RA working copy
+	bool RememberRaSourceDirForMountedDisk(int drive);
+										// remember source dir for mounted RA media
 	bool EnsureRaService(std::string *error);
 										// create RA service if needed
 	bool SaveRaModeSetting(bool enabled, std::string *error);
