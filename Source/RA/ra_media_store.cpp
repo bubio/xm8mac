@@ -1,6 +1,7 @@
 #include "ra_media_store.h"
 
 #include "m3u.h"
+#include "pathresolver.h"
 
 #include <chrono>
 #include <cerrno>
@@ -79,6 +80,22 @@ bool IsRegularFileNoFollow(const std::string& path)
 {
 	struct stat st;
 	return lstat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+bool ResolveSourcePath(const std::string& source_path, std::string *resolved,
+	std::string *error)
+{
+	char buffer[4096];
+	if (!ResolvePathForIO(source_path.c_str(), buffer, sizeof(buffer))) {
+		if (error != nullptr) {
+			*error = "cannot resolve media source path";
+		}
+		return false;
+	}
+	if (resolved != nullptr) {
+		*resolved = buffer;
+	}
+	return true;
 }
 
 bool MakeDirectoryTree(const std::string& path, std::string *error)
@@ -333,8 +350,13 @@ bool RaMediaStore::ResetWorkingCopy(const std::string& source_path,
 		return false;
 	}
 
+	std::string io_source_path;
+	if (!ResolveSourcePath(source_path, &io_source_path, error)) {
+		return false;
+	}
+
 	D88MediaInfo media;
-	if (!ProbeD88File(source_path.c_str(), &media, error)) {
+	if (!ProbeD88File(io_source_path.c_str(), &media, error)) {
 		return false;
 	}
 	if (media.md5 != expected_md5) {
@@ -355,7 +377,7 @@ bool RaMediaStore::ResetWorkingCopy(const std::string& source_path,
 		!MakeDirectoryTree(media_dir, error)) {
 		return false;
 	}
-	if (!CopyAndVerify(source_path, temporary, media, error)) {
+	if (!CopyAndVerify(io_source_path, temporary, media, error)) {
 		RemoveFile(temporary, nullptr);
 		return false;
 	}
@@ -410,8 +432,11 @@ bool RaMediaStore::CheckMediaHealth(const std::string& md5,
 			ProbeD88File(working_path.c_str(), &working, nullptr);
 	}
 
+	std::string io_source_path;
 	struct stat source_stat;
-	checked.source_exists = stat(record.source_locator.c_str(),
+	checked.source_exists =
+		ResolveSourcePath(record.source_locator, &io_source_path, nullptr) &&
+		stat(io_source_path.c_str(),
 		&source_stat) == 0 && S_ISREG(source_stat.st_mode);
 	if (checked.source_exists) {
 		checked.source_size = static_cast<int64_t>(source_stat.st_size);
@@ -422,7 +447,7 @@ bool RaMediaStore::CheckMediaHealth(const std::string& md5,
 			 checked.source_mtime != record.source_mtime);
 		if (checked.source_metadata_changed) {
 			D88MediaInfo source_media;
-			if (ProbeD88File(record.source_locator.c_str(), &source_media,
+			if (ProbeD88File(io_source_path.c_str(), &source_media,
 				nullptr)) {
 				checked.source_hash_changed = source_media.md5 != record.md5;
 			}
@@ -557,24 +582,30 @@ bool RaMediaStore::ImportD88IntoGame(const std::string& source_path,
 		return false;
 	}
 
+	std::string io_source_path;
+	if (!ResolveSourcePath(source_path, &io_source_path, error)) {
+		return false;
+	}
+
 	D88MediaInfo media;
-	if (!ProbeD88File(source_path.c_str(), &media, error)) {
+	if (!ProbeD88File(io_source_path.c_str(), &media, error)) {
 		return false;
 	}
 
 	std::string working_path;
 	bool copied = false;
-	if (!EnsureWorkingCopy(source_path, media, &working_path, &copied, error)) {
+	if (!EnsureWorkingCopy(io_source_path, media, &working_path, &copied,
+		error)) {
 		return false;
 	}
 
 	MediaRecord record;
 	const bool registered = game_id > 0 ?
 		library_->RegisterDesktopMediaInGame(media, source_path,
-			DisplayNameForPath(source_path), FileMtime(source_path),
+			DisplayNameForPath(source_path), FileMtime(io_source_path),
 			game_id, ordinal, &record, error) :
 		library_->RegisterDesktopMedia(media, source_path,
-			DisplayNameForPath(source_path), FileMtime(source_path),
+			DisplayNameForPath(source_path), FileMtime(io_source_path),
 			&record, error);
 	if (!registered) {
 		if (copied) {
