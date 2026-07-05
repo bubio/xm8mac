@@ -43,6 +43,7 @@
 #include "diskmgr.h"
 #include "tapemgr.h"
 #include "clidisk.h"
+#include "pathresolver.h"
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_build_info.h"
 #include "ra_media_probe.h"
@@ -701,10 +702,22 @@ bool App::ProbeDisk(const DiskSpec& spec, int *banks, std::string *error)
 bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 {
 	DiskSpec open_spec = spec;
+	char resolved_path[_MAX_PATH * 3];
+	if (!ResolvePathForIO(spec.path.c_str(), resolved_path,
+		sizeof(resolved_path))) {
+		if (error != NULL) {
+			std::ostringstream message;
+			message << "drive " << spec.drive << ": cannot resolve D88 path: "
+				<< spec.path;
+			*error = message.str();
+		}
+		return false;
+	}
+	open_spec.path = resolved_path;
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	std::string ra_hash_to_identify;
 	int64_t ra_game_to_identify = 0;
-	if (ResolveDiskForRaMode(spec, &open_spec, &ra_hash_to_identify,
+	if (ResolveDiskForRaMode(open_spec, &open_spec, &ra_hash_to_identify,
 		&ra_game_to_identify,
 		error) == false) {
 		return false;
