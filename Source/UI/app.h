@@ -202,6 +202,8 @@ private:
 										// resolve disk to RA working copy
 	bool RememberRaSourceDirForMountedDisk(int drive);
 										// remember source dir for mounted RA media
+	bool RememberRaLaunchDriveForMountedDisk(int drive, std::string *error);
+										// persist a mounted disk in its RA launch profile
 	bool EnsureRaService(std::string *error);
 										// create RA service if needed
 	bool SaveRaModeSetting(bool enabled, std::string *error);

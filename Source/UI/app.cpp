@@ -791,6 +791,10 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 		return false;
 	}
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_mode_enabled &&
+		!RememberRaLaunchDriveForMountedDisk(open_spec.drive, error)) {
+		return false;
+	}
 	if (!ra_hash_to_identify.empty()) {
 		BeginRaSessionForMedia(ra_hash_to_identify, ra_game_to_identify);
 	}
@@ -892,6 +896,82 @@ bool App::RememberRaSourceDirForMountedDisk(int drive)
 	}
 	disk_open_dir = dir;
 	return true;
+}
+
+//
+// RememberRaLaunchDriveForMountedDisk()
+// persist an explicitly mounted disk/bank in the owning game's launch profile
+//
+bool App::RememberRaLaunchDriveForMountedDisk(int drive, std::string *error)
+{
+	if (drive < 0 || drive >= MAX_DRIVE || ra_library == NULL ||
+		diskmgr[drive] == NULL || !diskmgr[drive]->IsOpen()) {
+		return true;
+	}
+
+	Xm8Ra::D88MediaInfo media;
+	if (!Xm8Ra::ProbeD88File(diskmgr[drive]->GetPath(), &media, error)) {
+		return false;
+	}
+	Xm8Ra::MediaRecord record;
+	std::string find_error;
+	if (!ra_library->FindMedia(media.md5, &record, &find_error)) {
+		if (!find_error.empty()) {
+			if (error != NULL) {
+				*error = find_error;
+			}
+			return false;
+		}
+		return true;
+	}
+
+	// Drive 2 is only part of this launch profile when Drive 1 belongs to
+	// the same local game. This also covers two banks from one D88.
+	if (drive == 1) {
+		if (diskmgr[0] == NULL || !diskmgr[0]->IsOpen()) {
+			return true;
+		}
+		Xm8Ra::D88MediaInfo anchor_media;
+		Xm8Ra::MediaRecord anchor_record;
+		if (!Xm8Ra::ProbeD88File(diskmgr[0]->GetPath(), &anchor_media, error)) {
+			return false;
+		}
+		find_error.clear();
+		if (!ra_library->FindMedia(anchor_media.md5, &anchor_record,
+			&find_error)) {
+			if (!find_error.empty()) {
+				if (error != NULL) {
+					*error = find_error;
+				}
+				return false;
+			}
+			return true;
+		}
+		if (anchor_record.game_id != record.game_id) {
+			return true;
+		}
+	}
+
+	Xm8Ra::LaunchProfile profile;
+	if (!ra_library->LoadLaunchProfile(record.game_id, &profile, error)) {
+		return false;
+	}
+	Xm8Ra::LaunchDrive& slot = profile.drives[drive];
+	const int bank = diskmgr[drive]->GetBank();
+	const bool is_anchor = drive == 0;
+	if (slot.assigned && slot.media_md5 == media.md5 &&
+		slot.bank_index == bank && slot.is_ra_anchor == is_anchor) {
+		return true;
+	}
+
+	if (is_anchor) {
+		profile.drives[1].is_ra_anchor = false;
+	}
+	slot.assigned = true;
+	slot.media_md5 = media.md5;
+	slot.bank_index = bank;
+	slot.is_ra_anchor = is_anchor;
+	return ra_library->SaveLaunchProfile(profile, error);
 }
 
 //
@@ -1989,19 +2069,7 @@ void App::DrawRaOverlay()
 			else if (library_screen) {
 				const Xm8Ra::RaOverlayLibraryItem& item =
 					library.games[item_index];
-				const char *health =
-					item.health_state == Xm8Ra::kRaMediaHealthOk ? "OK" : "!";
-				if (item.has_progress && item.core_total > 0) {
-					std::snprintf(line, sizeof(line),
-						"%s  %d/%d  %d media  %s",
-						item.title.c_str(), item.core_unlocked,
-						item.core_total, item.media_count, health);
-				}
-				else {
-					std::snprintf(line, sizeof(line),
-						"%s  %d media  %s",
-						item.title.c_str(), item.media_count, health);
-				}
+				std::snprintf(line, sizeof(line), "%s", item.title.c_str());
 			}
 			else if (achievements_screen) {
 				const Xm8Ra::RaOverlayAchievementItem& item =
@@ -5242,6 +5310,11 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 		}
 		return false;
 	}
+	// Capture an already-mounted auxiliary disk as well. This migrates the
+	// former Drive-1-only default the first time an existing game is started.
+	if (!RememberRaLaunchDriveForMountedDisk(1, error)) {
+		return false;
+	}
 
 	Xm8Ra::ResolvedLaunchProfile profile;
 	if (!ra_media_store->ResolveLaunchProfile(game_id, &profile, error)) {
@@ -5329,6 +5402,9 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 			return false;
 		}
 	}
+	// START represents a fresh boot of the saved disk configuration.
+	vm->reset();
+	upd1990a->resync();
 	UnlockVM();
 
 	if (ra_service != NULL) {

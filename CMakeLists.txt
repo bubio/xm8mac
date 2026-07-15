@@ -321,9 +321,17 @@ if(BUILD_TESTING)
   endif()
 
   if(XM8_ENABLE_RETROACHIEVEMENTS)
+    set(RA_PATHRESOLVER_SOURCES
+      Source/UI/pathresolver.cpp
+    )
+    if(APPLE)
+      list(APPEND RA_PATHRESOLVER_SOURCES Source/UI/pathresolver_mac.mm)
+    endif()
+
     add_executable(ra_dependency_test
       Tests/ra_dependency_test.cpp
       Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
       $<TARGET_OBJECTS:xm8_ra_core>
       $<TARGET_OBJECTS:xm8_ra_platform>
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
@@ -338,6 +346,7 @@ if(BUILD_TESTING)
       Tests/ra_media_probe_test.cpp
       Tests/Fixtures/d88_fixture.cpp
       Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
       $<TARGET_OBJECTS:xm8_ra_core>
       $<TARGET_OBJECTS:xm8_ra_platform>
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
@@ -368,6 +377,7 @@ if(BUILD_TESTING)
       Tests/ra_library_store_test.cpp
       Tests/Fixtures/d88_fixture.cpp
       Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
       $<TARGET_OBJECTS:xm8_ra_core>
       $<TARGET_OBJECTS:xm8_ra_platform>
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
@@ -387,6 +397,7 @@ if(BUILD_TESTING)
       Tests/Fixtures/d88_fixture.cpp
       Tests/Fixtures/ra_library_fixture_seed.cpp
       Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
       $<TARGET_OBJECTS:xm8_ra_core>
       $<TARGET_OBJECTS:xm8_ra_platform>
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
@@ -405,6 +416,7 @@ if(BUILD_TESTING)
       Tests/Fixtures/d88_fixture.cpp
       Tests/Fixtures/ra_library_fixture_seed.cpp
       Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
       $<TARGET_OBJECTS:xm8_ra_core>
       $<TARGET_OBJECTS:xm8_ra_platform>
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
@@ -425,6 +437,7 @@ if(BUILD_TESTING)
       Tests/ra_credentials_http_test.cpp
       Source/RA/ra_http_fake.cpp
       Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
       $<TARGET_OBJECTS:xm8_ra_core>
       $<TARGET_OBJECTS:xm8_ra_platform>
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
