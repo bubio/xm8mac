@@ -1575,6 +1575,22 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
 		return false;
 	}
+	if (e->type == SDL_MOUSEMOTION) {
+		if (e->motion.which == SDL_TOUCH_MOUSEID) {
+			return true;
+		}
+		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
+			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
+			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
+			int x = e->motion.x;
+			int y = e->motion.y;
+			if (video->ConvertPoint(&x, &y)) {
+				return HandleRaOverlayAction(
+					ra_overlay->OnListPointer(x, y, false));
+			}
+		}
+		return true;
+	}
 	if (e->type == SDL_MOUSEWHEEL) {
 		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
 			ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail ||
@@ -3403,7 +3419,7 @@ void App::Poll(SDL_Event *e)
 			mouse_tick = SDL_GetTicks();
 		}
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-		if (ra_overlay != NULL && ra_overlay->IsBlocking()) {
+		if (HandleRaOverlayMouse(e)) {
 			break;
 		}
 #endif
