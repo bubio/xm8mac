@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # SDL2 のセットアップをキャッシュし、必要ならスクリプトで実行
       - name: Cache SDL2
