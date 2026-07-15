@@ -169,3 +169,79 @@ Phase 5の次の実装単位は、media change/rollbackとOffline sessionを先�
 - Phase 7: RA専用Softcore state、progress chunk、検証付きloadを実装する。
 - Phase 8: Hardcore policyとmacOS完全受入を行う。
 - Phase 9以降: Windows、Linux、Android、4 OS最終受入の順序を維持する。
+
+## 8. 次回作業handoff
+
+### 8.1 現在地点
+
+- branch: `codex/retroachievements-integration`
+- 実装commit: `d5529c0 Add RA Rich Presence menu and frame callback support`
+- `origin/codex/retroachievements-integration`へ反映済み。
+- ASCENDによる実フレーム評価とRich Presence表示は利用者手動確認済み。
+- 次回はPhase 5のmedia change/rollbackから開始する。Library同期やPhase 6のtoast
+  queueへ先に進まない。
+
+### 8.2 最初に実装する単位
+
+`rc_client_begin_change_media()`を使う「同一ゲームの別D88への交換」と、その失敗処理を
+1単位として実装する。
+
+処理順:
+
+1. 変更先mediaが現在のLibrary `games.id`に所属することをDBで確認する。
+2. 保存済みRA識別hashとworking copyを取得し、D88 probeとbank範囲を検証する。
+3. 現在のDrive 1 path、bank、RA hashをrollback用に保持する。
+4. 新hashで`rc_client_begin_change_media()`を開始する。
+5. RA成功時だけVMのDrive 1をworking copyへ交換する。
+6. VM交換失敗時は旧hashへ`rc_client_begin_change_media()`してRAをrollbackする。
+7. rollback失敗時はRA評価を停止してOffline sessionへ移し、VMは交換前媒体を維持する。
+
+境界条件:
+
+- 同一D88内のbank切替ではmedia change APIを呼ばない。
+- Drive 2の変更ではmedia change APIを呼ばない。
+- 別ゲーム所属mediaは現在sessionへ挿入せず、ゲーム再起動を要求する。
+- RA変更確定前にVMの現在媒体やlaunch profileを変更しない。
+
+### 8.3 主な変更対象
+
+- `Source/RA/ra_service.h/.cpp`
+  - media changeのpending/callback/abort、成功・失敗snapshot、rollback入口。
+- `Source/UI/app.cpp/.h`
+  - `OpenDiskFromUser()`とRA媒体解決を、load gameとmedia changeで分岐する。
+  - RA成功後のVM交換、VM失敗時rollback、Offline遷移を調停する。
+- `Source/RA/ra_library.h/.cpp`または`ra_media_store.h/.cpp`
+  - 対象mediaの同一game所属、hash、working path、bankを一括検証して返す。
+- `Tests/ra_service_test.cpp`、`Tests/ra_library_store_test.cpp`
+  - 下記の成功・失敗経路をfake client/生成fixtureで固定する。
+
+### 8.4 完了条件
+
+- 同一ゲーム別媒体のRA成功後だけDrive 1が交換される。
+- RA change失敗時はVMとlaunch profileが変化しない。
+- VM交換失敗・RA rollback成功時は旧媒体で評価を継続する。
+- rollback失敗時はOffline sessionとなり、以降`DoFrame()`しない。
+- bank切替とDrive 2変更でmedia change API呼出しが0回である。
+- 別ゲーム媒体が拒否され、現在sessionとVM媒体が維持される。
+- shutdown時にpending media change callbackを残さない。
+
+ASCENDは単一D88なので回帰確認へ使う。媒体交換の自動・手動確認には
+`ra_seed_library_fixture`が生成する`RA Test Multi Disk`を使う。
+
+再検証command:
+
+```sh
+cmake --build build-ra --target xm8 ra_service_test \
+  ra_library_store_test ra_seed_library_fixture_test
+ctest --test-dir build-ra \
+  -R 'host_frame_callback_test|ra_|d88fixture_test|d88probe_test|clidisk_test' \
+  --output-on-failure
+cmake --build /tmp/xm8mac-ra-audit-off --target xm8 \
+  host_frame_callback_test d88fixture_test d88probe_test clidisk_test
+ctest --test-dir /tmp/xm8mac-ra-audit-off \
+  -R 'host_frame_callback_test|d88fixture_test|d88probe_test|clidisk_test' \
+  --output-on-failure
+git diff --check
+```
+
+media change/rollback完了後に、Offline session状態機械、Library同期の順で進める。
