@@ -702,6 +702,7 @@ void Menu::EnterRa(int id)
 
 	list->AddCheckButton("RA mode", MENU_RA_MODE);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
+	list->AddButton("Now: -", MENU_RA_PRESENCE);
 	list->AddButton("Login", MENU_RA_LOGIN);
 	list->AddButton("Library", MENU_RA_LIBRARY);
 	list->AddButton("Achievements", MENU_RA_ACHIEVEMENTS);
@@ -729,9 +730,22 @@ void Menu::UpdateRaStatus()
 	char ra_status[96];
 	app->GetRaMenuStatus(ra_status, sizeof(ra_status));
 	list->SetText(MENU_RA_STATUS, ra_status);
+	char ra_presence[256];
+	app->GetRaMenuPresence(ra_presence, sizeof(ra_presence));
+	list->SetText(MENU_RA_PRESENCE, ra_presence);
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
 	list->SetText(MENU_RA_LOGIN,
 		app->IsRaLoggedIn() ? "Logout" : "Login");
+}
+
+//
+// IsRaRichPresenceFocused()
+// check whether the RA menu Rich Presence row has focus
+//
+bool Menu::IsRaRichPresenceFocused()
+{
+	return list != NULL && list->GetID() == MENU_RA &&
+		list->GetFocusID() == MENU_RA_PRESENCE;
 }
 #endif
 
@@ -2276,6 +2290,10 @@ void Menu::CmdRa(int id)
 		break;
 
 	case MENU_RA_STATUS:
+		update_status();
+		break;
+
+	case MENU_RA_PRESENCE:
 		update_status();
 		break;
 

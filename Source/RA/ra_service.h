@@ -248,6 +248,7 @@ public:
 
 	RaLoginSnapshot LoginSnapshot() const;
 	RaGameSessionSnapshot GameSessionSnapshot() const;
+	std::string RichPresence() const;
 	RaAchievementListSnapshot AchievementListSnapshot() const;
 	RaLeaderboardListSnapshot LeaderboardListSnapshot() const;
 	RaLeaderboardEntriesSnapshot LeaderboardEntriesSnapshot() const;

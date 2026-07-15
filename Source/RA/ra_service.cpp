@@ -543,6 +543,11 @@ RaGameSessionSnapshot RaService::GameSessionSnapshot() const
 	return game_session_;
 }
 
+std::string RaService::RichPresence() const
+{
+	return rich_presence_;
+}
+
 RaAchievementListSnapshot RaService::AchievementListSnapshot() const
 {
 	RaAchievementListSnapshot snapshot;

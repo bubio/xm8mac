@@ -265,6 +265,8 @@
 										// RetroAchievements achievements
 #define MENU_RA_LEADERBOARDS	1506
 										// RetroAchievements leaderboards
+#define MENU_RA_PRESENCE		1507
+										// RetroAchievements Rich Presence
 #define MENU_RA_MAX				1599
 										// maximum
 

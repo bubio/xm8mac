@@ -301,6 +301,14 @@ if(BUILD_TESTING)
   target_include_directories(pathresolver_test PRIVATE Source/UI)
   add_test(NAME pathresolver_test COMMAND pathresolver_test)
 
+  add_executable(host_frame_callback_test
+    Tests/host_frame_callback_test.cpp
+  )
+  target_include_directories(host_frame_callback_test PRIVATE
+    Source/ePC-8801MA/vm
+  )
+  add_test(NAME host_frame_callback_test COMMAND host_frame_callback_test)
+
   if(APPLE)
     add_executable(converter_mac_test
       Tests/converter_mac_test.mm
@@ -360,6 +368,22 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_media_probe_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_media_probe_test COMMAND ra_media_probe_test)
+
+    add_executable(ra_inspect_media
+      Tests/ra_inspect_media.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_inspect_media PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_inspect_media PRIVATE
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_inspect_media PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
 
     add_executable(ra_memory_map_test
       Tests/ra_memory_map_test.cpp

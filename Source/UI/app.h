@@ -147,6 +147,8 @@ public:
 										// logout RA
 	void GetRaMenuStatus(char *buffer, size_t capacity) const;
 										// get RA status text for menu
+	void GetRaMenuPresence(char *buffer, size_t capacity) const;
+										// get Rich Presence text for menu
 	uint32_t ReadRaInspectionMemory(uint32_t address, uint8_t *buffer,
 		uint32_t num_bytes) const;
 										// read current VM memory for RA
@@ -216,8 +218,14 @@ private:
 										// begin RA session for media hash
 	void BeginRaSessionForMountedDrive1();
 										// begin RA session for mounted drive 1
-	void ProcessRaService(bool emulation_frame);
-										// progress RA service
+	static void RaHostFrameComplete(void *userdata);
+										// EVENT host frame callback
+	void AttachRaHostFrameCallback();
+										// connect callback to current EVENT instance
+	void ProcessRaEmulationFrame();
+										// evaluate one completed VM frame
+	void ProcessRaService(bool emulation_idle);
+										// progress async RA service work
 	void ProcessRaImages();
 										// progress RA badge image HTTP
 	void RequestRaBadgeImage(const std::string& url);
@@ -379,6 +387,10 @@ private:
 										// RA auto-scroll selected text revision
 	Uint32 ra_overlay_auto_scroll_started;
 										// RA auto-scroll selected text start tick
+	bool ra_menu_presence_scroll_active;
+										// RA menu Rich Presence detail has focus
+	Uint32 ra_menu_presence_scroll_started;
+										// RA menu Rich Presence scroll start tick
 	std::string ra_pending_game_hash;
 										// media hash pending RA load
 	int64_t ra_pending_library_game_id;

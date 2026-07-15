@@ -660,6 +660,16 @@ int MenuList::GetID()
 }
 
 //
+// GetFocusID()
+// get focused item id
+//
+int MenuList::GetFocusID()
+{
+	MenuItem *item = GetItem(menu_focus);
+	return item != NULL ? item->GetID() : MENU_BACK;
+}
+
+//
 // GetName()
 // get menu name
 //

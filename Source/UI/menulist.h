@@ -69,6 +69,8 @@ public:
 										// set user info
 	int GetID();
 										// get menu id
+	int GetFocusID();
+										// get focused item id
 	const char* GetName(int id);
 										// get menu name
 	void SetFocus(int id);

@@ -53,6 +53,8 @@ public:
 										// enter RetroAchievements menu
 	void UpdateRaStatus();
 										// update RetroAchievements status rows
+	bool IsRaRichPresenceFocused();
+										// Rich Presence row has focus
 	void EnterVideo(int id);
 										// enter video menu
 	void EnterAudio();

@@ -13,6 +13,7 @@
 #include "vm.h"
 #include "../emu.h"
 #include "device.h"
+#include "host_frame_callback.h"
 
 #define MAX_CPU		8
 #define MAX_SOUND	8
@@ -89,6 +90,7 @@ private:
 	int dont_skip_frames;
 	bool prev_skip, next_skip;
 	bool sound_changed;
+	HostFrameCallback host_frame_callback;
 	
 	void mix_sound(int samples);
 	void* get_event(int index);
@@ -173,6 +175,11 @@ public:
 		return next_frames_per_sec;
 	}
 	void drive();
+	void set_host_frame_callback(HostFrameCallback::Callback callback,
+		void *userdata)
+	{
+		host_frame_callback.set(callback, userdata);
+	}
 	
 	void initialize_sound(int rate, int samples);
 	uint16* create_sound(int* extra_frames);

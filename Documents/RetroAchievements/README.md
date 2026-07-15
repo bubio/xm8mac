@@ -61,6 +61,7 @@ ePC-8801MAの旧版
 | [11_Phase4実施記録.md](11_Phase4実施記録.md) | macOS HTTP、認証、RAセッション開始、トップ階層RAメニュー、検証結果 |
 | [12_Phase5実施記録.md](12_Phase5実施記録.md) | macOS RAオーバーレイ基盤、通知状態分離、検証結果 |
 | [13_実ROMなしLibrary検証手順.md](13_実ROMなしLibrary検証手順.md) | 生成fixtureを使うLibrary v1手動確認、seed tool、検証結果 |
+| [14_Phase5-6継続実施記録.md](14_Phase5-6継続実施記録.md) | 現状再監査、実フレーム評価、ASCEND媒体検査、Phase 5-6残件 |
 
 ## 3. 確定事項
 

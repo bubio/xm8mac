@@ -372,6 +372,10 @@ void EVENT::drive()
 		}
 	}
 #endif // SDL
+
+	// Notify the host only after the entire VM frame, including sound mixing,
+	// has completed. The callback must not perform UI work.
+	host_frame_callback.notify();
 }
 
 void EVENT::update_event(int clock)

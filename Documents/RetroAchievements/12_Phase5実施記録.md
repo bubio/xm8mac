@@ -109,6 +109,11 @@ git diff --check
 
 ## 5. 未完了項目
 
+> 2026-07-15追記: 本節は2026-07-02時点の記録である。Library、Game Detail、
+> Achievements詳細、badge、Leaderboard一覧・scoreboard・順位取得は後続commitで
+> 実装済みとなった。現在の実装状況と残件は
+> [14_Phase5-6継続実施記録.md](14_Phase5-6継続実施記録.md)を参照すること。
+
 - ASCIIオンスクリーンキーボード。
 - 既存softkeyはVMへのPC-88キー入力経路であり、RA Login文字列入力へ渡す変換層は未接続。
 - RetroAchievementsメニューとLogin画面の視覚確認とスクリーンショット比較。

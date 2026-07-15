@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
@@ -86,6 +87,21 @@ std::string MinimalAchievementSetsJson()
 		"\"Achievements\":[],\"Leaderboards\":[]}]}";
 }
 
+std::string FrameAchievementSetsJson()
+{
+	return "{\"Success\":true,\"GameId\":1234,\"Title\":\"Frame Test\","
+		"\"ConsoleId\":47,\"ImageIconUrl\":\"\","
+		"\"RichPresenceGameId\":0,\"RichPresencePatch\":\"\","
+		"\"Sets\":[{\"AchievementSetId\":1234,\"GameId\":1234,"
+		"\"Title\":\"Frame Test\",\"Type\":\"core\",\"ImageIconUrl\":\"\","
+		"\"Achievements\":[{\"ID\":42,\"Title\":\"Frame Edge\","
+		"\"Description\":\"Observe an intermediate frame\",\"Flags\":3,"
+		"\"Points\":5,\"MemAddr\":\"0xH0000=1\",\"Author\":\"test\","
+		"\"BadgeName\":\"00001\",\"Created\":1710000000,"
+		"\"Modified\":1710000000,\"Type\":\"\",\"Rarity\":100.0,"
+		"\"RarityHardcore\":100.0}],\"Leaderboards\":[]}]}";
+}
+
 std::string StartSessionJson()
 {
 	return "{\"Success\":true,\"Unlocks\":[],\"HardcoreUnlocks\":[],"
@@ -108,6 +124,27 @@ std::string LeaderboardInfoJson()
 		"{\"User\":\"player\",\"Rank\":2,\"Index\":2,\"Score\":900,"
 		"\"DateSubmitted\":1710000003,\"AvatarUrl\":\"\"}"
 		"]}}";
+}
+
+struct FrameMemory {
+	uint8_t value = 0;
+	uint32_t reads = 0;
+};
+
+uint32_t ReadFrameMemory(uint32_t address, uint8_t *buffer,
+	uint32_t num_bytes, void *userdata)
+{
+	FrameMemory *memory = static_cast<FrameMemory *>(userdata);
+	if (memory == nullptr || buffer == nullptr || num_bytes == 0 ||
+		address != 0) {
+		return 0;
+	}
+	memory->reads++;
+	buffer[0] = memory->value;
+	if (num_bytes > 1) {
+		std::memset(buffer + 1, 0, num_bytes - 1);
+	}
+	return num_bytes;
 }
 
 } // namespace
@@ -450,6 +487,74 @@ int main()
 			"failed game load marks disabled flag");
 		Check(!snapshot.message.empty(),
 			"failed game load captures an explanatory message");
+	}
+
+	{
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
+		FrameMemory memory;
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
+		options.http_client = std::move(fake_http);
+		options.host_read_memory = ReadFrameMemory;
+		options.host_read_memory_userdata = &memory;
+		Xm8Ra::RaService service(std::move(options));
+
+		std::string error;
+		Check(service.BeginLoginWithPassword("player", "secret", &error),
+			"begin login for frame evaluation");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"User\":\"player\",\"Token\":\"frame-token\","
+			"\"Score\":1,\"SoftcoreScore\":2,\"Messages\":0}"));
+		service.DrainHttp();
+		Check(service.BeginLoadGameByHash(kKnownSupportedPc8800Hash, &error),
+			"begin frame evaluation game load");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			FrameAchievementSetsJson()));
+		service.DrainHttp();
+		if (fake_http_raw->SentRequests().empty() ||
+			fake_http_raw->SentRequests().back().post_data.find(
+				"r=startsession") == std::string::npos) {
+			std::cerr << "frame evaluation did not request startsession\n";
+		}
+		Check(!fake_http_raw->SentRequests().empty() &&
+			fake_http_raw->SentRequests().back().post_data.find(
+				"r=startsession") != std::string::npos,
+			"frame evaluation starts an RA session");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			StartSessionJson()));
+		service.DrainHttp();
+		service.Idle();
+		const Xm8Ra::RaGameSessionSnapshot frame_game =
+			service.GameSessionSnapshot();
+		if (frame_game.state != Xm8Ra::RaGameSessionState::Loaded) {
+			std::cerr << "frame evaluation game failed to load: "
+				<< frame_game.message << '\n';
+		}
+		Check(frame_game.state == Xm8Ra::RaGameSessionState::Loaded,
+			"frame evaluation game is loaded");
+		service.TakeEvents();
+
+		memory.value = 0;
+		Check(service.DoFrame(), "evaluate first completed frame");
+		Check(service.TakeEvents().empty(),
+			"achievement remains locked on first frame");
+		memory.value = 1;
+		Check(service.DoFrame(), "evaluate second completed frame");
+		const std::vector<Xm8Ra::RaEvent> frame_events = service.TakeEvents();
+		bool triggered = false;
+		for (const Xm8Ra::RaEvent& event : frame_events) {
+			if (event.type == Xm8Ra::RaEventType::AchievementTriggered &&
+				event.achievement.id == 42) {
+				triggered = true;
+			}
+		}
+		Check(triggered,
+			"memory change on the second frame triggers the achievement");
+		Check(memory.reads >= 2,
+			"each completed frame reads current emulated memory");
 	}
 
 	{

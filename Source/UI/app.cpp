@@ -73,6 +73,8 @@
 										// delay on menu mode (ms)
 #define SLEEP_POWERDOWN			1000
 										// delay on power down (ms)
+#define SLEEP_RA_BACKGROUND		1000
+										// maximum RA idle interval in background (ms)
 #define FORCE_SYNC				500
 										// force synchronize (ms)
 #define SKIP_FRAMES_MAX			15
@@ -189,8 +191,9 @@ std::string RaEventNotice(const Xm8Ra::RaEvent& event)
 	case Xm8Ra::RaEventType::SubsetCompleted:
 		return "RA: subset completed " + event.subset.title;
 	case Xm8Ra::RaEventType::RichPresenceChanged:
-		return event.rich_presence.empty() ? std::string() :
-			"RA: " + event.rich_presence;
+		// Rich Presence is frequently updated gameplay state. Display it in
+		// the RA menu detail line instead of replacing transient notices.
+		return std::string();
 	default:
 		break;
 	}
@@ -336,6 +339,8 @@ App::App()
 	ra_overlay_finger_scroll_y = 0;
 	ra_overlay_auto_scroll_revision = 0;
 	ra_overlay_auto_scroll_started = 0;
+	ra_menu_presence_scroll_active = false;
+	ra_menu_presence_scroll_started = 0;
 	ra_pending_library_game_id = 0;
 #endif
 
@@ -580,6 +585,10 @@ bool App::Init(const CliOptions& options)
 
 	// event manager
 	evmgr = (EVENT*)vm->get_device(1);
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	AttachRaHostFrameCallback();
+#endif
 
 	// PC88 device
 	pc88 = (PC88*)vm->get_device(2);
@@ -1167,10 +1176,45 @@ void App::BeginRaSessionForMountedDrive1()
 }
 
 //
-// ProcessRaService()
-// progress RA HTTP, login, game load, and frame/idle processing
+// RaHostFrameComplete()
+// receive the generic EVENT frame completion callback
 //
-void App::ProcessRaService(bool emulation_frame)
+void App::RaHostFrameComplete(void *userdata)
+{
+	App *app = static_cast<App *>(userdata);
+	if (app != NULL) {
+		app->ProcessRaEmulationFrame();
+	}
+}
+
+//
+// AttachRaHostFrameCallback()
+// connect the current EVENT instance to the RA frame evaluator
+//
+void App::AttachRaHostFrameCallback()
+{
+	if (evmgr != NULL) {
+		evmgr->set_host_frame_callback(RaHostFrameComplete, this);
+	}
+}
+
+//
+// ProcessRaEmulationFrame()
+// evaluate exactly one completed VM frame without touching SDL or UI state
+//
+void App::ProcessRaEmulationFrame()
+{
+	if (!ra_mode_enabled || ra_session_disabled || ra_service == NULL) {
+		return;
+	}
+	ra_service->DoFrame();
+}
+
+//
+// ProcessRaService()
+// progress RA HTTP, login, game load, events, and optional idle processing
+//
+void App::ProcessRaService(bool emulation_idle)
 {
 	if (!ra_mode_enabled || ra_service == NULL) {
 		return;
@@ -1316,12 +1360,9 @@ void App::ProcessRaService(bool emulation_frame)
 		}
 	}
 
-	if (emulation_frame && !ra_session_disabled) {
-		if (!ra_service->DoFrame()) {
-			ra_service->Idle();
-		}
-	}
-	else {
+	if (emulation_idle ||
+		ra_service->GameSessionSnapshot().state !=
+			Xm8Ra::RaGameSessionState::Loaded) {
 		ra_service->Idle();
 	}
 	AddRaEventsAsNotices(ra_service->TakeEvents());
@@ -2577,6 +2618,45 @@ void App::DrawRaOverlay()
 		}
 		video->DrawCtrl();
 	}
+	const bool presence_focused = app_menu && menu != NULL &&
+		menu->IsRaRichPresenceFocused();
+	if (presence_focused) {
+		if (!ra_menu_presence_scroll_active) {
+			ra_menu_presence_scroll_active = true;
+			ra_menu_presence_scroll_started = SDL_GetTicks();
+		}
+
+		std::string presence = ra_service != NULL ?
+			ra_service->RichPresence() : std::string();
+		if (presence.empty()) {
+			presence = "No Rich Presence";
+		}
+		const std::string presence_sjis =
+			ToSjisMenuText(converter, presence);
+		char display_presence[256];
+		SDL_Rect presence_rect = {
+			(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
+			(SCREEN_HEIGHT / 2) +
+				((MENUITEM_HEIGHT * MENUITEM_LINES) / 2) + 6,
+			MENUITEM_WIDTH,
+			24
+		};
+		CopyAutoScrollMenuText(display_presence, sizeof(display_presence),
+			presence_sjis.c_str(), presence_rect.w - 16,
+			SDL_GetTicks() - ra_menu_presence_scroll_started);
+		Uint32 *buf = video->GetMenuFrame();
+		const Uint32 alpha = (Uint32)setting->GetMenuAlpha() << 24;
+		font->DrawFillRect(buf, &presence_rect, MENUITEM_BACK | alpha);
+		presence_rect.x += 8;
+		presence_rect.w -= 16;
+		font->DrawSjisLeftOr(buf, &presence_rect, display_presence,
+			MENUITEM_FORE | alpha);
+		video->DrawCtrl();
+	}
+	else {
+		ra_menu_presence_scroll_active = false;
+	}
+
 	const std::string notice = ra_overlay->VisibleNotice(SDL_GetTicks());
 	if (notice.empty()) {
 		return;
@@ -3042,8 +3122,17 @@ void App::Run()
 
 			// wait until event
 			if (app_background == true) {
-				// background -> wait infinite
-				ret = SDL_WaitEvent(&e);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+				if (ra_mode_enabled && ra_service != NULL) {
+					// Keep HTTP and rc_client idle processing alive while backgrounded.
+					ret = SDL_WaitEventTimeout(&e, SLEEP_RA_BACKGROUND);
+				}
+				else
+#endif
+				{
+					// Normal mode retains the existing indefinite wait.
+					ret = SDL_WaitEvent(&e);
+				}
 			}
 			else {
 				if (app_menu == true || ra_overlay_blocking) {
@@ -3073,7 +3162,7 @@ void App::Run()
 				menu->ProcessMenu();
 			}
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-			ProcessRaService(false);
+			ProcessRaService(true);
 #endif
 
 			// power management
@@ -3157,12 +3246,10 @@ void App::Run()
 				evmgr->set_sample_multi(multi_table[buffer_pct >> 4]);
 				evmgr->create_sound32_after(buffer_evmgr);
 			}
-#ifdef XM8_ENABLE_RETROACHIEVEMENTS
-			for (ret=0; ret<extra; ret++) {
-				ProcessRaService(true);
-			}
-#endif
 			UnlockVM();
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			ProcessRaService(false);
+#endif
 
 			// calc next time
 			if (rate != vm->frame_rate()) {
@@ -4354,6 +4441,10 @@ void App::ChangeSystem(bool load)
 
 	// get event manager
 	evmgr = (EVENT*)vm->get_device(1);
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	AttachRaHostFrameCallback();
+#endif
 
 	// get PC88 device
 	pc88 = (PC88*)vm->get_device(2);
@@ -5598,6 +5689,25 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 		}
 	}
 	std::snprintf(buffer, capacity, "%s", text);
+}
+
+//
+// GetRaMenuPresence()
+// get current Rich Presence text for the RA menu
+//
+void App::GetRaMenuPresence(char *buffer, size_t capacity) const
+{
+	if (buffer == NULL || capacity == 0) {
+		return;
+	}
+	std::string presence;
+	if (ra_service != NULL &&
+		ra_service->GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::Loaded) {
+		presence = ra_service->RichPresence();
+	}
+	std::snprintf(buffer, capacity, "Now: %s",
+		presence.empty() ? "-" : presence.c_str());
 }
 
 //
