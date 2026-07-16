@@ -369,6 +369,12 @@ if(BUILD_TESTING)
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_media_probe_test COMMAND ra_media_probe_test)
 
+    add_executable(ra_media_change_policy_test
+      Tests/ra_media_change_policy_test.cpp
+    )
+    target_include_directories(ra_media_change_policy_test PRIVATE Source/RA)
+    add_test(NAME ra_media_change_policy_test COMMAND ra_media_change_policy_test)
+
     add_executable(ra_inspect_media
       Tests/ra_inspect_media.cpp
       Source/UI/m3u.cpp

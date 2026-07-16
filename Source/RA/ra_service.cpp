@@ -1,6 +1,7 @@
 #include "ra_service.h"
 
 #include "rc_error.h"
+#include "rc_api_runtime.h"
 
 #include <cctype>
 #include <cstring>
@@ -378,6 +379,96 @@ bool RaService::BeginLoadGameByHash(const std::string& hash, std::string *error)
 	return true;
 }
 
+bool RaService::BeginChangeMediaByHash(const std::string& hash,
+	std::string *error)
+{
+	if (!IsReady()) {
+		if (error != nullptr) {
+			*error = "RA service is not ready";
+		}
+		return false;
+	}
+	if (login_.state != RaLoginState::LoggedIn ||
+		game_session_.state != RaGameSessionState::Loaded) {
+		if (error != nullptr) {
+			*error = "RA game is required before changing media";
+		}
+		return false;
+	}
+	if (!IsMd5Hex(hash)) {
+		if (error != nullptr) {
+			*error = "RA media hash must be a 32-character MD5 hex string";
+		}
+		return false;
+	}
+	if (media_change_.state == RaMediaChangeState::Pending) {
+		if (error != nullptr) {
+			*error = "RA media change is already pending";
+		}
+		return false;
+	}
+
+	media_change_ = RaMediaChangeSnapshot();
+	media_change_.state = RaMediaChangeState::Pending;
+	media_change_.hash = hash;
+	const auto verified = verified_media_game_ids_.find(hash);
+	if (verified != verified_media_game_ids_.end()) {
+		if (verified->second != game_session_.game_id) {
+			media_change_.state = RaMediaChangeState::Failed;
+			media_change_.result = RC_INVALID_STATE;
+			media_change_.message = "RA media belongs to another game";
+			if (error != nullptr) {
+				*error = media_change_.message;
+			}
+			return false;
+		}
+		return StartClientMediaChange(error);
+	}
+
+	rc_api_resolve_hash_request_t params = {};
+	params.game_hash = hash.c_str();
+	rc_api_request_t request = {};
+	const int result = rc_api_init_resolve_hash_request(&request, &params);
+	if (result != RC_OK) {
+		media_change_.state = RaMediaChangeState::Failed;
+		media_change_.result = result;
+		media_change_.message = rc_error_str(result);
+		if (error != nullptr) {
+			*error = media_change_.message;
+		}
+		return false;
+	}
+	media_change_preflight_pending_ = true;
+	http_bridge_->BeginServerCall(&request, ResolveMediaHashCallback, this);
+	rc_api_destroy_request(&request);
+	return media_change_.state == RaMediaChangeState::Pending;
+}
+
+bool RaService::StartClientMediaChange(std::string *error)
+{
+	rc_client_async_handle_t *handle = rc_client_begin_change_media(
+		client_, media_change_.hash.c_str(), MediaChangeCallback, this);
+	media_change_async_handle_ = handle;
+	if (handle == nullptr &&
+		media_change_.state == RaMediaChangeState::Pending) {
+		media_change_.state = RaMediaChangeState::Failed;
+		media_change_.result = RC_INVALID_STATE;
+		media_change_.message = "RA media change did not start";
+		if (error != nullptr) {
+			*error = media_change_.message;
+		}
+		return false;
+	}
+	return media_change_.state != RaMediaChangeState::Failed;
+}
+
+void RaService::ClearMediaChangeResult()
+{
+	if (media_change_.state != RaMediaChangeState::Pending) {
+		media_change_ = RaMediaChangeSnapshot();
+	}
+}
+
 bool RaService::BeginFetchLeaderboardEntries(uint32_t leaderboard_id,
 	uint32_t first_entry, uint32_t count, std::string *error)
 {
@@ -480,12 +571,15 @@ std::vector<RaEvent> RaService::TakeEvents()
 
 void RaService::UnloadGame()
 {
+	AbortMediaChangeInProgress();
 	AbortLeaderboardEntriesInProgress();
 	if (client_ != nullptr) {
 		rc_client_unload_game(client_);
 	}
 	game_session_ = RaGameSessionSnapshot();
 	leaderboard_entries_ = RaLeaderboardEntriesSnapshot();
+	media_change_ = RaMediaChangeSnapshot();
+	verified_media_game_ids_.clear();
 	rich_presence_.clear();
 }
 
@@ -513,6 +607,7 @@ void RaService::Shutdown()
 	shutdown_ = true;
 
 	AbortLoginInProgress();
+	AbortMediaChangeInProgress();
 	AbortLeaderboardEntriesInProgress();
 	if (http_bridge_ != nullptr) {
 		http_bridge_->CancelAll();
@@ -541,6 +636,11 @@ RaLoginSnapshot RaService::LoginSnapshot() const
 RaGameSessionSnapshot RaService::GameSessionSnapshot() const
 {
 	return game_session_;
+}
+
+RaMediaChangeSnapshot RaService::MediaChangeSnapshot() const
+{
+	return media_change_;
 }
 
 std::string RaService::RichPresence() const
@@ -691,6 +791,24 @@ void RC_CCONV RaService::LoadGameCallback(int result,
 	}
 }
 
+void RC_CCONV RaService::MediaChangeCallback(int result,
+	const char *error_message, rc_client_t *, void *userdata)
+{
+	RaService *service = static_cast<RaService *>(userdata);
+	if (service != nullptr) {
+		service->HandleMediaChangeCallback(result, error_message);
+	}
+}
+
+void RC_CCONV RaService::ResolveMediaHashCallback(
+	const rc_api_server_response_t *server_response, void *userdata)
+{
+	RaService *service = static_cast<RaService *>(userdata);
+	if (service != nullptr) {
+		service->HandleResolveMediaHashCallback(server_response);
+	}
+}
+
 void RC_CCONV RaService::LeaderboardEntriesCallback(int result,
 	const char *error_message, rc_client_leaderboard_entry_list_t *list,
 	rc_client_t *, void *userdata)
@@ -801,7 +919,64 @@ void RaService::HandleLoadGameCallback(int result, const char *error_message)
 	game_session_.title = game->title != nullptr ? game->title : "";
 	game_session_.hash = game->hash != nullptr ? game->hash : game_session_.hash;
 	game_session_.badge_url = game->badge_url != nullptr ? game->badge_url : "";
+	verified_media_game_ids_[game_session_.hash] = game_session_.game_id;
 	UpdateRichPresenceEvent();
+}
+
+void RaService::HandleResolveMediaHashCallback(
+	const rc_api_server_response_t *server_response)
+{
+	if (!media_change_preflight_pending_ ||
+		media_change_.state != RaMediaChangeState::Pending) {
+		return;
+	}
+	media_change_preflight_pending_ = false;
+	rc_api_resolve_hash_response_t response = {};
+	const int result = rc_api_process_resolve_hash_server_response(
+		&response, server_response);
+	const std::string message = response.response.error_message != nullptr ?
+		response.response.error_message : "";
+	if (result != RC_OK || !response.response.succeeded) {
+		media_change_.state = RaMediaChangeState::Failed;
+		media_change_.result = result != RC_OK ? result : RC_API_FAILURE;
+		media_change_.message = message.empty() ?
+			rc_error_str(media_change_.result) : message;
+		rc_api_destroy_resolve_hash_response(&response);
+		return;
+	}
+	if (response.game_id != game_session_.game_id) {
+		media_change_.state = RaMediaChangeState::Failed;
+		media_change_.result = RC_INVALID_STATE;
+		media_change_.message = response.game_id == 0 ?
+			"RA media is not identified" :
+			"RA media belongs to another game";
+		rc_api_destroy_resolve_hash_response(&response);
+		return;
+	}
+	verified_media_game_ids_[media_change_.hash] = response.game_id;
+	rc_api_destroy_resolve_hash_response(&response);
+	StartClientMediaChange(nullptr);
+}
+
+void RaService::HandleMediaChangeCallback(int result,
+	const char *error_message)
+{
+	if (result == RC_ABORTED) {
+		return;
+	}
+	media_change_async_handle_ = nullptr;
+	media_change_.result = result;
+	media_change_.message = error_message != nullptr ? error_message : "";
+	if (result != RC_OK) {
+		media_change_.state = RaMediaChangeState::Failed;
+		if (media_change_.message.empty()) {
+			media_change_.message = rc_error_str(result);
+		}
+		return;
+	}
+
+	media_change_.state = RaMediaChangeState::Succeeded;
+	game_session_.hash = media_change_.hash;
 }
 
 void RaService::HandleLeaderboardEntriesCallback(int result,
@@ -936,6 +1111,18 @@ void RaService::AbortLeaderboardEntriesInProgress()
 	leaderboard_entries_async_handle_ = nullptr;
 	if (leaderboard_entries_.state == RaLeaderboardEntriesState::FetchPending) {
 		leaderboard_entries_ = RaLeaderboardEntriesSnapshot();
+	}
+}
+
+void RaService::AbortMediaChangeInProgress()
+{
+	media_change_preflight_pending_ = false;
+	if (client_ != nullptr && media_change_async_handle_ != nullptr) {
+		rc_client_abort_async(client_, media_change_async_handle_);
+	}
+	media_change_async_handle_ = nullptr;
+	if (media_change_.state == RaMediaChangeState::Pending) {
+		media_change_ = RaMediaChangeSnapshot();
 	}
 }
 

@@ -200,8 +200,17 @@ private:
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		std::string *ra_hash_to_identify, int64_t *ra_game_to_identify,
-		std::string *error);
+		bool *ra_media_change, std::string *error);
 										// resolve disk to RA working copy
+	bool BeginRaMediaChange(const DiskSpec& target, const std::string& hash,
+		std::string *error);
+										// begin same-game Drive 1 media change
+	void ProcessRaMediaChange();
+										// commit or roll back pending media change
+	void ClearRaMediaChangeState();
+										// clear App media change transaction
+	void EnterRaOfflineSession(const std::string& message);
+										// stop RA evaluation after consistency failure
 	bool RememberRaSourceDirForMountedDisk(int drive);
 										// remember source dir for mounted RA media
 	bool RememberRaLaunchDriveForMountedDisk(int drive, std::string *error);
@@ -367,6 +376,8 @@ private:
 										// manual password login started
 	bool ra_session_disabled;
 										// RA disabled for current launch session
+	bool ra_offline_session;
+										// RA stopped after an unrecoverable consistency failure
 	Uint32 ra_overlay_joystick_prev;
 										// RA overlay joystick previous state
 	bool ra_overlay_mouse_target_valid;
@@ -395,8 +406,26 @@ private:
 										// media hash pending RA load
 	int64_t ra_pending_library_game_id;
 										// library game pending RA identification
+	int64_t ra_loaded_library_game_id;
+										// library game owning active RA media
 	std::string ra_loaded_game_hash;
 										// media hash passed to RA load
+	bool ra_media_change_pending;
+										// App is coordinating RA and VM media change
+	bool ra_media_change_rollback;
+										// pending RA call restores previous hash
+	bool ra_media_change_restore_failed;
+										// previous VM disk could not be restored
+	DiskSpec ra_media_change_target;
+										// validated target working copy
+	std::string ra_media_change_new_hash;
+										// requested target RA hash
+	std::string ra_media_change_old_hash;
+										// rollback RA hash
+	std::string ra_media_change_old_path;
+										// rollback VM path
+	int ra_media_change_old_bank;
+										// rollback VM bank
 #endif
 
 	// flags

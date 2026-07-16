@@ -62,6 +62,7 @@ ePC-8801MAの旧版
 | [12_Phase5実施記録.md](12_Phase5実施記録.md) | macOS RAオーバーレイ基盤、通知状態分離、検証結果 |
 | [13_実ROMなしLibrary検証手順.md](13_実ROMなしLibrary検証手順.md) | 生成fixtureを使うLibrary v1手動確認、seed tool、検証結果 |
 | [14_Phase5-6継続実施記録.md](14_Phase5-6継続実施記録.md) | 現状再監査、実フレーム評価、ASCEND媒体検査、Phase 5-6残件 |
+| [15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md) | 同一ゲーム媒体交換、VM失敗時rollback、整合不能時Offline遷移、次回handoff |
 
 ## 3. 確定事項
 

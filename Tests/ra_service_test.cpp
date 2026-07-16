@@ -407,6 +407,85 @@ int main()
 		Check(achievements.achievements.empty(),
 			"empty achievement set has no list items");
 
+		const std::string alternate_media_hash =
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+		Check(service.BeginChangeMediaByHash(alternate_media_hash, &error),
+			"begin media change by hash");
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Pending,
+			"media change enters pending state");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"r=gameid") != std::string::npos,
+			"media change resolves an unknown hash");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			std::string("m=") + alternate_media_hash) != std::string::npos,
+			"media change sends the requested hash");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":1234}"));
+		service.DrainHttp();
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Pending,
+			"verified media hash is passed to rc_client");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"r=gameid") != std::string::npos,
+			"rc_client resolves the verified media hash");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":1234}"));
+		service.DrainHttp();
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Succeeded,
+			"media change succeeds after hash resolution");
+		Check(service.GameSessionSnapshot().hash == alternate_media_hash,
+			"successful media change updates active hash");
+		service.ClearMediaChangeResult();
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::None,
+			"media change result can be consumed");
+
+		const std::string failed_media_hash =
+			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+		Check(service.BeginChangeMediaByHash(failed_media_hash, &error),
+			"begin media change that will fail");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":false,\"Error\":\"Unknown media\"}"));
+		service.DrainHttp();
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Failed,
+			"failed media hash resolution is reported");
+		Check(service.GameSessionSnapshot().hash == alternate_media_hash,
+			"failed media change preserves the active hash");
+		service.ClearMediaChangeResult();
+
+		const std::string other_game_media_hash =
+			"dddddddddddddddddddddddddddddddd";
+		Check(service.BeginChangeMediaByHash(other_game_media_hash, &error),
+			"begin media change for a different RA game");
+		const size_t requests_before_other_game =
+			fake_http_raw->SentRequests().size();
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":9999}"));
+		service.DrainHttp();
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Failed,
+			"different RA Game ID is rejected before media change");
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_before_other_game,
+			"different-game hash is not passed to rc_client media change");
+		Check(service.GameSessionSnapshot().hash == alternate_media_hash,
+			"different-game media preserves active hash");
+		service.ClearMediaChangeResult();
+
+		Check(service.BeginChangeMediaByHash(hash, &error),
+			"begin media rollback to a known hash");
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Succeeded,
+			"known media rollback completes synchronously");
+		Check(service.GameSessionSnapshot().hash == hash,
+			"media rollback restores the previous hash");
+		service.ClearMediaChangeResult();
+		Check(!service.BeginChangeMediaByHash("not-a-md5", &error),
+			"reject invalid media change hash");
+
 		Check(service.BeginFetchLeaderboardEntries(77, 1, 5, &error),
 			"begin leaderboard entry fetch");
 		Check(fake_http_raw->SentRequests().back().post_data.find(
@@ -437,7 +516,21 @@ int main()
 		Check(leaderboard_entries.entries[1].display == "000900",
 			"leaderboard entry display is formatted");
 
+		const std::string pending_media_hash =
+			"cccccccccccccccccccccccccccccccc";
+		Check(service.BeginChangeMediaByHash(pending_media_hash, &error),
+			"begin media change before unload");
+		const uint64_t pending_media_request = service.LastIssuedRequestId();
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Pending,
+			"media change remains pending before unload");
 		service.UnloadGame();
+		Check(service.MediaChangeSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::None,
+			"unload aborts pending media change");
+		fake_http_raw->Complete(MakeJsonResponse(pending_media_request,
+			"{\"Success\":true,\"GameID\":1234}"));
+		service.DrainHttp();
 		Check(service.GameSessionSnapshot().state ==
 			Xm8Ra::RaGameSessionState::NoGame,
 			"unload game resets game session state");

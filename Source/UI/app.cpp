@@ -46,6 +46,7 @@
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_build_info.h"
 #include "ra_media_probe.h"
+#include "ra_media_change_policy.h"
 #include "ra_platform.h"
 #include "ra_paths.h"
 #endif
@@ -329,6 +330,7 @@ App::App()
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_overlay_joystick_prev = 0;
 	ra_overlay_mouse_target_valid = false;
 	ra_overlay_mouse_target = Xm8Ra::RaOverlayLoginTarget::Username;
@@ -342,6 +344,12 @@ App::App()
 	ra_menu_presence_scroll_active = false;
 	ra_menu_presence_scroll_started = 0;
 	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
+	ra_media_change_pending = false;
+	ra_media_change_rollback = false;
+	ra_media_change_restore_failed = false;
+	ra_media_change_target = {"", 0, 0};
+	ra_media_change_old_bank = 0;
 #endif
 
 	// flags
@@ -781,9 +789,9 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	std::string ra_hash_to_identify;
 	int64_t ra_game_to_identify = 0;
+	bool ra_media_change = false;
 	if (ResolveDiskForRaMode(spec, &open_spec, &ra_hash_to_identify,
-		&ra_game_to_identify,
-		error) == false) {
+		&ra_game_to_identify, &ra_media_change, error) == false) {
 		return false;
 	}
 #endif
@@ -791,6 +799,11 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 	if (ProbeDisk(open_spec, &banks, error) == false) {
 		return false;
 	}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_media_change) {
+		return BeginRaMediaChange(open_spec, ra_hash_to_identify, error);
+	}
+#endif
 	if (diskmgr[open_spec.drive]->Open(open_spec.path.c_str(),
 		open_spec.bank) == false) {
 		std::ostringstream message;
@@ -831,7 +844,7 @@ bool App::OpenDiskFromMenu(const DiskSpec& spec, std::string *error)
 //
 bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 	std::string *ra_hash_to_identify, int64_t *ra_game_to_identify,
-	std::string *error)
+	bool *ra_media_change, std::string *error)
 {
 	if (resolved == NULL) {
 		*error = "invalid RA disk target";
@@ -843,6 +856,9 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 	}
 	if (ra_game_to_identify != NULL) {
 		*ra_game_to_identify = 0;
+	}
+	if (ra_media_change != NULL) {
+		*ra_media_change = false;
 	}
 	if (!ra_mode_enabled) {
 		return true;
@@ -864,10 +880,34 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 			return false;
 		}
 		const std::string& ra_hash = imported.media_info.bank_md5s[bank];
-		const bool can_identify =
-			ra_loaded_game_hash.empty() || ra_session_disabled ||
-			ra_loaded_game_hash != ra_hash;
-		if (can_identify) {
+		const bool game_loaded = ra_service != NULL && !ra_session_disabled &&
+			ra_service->GameSessionSnapshot().state ==
+				Xm8Ra::RaGameSessionState::Loaded;
+		const bool same_working_media = game_loaded && diskmgr[0] != NULL &&
+			diskmgr[0]->IsOpen() &&
+			resolved->path == diskmgr[0]->GetPath();
+		const Xm8Ra::RaMediaChangeAction action =
+			Xm8Ra::ClassifyMediaChange(spec.drive, game_loaded,
+				ra_media_change_pending, same_working_media,
+				ra_loaded_library_game_id,
+				ra_loaded_game_hash, imported.record.game_id, ra_hash);
+		if (action == Xm8Ra::RaMediaChangeAction::RejectPending) {
+			*error = "RA media change is already pending";
+			return false;
+		}
+		if (action == Xm8Ra::RaMediaChangeAction::RejectDifferentGame) {
+			*error = "RA media belongs to another game; restart required";
+			return false;
+		}
+		if (action == Xm8Ra::RaMediaChangeAction::BeginSameGameChange) {
+			if (ra_media_change != NULL) {
+				*ra_media_change = true;
+			}
+			if (ra_hash_to_identify != NULL) {
+				*ra_hash_to_identify = ra_hash;
+			}
+		}
+		else if (!game_loaded || ra_session_disabled) {
 			if (ra_hash_to_identify != NULL) {
 				*ra_hash_to_identify = ra_hash;
 			}
@@ -877,6 +917,153 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		}
 	}
 	return true;
+}
+
+//
+// BeginRaMediaChange()
+// ask RA to accept a same-game Drive 1 media hash before changing the VM
+//
+bool App::BeginRaMediaChange(const DiskSpec& target,
+	const std::string& hash, std::string *error)
+{
+	if (ra_service == NULL || diskmgr[0] == NULL ||
+		!diskmgr[0]->IsOpen() || target.drive != 0 || hash.empty()) {
+		if (error != NULL) {
+			*error = "RA media change is not available";
+		}
+		return false;
+	}
+	if (ra_media_change_pending) {
+		if (error != NULL) {
+			*error = "RA media change is already pending";
+		}
+		return false;
+	}
+
+	ClearRaMediaChangeState();
+	ra_media_change_pending = true;
+	ra_media_change_target = target;
+	ra_media_change_new_hash = hash;
+	ra_media_change_old_hash = ra_loaded_game_hash;
+	ra_media_change_old_path = diskmgr[0]->GetPath();
+	ra_media_change_old_bank = diskmgr[0]->GetBank();
+	if (!ra_service->BeginChangeMediaByHash(hash, error)) {
+		ra_service->ClearMediaChangeResult();
+		ClearRaMediaChangeState();
+		return false;
+	}
+
+	AddRaNotice("RA: changing media");
+	return true;
+}
+
+//
+// ProcessRaMediaChange()
+// commit the VM swap after RA success, or restore RA after VM failure
+//
+void App::ProcessRaMediaChange()
+{
+	if (!ra_media_change_pending || ra_service == NULL) {
+		return;
+	}
+	const Xm8Ra::RaMediaChangeSnapshot change =
+		ra_service->MediaChangeSnapshot();
+	if (change.state == Xm8Ra::RaMediaChangeState::None ||
+		change.state == Xm8Ra::RaMediaChangeState::Pending) {
+		return;
+	}
+
+	if (change.state == Xm8Ra::RaMediaChangeState::Failed) {
+		const std::string message = change.message.empty() ?
+			"media change failed" : change.message;
+		ra_service->ClearMediaChangeResult();
+		if (ra_media_change_rollback) {
+			EnterRaOfflineSession("RA rollback failed: " + message);
+		}
+		else {
+			ClearRaMediaChangeState();
+			AddRaNotice("RA: " + message);
+		}
+		return;
+	}
+
+	if (ra_media_change_rollback) {
+		ra_service->ClearMediaChangeResult();
+		if (ra_media_change_restore_failed) {
+			EnterRaOfflineSession("previous disk could not be restored");
+			return;
+		}
+		ra_loaded_game_hash = ra_media_change_old_hash;
+		ClearRaMediaChangeState();
+		AddRaNotice("RA: media change rolled back");
+		return;
+	}
+
+	std::string vm_error;
+	bool vm_changed = diskmgr[0]->Open(ra_media_change_target.path.c_str(),
+		ra_media_change_target.bank);
+	if (!vm_changed) {
+		vm_error = "VM rejected changed media";
+	}
+	else if (!RememberRaLaunchDriveForMountedDisk(0, &vm_error)) {
+		vm_changed = false;
+	}
+
+	if (vm_changed) {
+		ra_loaded_game_hash = ra_media_change_new_hash;
+		ra_service->ClearMediaChangeResult();
+		ClearRaMediaChangeState();
+		AddRaNotice("RA: media changed");
+		return;
+	}
+
+	const bool restored = !ra_media_change_old_path.empty() &&
+		diskmgr[0]->Open(ra_media_change_old_path.c_str(),
+			ra_media_change_old_bank);
+	ra_media_change_restore_failed = !restored;
+	ra_media_change_rollback = true;
+	ra_service->ClearMediaChangeResult();
+	std::string rollback_error;
+	if (ra_media_change_old_hash.empty() ||
+		!ra_service->BeginChangeMediaByHash(ra_media_change_old_hash,
+			&rollback_error)) {
+		EnterRaOfflineSession(rollback_error.empty() ? vm_error :
+			"RA rollback failed: " + rollback_error);
+		return;
+	}
+	AddRaNotice("RA: rolling back media change");
+	ProcessRaMediaChange();
+}
+
+void App::ClearRaMediaChangeState()
+{
+	ra_media_change_pending = false;
+	ra_media_change_rollback = false;
+	ra_media_change_restore_failed = false;
+	ra_media_change_target = {"", 0, 0};
+	ra_media_change_new_hash.clear();
+	ra_media_change_old_hash.clear();
+	ra_media_change_old_path.clear();
+	ra_media_change_old_bank = 0;
+}
+
+void App::EnterRaOfflineSession(const std::string& message)
+{
+	if (ra_service != NULL) {
+		ra_service->UnloadGame();
+	}
+	ra_session_disabled = true;
+	ra_offline_session = true;
+	ra_pending_game_hash.clear();
+	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
+	ra_loaded_game_hash.clear();
+	ra_leaderboard_scoreboards.clear();
+	ClearRaMediaChangeState();
+	AddRaNotice(message.empty() ? "RA: offline" : "RA: offline - " + message);
+	RefreshRaAchievementsOverlay();
+	RefreshRaLeaderboardsOverlay();
+	menu->UpdateRaStatus();
 }
 
 //
@@ -1081,6 +1268,7 @@ bool App::BeginRaSavedTokenLogin(bool notify_missing_token)
 	}
 
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_saved_login_started = true;
 	ra_manual_login_started = false;
 	if (notify_missing_token) {
@@ -1123,12 +1311,15 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 	}
 
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	if (ra_service != NULL) {
 		ra_service->UnloadGame();
 	}
 	ra_pending_game_hash = md5;
 	ra_pending_library_game_id = game_id;
+	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
 	AddRaNotice("RA: identifying " + md5.substr(0, 8));
 	RefreshRaAchievementsOverlay();
@@ -1204,7 +1395,8 @@ void App::AttachRaHostFrameCallback()
 //
 void App::ProcessRaEmulationFrame()
 {
-	if (!ra_mode_enabled || ra_session_disabled || ra_service == NULL) {
+	if (!ra_mode_enabled || ra_session_disabled || ra_service == NULL ||
+		ra_media_change_pending) {
 		return;
 	}
 	ra_service->DoFrame();
@@ -1229,6 +1421,7 @@ void App::ProcessRaService(bool emulation_idle)
 	const Xm8Ra::RaLeaderboardEntriesSnapshot entries_before =
 		ra_service->LeaderboardEntriesSnapshot();
 	ra_service->DrainHttp();
+	ProcessRaMediaChange();
 	const Xm8Ra::RaLoginSnapshot login_after_drain =
 		ra_service->LoginSnapshot();
 	const Xm8Ra::RaGameSessionSnapshot game_after_drain =
@@ -1324,6 +1517,7 @@ void App::ProcessRaService(bool emulation_idle)
 			}
 		}
 		else if (game.state == Xm8Ra::RaGameSessionState::Loaded) {
+			ra_loaded_library_game_id = ra_pending_library_game_id;
 			if (ra_pending_library_game_id > 0 && ra_library != NULL) {
 				std::string error;
 				if (!ra_library->MarkGameIdentified(
@@ -1347,6 +1541,7 @@ void App::ProcessRaService(bool emulation_idle)
 				ra_pending_library_game_id = 0;
 			}
 			ra_loaded_game_hash.clear();
+			ra_loaded_library_game_id = 0;
 			ra_leaderboard_scoreboards.clear();
 			if (login.state == Xm8Ra::RaLoginState::Failed) {
 				AddRaNotice("RA: login failed");
@@ -1961,6 +2156,7 @@ bool App::SubmitRaOverlayLogin()
 	}
 
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = true;
 	SDL_StopTextInput();
@@ -2894,9 +3090,12 @@ void App::Deinit()
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
 #endif
 
@@ -4423,9 +4622,12 @@ void App::ChangeSystem(bool load)
 		ra_service->UnloadGame();
 	}
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
 #endif
 
@@ -4589,9 +4791,12 @@ void App::Reset()
 		ra_service->UnloadGame();
 	}
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
 	RefreshRaAchievementsOverlay();
 	RefreshRaLeaderboardsOverlay();
@@ -4794,11 +4999,14 @@ bool App::ToggleRaMode()
 
 	ra_mode_enabled = enable;
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
 	if (!enable && ra_service != NULL) {
 		ra_service->UnloadGame();
@@ -5503,9 +5711,12 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 	}
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	BeginRaSessionForMedia(anchor_hash, game_id);
 	ra_library->MarkGamePlayed(game_id, nullptr);
 	return true;
@@ -5623,11 +5834,14 @@ void App::LogoutRa()
 		ra_service->Logout();
 	}
 	ra_session_disabled = false;
+	ra_offline_session = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
+	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
+	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
 	AddRaNotice("RA: logged out");
 }
@@ -5652,7 +5866,10 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
 		const Xm8Ra::RaGameSessionSnapshot game =
 			ra_service->GameSessionSnapshot();
-		if (login.state == Xm8Ra::RaLoginState::LoginPending) {
+		if (ra_offline_session) {
+			text = "RA: offline for session";
+		}
+		else if (login.state == Xm8Ra::RaLoginState::LoginPending) {
 			text = "RA: login pending";
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&

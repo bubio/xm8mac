@@ -149,10 +149,10 @@ cmake --build build-ra --target ra_inspect_media
 
 ## 6. Phase 5残件
 
-今回の修正後もPhase 5は完了扱いにしない。残件は次のとおりである。
+媒体交換とrollbackは
+[15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md)で実装した。
+Phase 5はまだ完了扱いにしない。残件は次のとおりである。
 
-- `rc_client_begin_change_media()`を使う同一Game ID媒体交換。
-- VM媒体交換失敗時のRA rollbackと、rollback失敗時のOffline遷移。
 - 起動時offline、識別失敗、session開始失敗を区別するOffline session状態機械。
 - Active中切断・再接続と「起動時Offlineから途中復帰しない」試験。
 - hash library、game titles、all user progressによるライブラリ同期。
@@ -160,7 +160,7 @@ cmake --build build-ra --target ra_inspect_media
 - Full Speed、描画skip、実VM複数frameについての計数可能なintegration test。
 - ASCENDの実RA Game ID、タイトル、実績一覧取得とrequest packet確認。
 
-Phase 5の次の実装単位は、media change/rollbackとOffline sessionを先に行い、
+Phase 5の次の実装単位は、起動時を含むOffline session状態機械である。
 その後にライブラリ同期を行う。
 
 ## 7. 後続Phase
@@ -170,7 +170,11 @@ Phase 5の次の実装単位は、media change/rollbackとOffline sessionを先�
 - Phase 8: Hardcore policyとmacOS完全受入を行う。
 - Phase 9以降: Windows、Linux、Android、4 OS最終受入の順序を維持する。
 
-## 8. 次回作業handoff
+## 8. 次回作業handoff（更新前記録）
+
+以下は媒体交換実装前のhandoffとして保存する。現在の次回作業は
+[15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md)の
+「次回作業handoff」を正とする。
 
 ### 8.1 現在地点
 
