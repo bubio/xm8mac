@@ -48,9 +48,10 @@ Library同期で`games.identification_state=4`となった媒体競合ゲーム�
 - ASCEND: 348848 bytes、1 bank、RA hash
   `5def00835e061a54fe6d1fa2d5a8d2b0`で不変。
 
-## 5. 次回作業
+## 5. 次回作業（完了）
 
-次は競合を次の2種類へ分類し、Game Detailから明示操作できるようにする。
+競合を次の2種類へ分類し、Game Detailから明示操作できる実装は
+[20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md)で完了した。
 
 1. 同じRA Game IDへ解決された複数ローカルゲーム: 古いゲームへ`MERGE`する。
 2. 1ローカルゲーム内の媒体が異なるRA Game IDへ解決: 媒体単位で`SPLIT`する。

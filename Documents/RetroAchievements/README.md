@@ -67,6 +67,7 @@ ePC-8801MAの旧版
 | [17_Phase5Library同期実施記録.md](17_Phase5Library同期実施記録.md) | bank別hash、hash/title/progress同期、transaction、schema v2、次回handoff |
 | [18_Phase5実VMフレーム計数実施記録.md](18_Phase5実VMフレーム計数実施記録.md) | 実PC-8801MA VMによる通常、複数frame、描画skip、Full Speed相当のcallback計数 |
 | [19_Phase5媒体競合起動制限実施記録.md](19_Phase5媒体競合起動制限実施記録.md) | 競合ゲームのLibrary表示、Game Detail表示、UI／DB二重の起動禁止 |
+| [20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md) | 競合分類、明示MERGE／SPLIT、MANUAL拒否、transaction rollback検証 |
 
 ## 3. 確定事項
 

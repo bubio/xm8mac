@@ -113,6 +113,21 @@ struct RaLibrarySyncPayload {
 	std::vector<RaLibraryProgress> progress;
 };
 
+enum class RaGameConflictKind {
+	None = 0,
+	Merge = 1,
+	Split = 2,
+	Manual = 3,
+};
+
+struct RaGameConflictInfo {
+	RaGameConflictKind kind = RaGameConflictKind::None;
+	int64_t game_id = 0;
+	int64_t primary_ra_game_id = 0;
+	int related_game_count = 0;
+	int resulting_game_count = 0;
+};
+
 struct LaunchDrive {
 	bool assigned = false;
 	std::string media_md5;
@@ -162,6 +177,10 @@ public:
 		std::string *error);
 	bool LoadGameIdentification(int64_t game_id, int64_t *ra_game_id,
 		int *identification_state, std::string *error);
+	bool InspectGameConflict(int64_t game_id, RaGameConflictInfo *info,
+		std::string *error);
+	bool ResolveGameConflict(int64_t game_id, RaGameConflictInfo *result,
+		std::string *error);
 	bool MergeGameMedia(int64_t target_game_id, int64_t source_game_id,
 		std::string *error);
 	bool MarkGameIdentified(int64_t game_id, int64_t ra_game_id,

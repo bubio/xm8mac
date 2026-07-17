@@ -94,14 +94,16 @@ Full Speed、描画skip、1回のsound生成で複数VM frameが進む場合のi
 [18_Phase5実VMフレーム計数実施記録.md](18_Phase5実VMフレーム計数実施記録.md)で完了した。
 実PC-8801MA VMの`EVENT::drive()`を使い、完了frame数とcallback回数の一致をRA ON/OFFの
 双方で固定している。
+媒体競合の起動制限と明示的なMERGE／SPLITは
+[19_Phase5媒体競合起動制限実施記録.md](19_Phase5媒体競合起動制限実施記録.md)および
+[20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md)で完了した。
 
 現在の順序:
 
-1. 媒体競合を解消する統合・分離UIと競合媒体の起動制限。
-2. ASCENDで実HTTPS Library同期を手動確認。
-3. 実ネットワーク切断・再接続を手動確認。
-4. Phase 5完了判定。
-5. Phase 6のtoast queue、画像cache、全入力、視覚受入。
+1. ASCENDで実HTTPS Library同期を手動確認。
+2. 実ネットワーク切断・再接続を手動確認。
+3. Phase 5完了判定。
+4. Phase 6のtoast queue、画像cache、全入力、視覚受入。
 
 開始時command:
 

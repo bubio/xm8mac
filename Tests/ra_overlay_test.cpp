@@ -219,15 +219,33 @@ int main()
 	conflict.game_id = 999;
 	conflict.title = "Conflicting Game";
 	conflict.identification_state = 4;
+	conflict.conflict_kind = Xm8Ra::RaOverlayConflictKind::Merge;
 	conflicts.games.push_back(conflict);
 	overlay.OpenLibrary(conflicts);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
 	assert(!overlay.CanLaunchSelectedLibraryGame());
+	assert(overlay.CanResolveSelectedLibraryConflict());
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::ResolveLibraryConflict);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
+	conflict.conflict_kind = Xm8Ra::RaOverlayConflictKind::Split;
+	conflicts.games[0] = conflict;
+	overlay.OpenLibrary(conflicts);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
 		Xm8Ra::RaOverlayAction::None);
-	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
+	assert(overlay.CanResolveSelectedLibraryConflict());
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::ResolveLibraryConflict);
+	conflict.conflict_kind = Xm8Ra::RaOverlayConflictKind::Manual;
+	conflicts.games[0] = conflict;
+	overlay.OpenLibrary(conflicts);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(!overlay.CanResolveSelectedLibraryConflict());
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
 
 	Xm8Ra::RaOverlayLeaderboardListSnapshot leaderboards;
 	leaderboards.game_loaded = true;

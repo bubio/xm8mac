@@ -259,6 +259,9 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 			if (CanLaunchSelectedLibraryGame()) {
 				return RaOverlayAction::OpenLibraryGame;
 			}
+			if (CanResolveSelectedLibraryConflict()) {
+				return RaOverlayAction::ResolveLibraryConflict;
+			}
 			break;
 		case RaOverlayKey::Up:
 		case RaOverlayKey::Down:
@@ -678,6 +681,18 @@ bool RaOverlay::CanLaunchSelectedLibraryGame() const
 		library_.games[library_.selected_index].identification_state ==
 			kIdentificationIdentified &&
 		library_.games[library_.selected_index].ra_game_id > 0;
+}
+
+bool RaOverlay::CanResolveSelectedLibraryConflict() const
+{
+	return (screen_ == RaOverlayScreen::Library ||
+		screen_ == RaOverlayScreen::GameDetail) &&
+		library_.selected_index < library_.games.size() &&
+		library_.games[library_.selected_index].identification_state == 4 &&
+		(library_.games[library_.selected_index].conflict_kind ==
+			RaOverlayConflictKind::Merge ||
+		 library_.games[library_.selected_index].conflict_kind ==
+			RaOverlayConflictKind::Split);
 }
 
 bool RaOverlay::OpenSelectedLibraryGameDetail()

@@ -730,6 +730,260 @@ int main()
 		"migration adds bank-level RA columns");
 	migrated.Close();
 
+	// Duplicate local games that resolve to one RA ID are merged atomically.
+	const std::string merge_root = JoinPath(base, "merge-ra");
+	Xm8Ra::RaLibrary merge_library;
+	Check(merge_library.Open(merge_root, &error),
+		"open merge conflict library");
+	Xm8Ra::RaMediaStore merge_store(&merge_library);
+	Xm8Ra::ImportedMedia merge_first;
+	Xm8Ra::ImportedMedia merge_second;
+	Check(merge_store.ImportDesktopD88(JoinPath(source_dir, "single.d88"),
+		&merge_first, &error), "import first merge medium");
+	Check(merge_store.ImportDesktopD88(JoinPath(source_dir, "second.d88"),
+		&merge_second, &error), "import second merge medium");
+	const std::vector<char> merge_first_bytes =
+		ReadFile(merge_first.working_path);
+	const std::vector<char> merge_second_bytes =
+		ReadFile(merge_second.working_path);
+	Xm8Ra::RaLibrarySyncPayload merge_sync;
+	merge_sync.username = "merge-user";
+	for (const Xm8Ra::ImportedMedia *item : {&merge_first, &merge_second}) {
+		Xm8Ra::RaLibraryHashMatch match;
+		match.hash = item->media_info.bank_md5s[0];
+		match.ra_game_id = 5001;
+		merge_sync.hashes.push_back(match);
+	}
+	Xm8Ra::RaLibraryGameTitle merge_title;
+	merge_title.ra_game_id = 5001;
+	merge_title.title = "Merged RA Game";
+	merge_sync.titles.push_back(merge_title);
+	Check(merge_library.ApplyLibrarySync(merge_sync, &error),
+		"create duplicate-game merge conflict");
+	Xm8Ra::RaGameConflictInfo merge_info;
+	Check(merge_library.InspectGameConflict(merge_second.record.game_id,
+		&merge_info, &error), "inspect merge conflict");
+	Check(merge_info.kind == Xm8Ra::RaGameConflictKind::Merge &&
+		merge_info.related_game_count == 2,
+		"duplicate RA games classify as merge");
+	Check(ExecSql(merge_library.DatabasePath(),
+		"CREATE TRIGGER fail_conflict_merge BEFORE UPDATE OF game_id ON media"
+		" WHEN OLD.game_id != NEW.game_id BEGIN"
+		" SELECT RAISE(ABORT, 'forced merge rollback'); END;", &error),
+		"install merge rollback trigger");
+	Check(!merge_library.ResolveGameConflict(merge_second.record.game_id,
+		&merge_info, &error), "merge failure rolls back transaction");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games") == 2,
+		"failed merge preserves both games");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(DISTINCT game_id) FROM media") == 2,
+		"failed merge preserves media ownership");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM launch_profiles") == 2,
+		"failed merge preserves launch profiles");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM pragma_foreign_key_check") == 0,
+		"failed merge leaves all foreign keys valid");
+	Check(ReadFile(merge_first.working_path) == merge_first_bytes &&
+		ReadFile(merge_second.working_path) == merge_second_bytes,
+		"failed merge does not alter working media");
+	Check(ExecSql(merge_library.DatabasePath(),
+		"DROP TRIGGER fail_conflict_merge", &error),
+		"remove merge rollback trigger");
+	Check(merge_library.ResolveGameConflict(merge_second.record.game_id,
+		&merge_info, &error), "resolve duplicate games by merge");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games") == 1,
+		"merge removes redundant game");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM media WHERE game_id = 1") == 2,
+		"merge moves all media to oldest game");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM launch_profiles WHERE game_id = 1") == 1,
+		"merge preserves oldest launch profile only");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT identification_state FROM games WHERE id = 1") ==
+		Xm8Ra::kRaIdentificationIdentified,
+		"merged game becomes identified");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT ra_game_id FROM games WHERE id = 1") == 5001,
+		"merged game stores common RA game id");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM pragma_foreign_key_check") == 0,
+		"merged database has no broken foreign keys");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM (SELECT game_id FROM media GROUP BY game_id"
+		" HAVING MIN(ordinal) != 0 OR MAX(ordinal) != COUNT(*) - 1"
+		" OR COUNT(DISTINCT ordinal) != COUNT(*))") == 0,
+		"merged media ordinals are compact and unique");
+	Check(QueryInt(merge_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games g WHERE (SELECT COUNT(*)"
+		" FROM launch_profiles lp WHERE lp.game_id = g.id"
+		" AND lp.is_ra_anchor = 1) != 1") == 0,
+		"merged game has exactly one RA anchor");
+	Check(ReadFile(merge_first.working_path) == merge_first_bytes &&
+		ReadFile(merge_second.working_path) == merge_second_bytes,
+		"merge only changes metadata, not working media");
+	Xm8Ra::ResolvedLaunchProfile resolved_merge;
+	Check(merge_store.ResolveLaunchProfile(1, &resolved_merge, &error),
+		"merged game launch profile remains resolvable");
+	Check(resolved_merge.anchor_md5 == merge_first.record.md5,
+		"merge keeps oldest game anchor");
+	merge_library.Close();
+
+	// A grouped game whose physical media map to different IDs is split.
+	const std::string split_root = JoinPath(base, "split-ra");
+	Xm8Ra::RaLibrary split_library;
+	Check(split_library.Open(split_root, &error),
+		"open split conflict library");
+	Xm8Ra::RaMediaStore split_store(&split_library);
+	Xm8Ra::ImportedPlaylist split_playlist;
+	Check(split_store.ImportM3U(JoinPath(source_dir, "pair.m3u"),
+		&split_playlist, &error), "import split conflict playlist");
+	std::vector<std::vector<char>> split_working_bytes;
+	for (const Xm8Ra::ImportedMedia& item : split_playlist.media) {
+		split_working_bytes.push_back(ReadFile(item.working_path));
+	}
+	Xm8Ra::RaLibrarySyncPayload split_sync;
+	split_sync.username = "split-user";
+	for (size_t index = 0; index < split_playlist.media.size(); ++index) {
+		Xm8Ra::RaLibraryHashMatch match;
+		match.hash = split_playlist.media[index].media_info.bank_md5s[0];
+		match.ra_game_id = static_cast<uint32_t>(6001 + index);
+		split_sync.hashes.push_back(match);
+		Xm8Ra::RaLibraryGameTitle title;
+		title.ra_game_id = match.ra_game_id;
+		title.title = "Split RA Game " + std::to_string(index + 1);
+		split_sync.titles.push_back(title);
+	}
+	Check(split_library.ApplyLibrarySync(split_sync, &error),
+		"create grouped-media split conflict");
+	Xm8Ra::RaGameConflictInfo split_info;
+	Check(split_library.InspectGameConflict(split_playlist.game_id,
+		&split_info, &error), "inspect split conflict");
+	Check(split_info.kind == Xm8Ra::RaGameConflictKind::Split &&
+		split_info.resulting_game_count == 2,
+		"different physical media classify as split");
+	Check(ExecSql(split_library.DatabasePath(),
+		"CREATE TRIGGER fail_conflict_split BEFORE INSERT ON games"
+		" WHEN NEW.ra_game_id = 6002 BEGIN"
+		" SELECT RAISE(ABORT, 'forced split rollback'); END;", &error),
+		"install split rollback trigger");
+	Check(!split_library.ResolveGameConflict(split_playlist.game_id,
+		&split_info, &error), "split failure rolls back transaction");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games") == 1,
+		"failed split preserves original game");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(DISTINCT game_id) FROM media") == 1,
+		"failed split preserves grouped media");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM launch_profiles") == 1,
+		"failed split restores original launch profile");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM pragma_foreign_key_check") == 0,
+		"failed split leaves all foreign keys valid");
+	for (size_t index = 0; index < split_playlist.media.size(); ++index) {
+		Check(ReadFile(split_playlist.media[index].working_path) ==
+			split_working_bytes[index],
+			"failed split does not alter working media");
+	}
+	Check(ExecSql(split_library.DatabasePath(),
+		"DROP TRIGGER fail_conflict_split", &error),
+		"remove split rollback trigger");
+	Check(split_library.ResolveGameConflict(split_playlist.game_id,
+		&split_info, &error), "resolve grouped media by split");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games") == 2,
+		"split creates one game per RA id");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(DISTINCT game_id) FROM media") == 2,
+		"split separates physical media ownership");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM launch_profiles") == 2,
+		"split creates one launch profile per game");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games WHERE identification_state = 1"
+		" AND ra_game_id IN (6001, 6002)") == 2,
+		"split results are identified and uniquely mapped");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM pragma_foreign_key_check") == 0,
+		"split database has no broken foreign keys");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM (SELECT game_id FROM media GROUP BY game_id"
+		" HAVING MIN(ordinal) != 0 OR MAX(ordinal) != COUNT(*) - 1"
+		" OR COUNT(DISTINCT ordinal) != COUNT(*))") == 0,
+		"split media ordinals are compact and unique");
+	Check(QueryInt(split_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games g WHERE (SELECT COUNT(*)"
+		" FROM launch_profiles lp WHERE lp.game_id = g.id"
+		" AND lp.is_ra_anchor = 1) != 1") == 0,
+		"each split game has exactly one RA anchor row");
+	for (size_t index = 0; index < split_playlist.media.size(); ++index) {
+		Check(ReadFile(split_playlist.media[index].working_path) ==
+			split_working_bytes[index],
+			"split only changes metadata, not working media");
+	}
+	Check(split_library.ListGames(&games, &error),
+		"list split result games");
+	Check(games.size() == 2, "both split games are visible");
+	for (const Xm8Ra::RaLibraryGameListItem& game : games) {
+		Xm8Ra::ResolvedLaunchProfile profile;
+		Check(split_store.ResolveLaunchProfile(game.game_id, &profile, &error),
+			"each split game has a resolvable launch profile");
+		Check(profile.drives[0].assigned &&
+			profile.drives[0].is_ra_anchor,
+			"each split game has exactly one drive-1 anchor");
+	}
+	split_library.Close();
+
+	// One physical multi-bank D88 cannot be split into separate local games.
+	const std::string manual_root = JoinPath(base, "manual-conflict-ra");
+	Xm8Ra::RaLibrary manual_library;
+	Check(manual_library.Open(manual_root, &error),
+		"open manual conflict library");
+	Xm8Ra::RaMediaStore manual_store(&manual_library);
+	Xm8Ra::ImportedMedia manual_media;
+	Check(manual_store.ImportDesktopD88(JoinPath(source_dir, "multi.d88"),
+		&manual_media, &error), "import multi-bank manual conflict");
+	const std::vector<char> manual_working_bytes =
+		ReadFile(manual_media.working_path);
+	Xm8Ra::RaLibrarySyncPayload manual_sync;
+	manual_sync.username = "manual-user";
+	for (size_t index = 0; index < manual_media.media_info.bank_md5s.size();
+		++index) {
+		Xm8Ra::RaLibraryHashMatch match;
+		match.hash = manual_media.media_info.bank_md5s[index];
+		match.ra_game_id = static_cast<uint32_t>(7001 + index);
+		manual_sync.hashes.push_back(match);
+		Xm8Ra::RaLibraryGameTitle title;
+		title.ra_game_id = match.ra_game_id;
+		title.title = "Manual RA Game " + std::to_string(index + 1);
+		manual_sync.titles.push_back(title);
+	}
+	Check(manual_library.ApplyLibrarySync(manual_sync, &error),
+		"create multi-bank manual conflict");
+	Xm8Ra::RaGameConflictInfo manual_info;
+	Check(manual_library.InspectGameConflict(manual_media.record.game_id,
+		&manual_info, &error), "inspect manual conflict");
+	Check(manual_info.kind == Xm8Ra::RaGameConflictKind::Manual,
+		"multi-ID physical D88 requires manual configuration");
+	Check(!manual_library.ResolveGameConflict(manual_media.record.game_id,
+		&manual_info, &error), "manual conflict rejects automatic resolution");
+	Check(QueryInt(manual_library.DatabasePath(),
+		"SELECT COUNT(*) FROM games WHERE identification_state = 4") == 1,
+		"manual conflict remains unchanged after rejection");
+	Check(QueryInt(manual_library.DatabasePath(),
+		"SELECT COUNT(*) FROM launch_profiles") == 1,
+		"manual conflict rejection preserves launch profile");
+	Check(QueryInt(manual_library.DatabasePath(),
+		"SELECT COUNT(*) FROM pragma_foreign_key_check") == 0,
+		"manual conflict rejection keeps foreign keys valid");
+	Check(ReadFile(manual_media.working_path) == manual_working_bytes,
+		"manual conflict rejection does not alter working media");
+	manual_library.Close();
+
 	const std::string corrupt_root = JoinPath(base, "corrupt-ra");
 	Check(MakeDirectoryTree(corrupt_root, &error), "create corrupt DB root");
 	Check(WriteTextFile(JoinPath(corrupt_root, "library.sqlite3"),

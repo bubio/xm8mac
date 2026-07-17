@@ -2,6 +2,7 @@
 
 #include "sqlite3.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cerrno>
 #include <cstdio>
@@ -931,6 +932,435 @@ bool RaLibrary::LoadGameIdentification(int64_t game_id,
 		0 : sqlite3_column_int64(stmt, 0);
 	*identification_state = sqlite3_column_int(stmt, 1);
 	sqlite3_finalize(stmt);
+	return true;
+}
+
+bool RaLibrary::InspectGameConflict(int64_t game_id,
+	RaGameConflictInfo *info, std::string *error)
+{
+	if (game_id <= 0 || info == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid game conflict request";
+		}
+		return false;
+	}
+
+	RaGameConflictInfo inspected;
+	inspected.game_id = game_id;
+	int64_t stored_ra_game_id = 0;
+	int state = kRaIdentificationUnidentified;
+	if (!LoadGameIdentification(game_id, &stored_ra_game_id, &state, error)) {
+		return false;
+	}
+	if (state != kRaIdentificationConflict) {
+		*info = inspected;
+		return true;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT DISTINCT mb.ra_game_id FROM media m"
+		" JOIN media_banks mb ON mb.media_md5 = m.md5"
+		" WHERE m.game_id = ? AND mb.ra_game_id IS NOT NULL"
+		" ORDER BY mb.ra_game_id",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, game_id);
+	std::vector<int64_t> ids;
+	while (true) {
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_DONE) {
+			break;
+		}
+		if (rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			sqlite3_finalize(stmt);
+			return false;
+		}
+		ids.push_back(sqlite3_column_int64(stmt, 0));
+	}
+	sqlite3_finalize(stmt);
+	if (ids.empty()) {
+		inspected.kind = RaGameConflictKind::Manual;
+		*info = inspected;
+		return true;
+	}
+	inspected.primary_ra_game_id = ids.front();
+
+	if (ids.size() == 1) {
+		if (!Prepare(db_,
+			"SELECT COUNT(*) FROM ("
+			" SELECT m.game_id FROM media m"
+			" JOIN games g ON g.id = m.game_id"
+			" JOIN media_banks mb ON mb.media_md5 = m.md5"
+			" WHERE g.identification_state = 4"
+			" GROUP BY m.game_id"
+			" HAVING COUNT(DISTINCT mb.ra_game_id) = 1"
+			" AND MIN(mb.ra_game_id) = ?"
+			" AND MIN(mb.identification_state) = 1"
+			" AND MAX(mb.identification_state) = 1)",
+			&stmt, error)) {
+			return false;
+		}
+		sqlite3_bind_int64(stmt, 1, ids.front());
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_ROW) {
+			inspected.related_game_count = sqlite3_column_int(stmt, 0);
+		}
+		else if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		if (rc != SQLITE_ROW) {
+			return false;
+		}
+		inspected.kind = inspected.related_game_count >= 2 ?
+			RaGameConflictKind::Merge : RaGameConflictKind::Manual;
+		inspected.resulting_game_count = 1;
+		*info = inspected;
+		return true;
+	}
+
+	// SPLIT is safe only when every physical D88 maps wholly to one RA ID.
+	if (!Prepare(db_,
+		"SELECT COUNT(*) FROM ("
+		" SELECT m.md5 FROM media m"
+		" JOIN media_banks mb ON mb.media_md5 = m.md5"
+		" WHERE m.game_id = ? GROUP BY m.md5"
+		" HAVING COUNT(DISTINCT mb.ra_game_id) != 1"
+		" OR MIN(mb.identification_state) != 1"
+		" OR MAX(mb.identification_state) != 1)",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, game_id);
+	const int unsafe_rc = sqlite3_step(stmt);
+	const int unsafe_media = unsafe_rc == SQLITE_ROW ?
+		sqlite3_column_int(stmt, 0) : -1;
+	sqlite3_finalize(stmt);
+	if (unsafe_rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		return false;
+	}
+
+	bool external_match = false;
+	if (!Prepare(db_,
+		"SELECT 1 FROM media m JOIN media_banks mb ON mb.media_md5 = m.md5"
+		" WHERE m.game_id != ? AND mb.ra_game_id = ? LIMIT 1",
+		&stmt, error)) {
+		return false;
+	}
+	for (int64_t id : ids) {
+		sqlite3_reset(stmt);
+		sqlite3_clear_bindings(stmt);
+		sqlite3_bind_int64(stmt, 1, game_id);
+		sqlite3_bind_int64(stmt, 2, id);
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_ROW) {
+			external_match = true;
+			break;
+		}
+		if (rc != SQLITE_DONE) {
+			if (error != nullptr) *error = sqlite3_errmsg(db_);
+			sqlite3_finalize(stmt);
+			return false;
+		}
+	}
+	sqlite3_finalize(stmt);
+	inspected.kind = unsafe_media == 0 && !external_match ?
+		RaGameConflictKind::Split : RaGameConflictKind::Manual;
+	inspected.related_game_count = 1;
+	inspected.resulting_game_count = static_cast<int>(ids.size());
+	*info = inspected;
+	return true;
+}
+
+bool RaLibrary::ResolveGameConflict(int64_t game_id,
+	RaGameConflictInfo *result, std::string *error)
+{
+	RaGameConflictInfo conflict;
+	if (!InspectGameConflict(game_id, &conflict, error)) {
+		return false;
+	}
+	if (conflict.kind != RaGameConflictKind::Merge &&
+		conflict.kind != RaGameConflictKind::Split) {
+		if (error != nullptr) {
+			*error = conflict.kind == RaGameConflictKind::Manual ?
+				"media conflict requires manual configuration" :
+				"game has no resolvable media conflict";
+		}
+		return false;
+	}
+	if (!Exec("BEGIN IMMEDIATE", error)) {
+		return false;
+	}
+	auto rollback = [&]() {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	};
+	RaGameConflictInfo locked_conflict;
+	if (!InspectGameConflict(game_id, &locked_conflict, error)) {
+		return rollback();
+	}
+	if (locked_conflict.kind != conflict.kind ||
+		(locked_conflict.kind != RaGameConflictKind::Merge &&
+		 locked_conflict.kind != RaGameConflictKind::Split)) {
+		if (error != nullptr) *error = "media conflict changed before resolution";
+		return rollback();
+	}
+	conflict = locked_conflict;
+	sqlite3_stmt *stmt = nullptr;
+	const int64_t now = NowUnixTime();
+
+	if (conflict.kind == RaGameConflictKind::Merge) {
+		std::vector<int64_t> game_ids;
+		if (!Prepare(db_,
+			"SELECT m.game_id FROM media m"
+			" JOIN games g ON g.id = m.game_id"
+			" JOIN media_banks mb ON mb.media_md5 = m.md5"
+			" WHERE g.identification_state = 4"
+			" GROUP BY m.game_id"
+			" HAVING COUNT(DISTINCT mb.ra_game_id) = 1"
+			" AND MIN(mb.ra_game_id) = ?"
+			" AND MIN(mb.identification_state) = 1"
+			" AND MAX(mb.identification_state) = 1"
+			" ORDER BY m.game_id",
+			&stmt, error)) {
+			return rollback();
+		}
+		sqlite3_bind_int64(stmt, 1, conflict.primary_ra_game_id);
+		while (true) {
+			const int rc = sqlite3_step(stmt);
+			if (rc == SQLITE_DONE) break;
+			if (rc != SQLITE_ROW) {
+				if (error != nullptr) *error = sqlite3_errmsg(db_);
+				sqlite3_finalize(stmt);
+				return rollback();
+			}
+			game_ids.push_back(sqlite3_column_int64(stmt, 0));
+		}
+		sqlite3_finalize(stmt);
+		if (game_ids.size() < 2) {
+			if (error != nullptr) *error = "merge conflict changed before resolution";
+			return rollback();
+		}
+		const int64_t target = game_ids.front();
+		int next_ordinal = 0;
+		if (!Prepare(db_,
+			"SELECT COALESCE(MAX(ordinal), -1) + 1 FROM media WHERE game_id = ?",
+			&stmt, error)) return rollback();
+		sqlite3_bind_int64(stmt, 1, target);
+		if (sqlite3_step(stmt) != SQLITE_ROW) {
+			if (error != nullptr) *error = sqlite3_errmsg(db_);
+			sqlite3_finalize(stmt);
+			return rollback();
+		}
+		next_ordinal = sqlite3_column_int(stmt, 0);
+		sqlite3_finalize(stmt);
+		for (size_t index = 1; index < game_ids.size(); ++index) {
+			const int64_t source = game_ids[index];
+			if (!Prepare(db_, "DELETE FROM launch_profiles WHERE game_id = ?",
+				&stmt, error)) return rollback();
+			sqlite3_bind_int64(stmt, 1, source);
+			if (!StepDone(db_, stmt, error)) return rollback();
+
+			std::vector<std::string> media;
+			if (!Prepare(db_,
+				"SELECT md5 FROM media WHERE game_id = ? ORDER BY ordinal, md5",
+				&stmt, error)) return rollback();
+			sqlite3_bind_int64(stmt, 1, source);
+			while (true) {
+				const int rc = sqlite3_step(stmt);
+				if (rc == SQLITE_DONE) break;
+				if (rc != SQLITE_ROW) {
+					if (error != nullptr) *error = sqlite3_errmsg(db_);
+					sqlite3_finalize(stmt);
+					return rollback();
+				}
+				media.push_back(ColumnText(stmt, 0));
+			}
+			sqlite3_finalize(stmt);
+			for (const std::string& md5 : media) {
+				if (!Prepare(db_,
+					"UPDATE media SET game_id = ?, ordinal = ?"
+					" WHERE md5 = ? AND game_id = ?", &stmt, error)) {
+					return rollback();
+				}
+				sqlite3_bind_int64(stmt, 1, target);
+				sqlite3_bind_int(stmt, 2, next_ordinal++);
+				sqlite3_bind_text(stmt, 3, md5.c_str(), -1, SQLITE_TRANSIENT);
+				sqlite3_bind_int64(stmt, 4, source);
+				if (!StepDone(db_, stmt, error)) return rollback();
+				if (sqlite3_changes(db_) != 1) {
+					if (error != nullptr) *error = "merge media ownership changed";
+					return rollback();
+				}
+			}
+			if (!Prepare(db_, "DELETE FROM games WHERE id = ?", &stmt, error))
+				return rollback();
+			sqlite3_bind_int64(stmt, 1, source);
+			if (!StepDone(db_, stmt, error)) return rollback();
+			if (sqlite3_changes(db_) != 1) {
+				if (error != nullptr) *error = "merge source game changed";
+				return rollback();
+			}
+		}
+		if (!Prepare(db_,
+			"UPDATE games SET ra_game_id = ?, identification_state = 1,"
+			" updated_at = ? WHERE id = ?", &stmt, error)) return rollback();
+		sqlite3_bind_int64(stmt, 1, conflict.primary_ra_game_id);
+		sqlite3_bind_int64(stmt, 2, now);
+		sqlite3_bind_int64(stmt, 3, target);
+		if (!StepDone(db_, stmt, error)) return rollback();
+		if (sqlite3_changes(db_) != 1) {
+			if (error != nullptr) *error = "merge target game changed";
+			return rollback();
+		}
+		conflict.game_id = target;
+	}
+	else {
+		struct MediaGroup {
+			std::string md5;
+			std::string title;
+			int ordinal = 0;
+			int bank = 0;
+			int64_t ra_game_id = 0;
+		};
+		std::vector<MediaGroup> media;
+		if (!Prepare(db_,
+			"SELECT m.md5, m.source_display_name, m.ordinal,"
+			" MIN(mb.bank_index), MIN(mb.ra_game_id)"
+			" FROM media m JOIN media_banks mb ON mb.media_md5 = m.md5"
+			" WHERE m.game_id = ? GROUP BY m.md5"
+			" ORDER BY m.ordinal, m.md5", &stmt, error)) return rollback();
+		sqlite3_bind_int64(stmt, 1, game_id);
+		while (true) {
+			const int rc = sqlite3_step(stmt);
+			if (rc == SQLITE_DONE) break;
+			if (rc != SQLITE_ROW) {
+				if (error != nullptr) *error = sqlite3_errmsg(db_);
+				sqlite3_finalize(stmt);
+				return rollback();
+			}
+			MediaGroup item;
+			item.md5 = ColumnText(stmt, 0);
+			item.title = ColumnText(stmt, 1);
+			item.ordinal = sqlite3_column_int(stmt, 2);
+			item.bank = sqlite3_column_int(stmt, 3);
+			item.ra_game_id = sqlite3_column_int64(stmt, 4);
+			media.push_back(item);
+		}
+		sqlite3_finalize(stmt);
+
+		std::string anchor_md5;
+		int anchor_bank = 0;
+		if (!Prepare(db_,
+			"SELECT media_md5, bank_index FROM launch_profiles"
+			" WHERE game_id = ? AND is_ra_anchor = 1",
+			&stmt, error)) return rollback();
+		sqlite3_bind_int64(stmt, 1, game_id);
+		if (sqlite3_step(stmt) != SQLITE_ROW) {
+			if (error != nullptr) *error = "split conflict has no RA anchor";
+			sqlite3_finalize(stmt);
+			return rollback();
+		}
+		anchor_md5 = ColumnText(stmt, 0);
+		anchor_bank = sqlite3_column_int(stmt, 1);
+		sqlite3_finalize(stmt);
+		int64_t anchor_ra_game_id = 0;
+		for (const MediaGroup& item : media) {
+			if (item.md5 == anchor_md5) anchor_ra_game_id = item.ra_game_id;
+		}
+		if (anchor_ra_game_id <= 0) {
+			if (error != nullptr) *error = "split conflict anchor is ambiguous";
+			return rollback();
+		}
+
+		if (!Prepare(db_, "DELETE FROM launch_profiles WHERE game_id = ?",
+			&stmt, error)) return rollback();
+		sqlite3_bind_int64(stmt, 1, game_id);
+		if (!StepDone(db_, stmt, error)) return rollback();
+
+		std::map<int64_t, int64_t> destination;
+		destination[anchor_ra_game_id] = game_id;
+		for (const MediaGroup& item : media) {
+			if (destination.find(item.ra_game_id) != destination.end()) continue;
+			if (!Prepare(db_,
+				"INSERT INTO games(ra_game_id, title, sort_title, title_source,"
+				" identification_state, created_at, updated_at)"
+				" VALUES(?, ?, ?, 0, 1, ?, ?)", &stmt, error)) return rollback();
+			sqlite3_bind_int64(stmt, 1, item.ra_game_id);
+			sqlite3_bind_text(stmt, 2, item.title.c_str(), -1, SQLITE_TRANSIENT);
+			const std::string sort_title = SortTitle(item.title);
+			sqlite3_bind_text(stmt, 3, sort_title.c_str(), -1, SQLITE_TRANSIENT);
+			sqlite3_bind_int64(stmt, 4, now);
+			sqlite3_bind_int64(stmt, 5, now);
+			if (!StepDone(db_, stmt, error)) return rollback();
+			if (sqlite3_changes(db_) != 1) {
+				if (error != nullptr) *error = "split game creation failed";
+				return rollback();
+			}
+			destination[item.ra_game_id] = sqlite3_last_insert_rowid(db_);
+		}
+		std::map<int64_t, int> ordinals;
+		std::map<int64_t, MediaGroup> first_media;
+		for (const MediaGroup& item : media) {
+			const int64_t dest = destination[item.ra_game_id];
+			if (!Prepare(db_, "UPDATE media SET game_id = ?, ordinal = ?"
+				" WHERE md5 = ? AND game_id = ?", &stmt, error)) return rollback();
+			sqlite3_bind_int64(stmt, 1, dest);
+			sqlite3_bind_int(stmt, 2, ordinals[item.ra_game_id]++);
+			sqlite3_bind_text(stmt, 3, item.md5.c_str(), -1, SQLITE_TRANSIENT);
+			sqlite3_bind_int64(stmt, 4, game_id);
+			if (!StepDone(db_, stmt, error)) return rollback();
+			if (sqlite3_changes(db_) != 1) {
+				if (error != nullptr) *error = "split media ownership changed";
+				return rollback();
+			}
+			if (first_media.find(item.ra_game_id) == first_media.end())
+				first_media[item.ra_game_id] = item;
+		}
+		if (!Prepare(db_,
+			"UPDATE games SET ra_game_id = ?, identification_state = 1,"
+			" updated_at = ? WHERE id = ?", &stmt, error)) return rollback();
+		sqlite3_bind_int64(stmt, 1, anchor_ra_game_id);
+		sqlite3_bind_int64(stmt, 2, now);
+		sqlite3_bind_int64(stmt, 3, game_id);
+		if (!StepDone(db_, stmt, error)) return rollback();
+		if (sqlite3_changes(db_) != 1) {
+			if (error != nullptr) *error = "split source game changed";
+			return rollback();
+		}
+		for (const auto& entry : destination) {
+			const int64_t id = entry.first;
+			const int64_t dest = entry.second;
+			const MediaGroup& anchor = id == anchor_ra_game_id ?
+				*std::find_if(media.begin(), media.end(), [&](const MediaGroup& item) {
+					return item.md5 == anchor_md5;
+				}) : first_media[id];
+			const int bank = id == anchor_ra_game_id ? anchor_bank : anchor.bank;
+			if (!Prepare(db_,
+				"INSERT INTO launch_profiles(game_id, drive, media_md5,"
+				" bank_index, is_ra_anchor) VALUES(?, 0, ?, ?, 1)",
+				&stmt, error)) return rollback();
+			sqlite3_bind_int64(stmt, 1, dest);
+			sqlite3_bind_text(stmt, 2, anchor.md5.c_str(), -1, SQLITE_TRANSIENT);
+			sqlite3_bind_int(stmt, 3, bank);
+			if (!StepDone(db_, stmt, error)) return rollback();
+		}
+	}
+
+	if (!Exec("COMMIT", error)) {
+		return rollback();
+	}
+	if (result != nullptr) {
+		*result = conflict;
+	}
 	return true;
 }
 

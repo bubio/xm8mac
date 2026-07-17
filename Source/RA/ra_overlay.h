@@ -52,7 +52,15 @@ enum class RaOverlayAction {
 	None,
 	SubmitLogin,
 	OpenLibraryGame,
+	ResolveLibraryConflict,
 	Close,
+};
+
+enum class RaOverlayConflictKind {
+	None = 0,
+	Merge = 1,
+	Split = 2,
+	Manual = 3,
 };
 
 struct RaOverlaySnapshot {
@@ -102,6 +110,7 @@ struct RaOverlayLibraryItem {
 	int64_t game_id = 0;
 	int64_t ra_game_id = 0;
 	int identification_state = 0;
+	RaOverlayConflictKind conflict_kind = RaOverlayConflictKind::None;
 	std::string title;
 	int media_count = 0;
 	int health_state = 0;
@@ -207,6 +216,7 @@ public:
 	bool ConsumeSubmittedLogin(std::string *username, std::string *password);
 	bool SelectedLibraryGameId(int64_t *game_id) const;
 	bool CanLaunchSelectedLibraryGame() const;
+	bool CanResolveSelectedLibraryConflict() const;
 	bool OpenSelectedLibraryGameDetail();
 	void SetLoginStatus(const std::string& message);
 	void CloseScreen();

@@ -153,15 +153,17 @@ cmake --build build-ra --target ra_inspect_media
 [15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md)、Offline状態機械は
 [16_Phase5Offline状態機械実施記録.md](16_Phase5Offline状態機械実施記録.md)、Library同期は
 [17_Phase5Library同期実施記録.md](17_Phase5Library同期実施記録.md)、実VMフレーム計数は
-[18_Phase5実VMフレーム計数実施記録.md](18_Phase5実VMフレーム計数実施記録.md)で実装した。
+[18_Phase5実VMフレーム計数実施記録.md](18_Phase5実VMフレーム計数実施記録.md)、
+媒体競合の起動制限と明示解消は
+[19_Phase5媒体競合起動制限実施記録.md](19_Phase5媒体競合起動制限実施記録.md)および
+[20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md)で実装した。
 Phase 5はまだ完了扱いにしない。残件は次のとおりである。
 
-- 媒体競合を解消する統合・分離UIと、競合媒体の起動制限。
 - ASCENDの実RA Game ID、タイトル、実績一覧取得とrequest packet確認。
 - 実HTTPSによるLibrary同期とLibrary画面へのtitle/progress反映確認。
 - 実ネットワーク切断時の`ActiveDisconnected`と再接続確認。
 
-Phase 5の次の実装単位は、媒体競合の起動制限と統合・分離UIである。
+Phase 5の次の確認単位は、実アカウントと実HTTPSを使うLibrary同期・画面反映である。
 
 ## 7. 後続Phase
 

@@ -1925,6 +1925,27 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 			AddRaNotice("RA: game launched");
 		}
 	}
+	else if (action == Xm8Ra::RaOverlayAction::ResolveLibraryConflict) {
+		int64_t game_id = 0;
+		std::string error;
+		Xm8Ra::RaGameConflictInfo resolved;
+		if (ra_loaded_library_game_id != 0) {
+			error = "stop the current library game before resolving media";
+		}
+		else if (ra_overlay == NULL || ra_library == NULL ||
+			!ra_overlay->SelectedLibraryGameId(&game_id) ||
+			!ra_library->ResolveGameConflict(game_id, &resolved, &error)) {
+			if (error.empty()) error = "media conflict resolution failed";
+		}
+		if (!error.empty()) {
+			AddRaNotice("RA: " + error);
+		}
+		else {
+			ra_overlay->OpenLibrary(MakeRaLibraryOverlaySnapshot());
+			AddRaNotice(resolved.kind == Xm8Ra::RaGameConflictKind::Merge ?
+				"RA: games merged" : "RA: media split");
+		}
+	}
 	else if (action == Xm8Ra::RaOverlayAction::Close) {
 		CloseRaOverlayToMenu();
 	}
@@ -2052,9 +2073,12 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
 		if (e->type == SDL_MOUSEBUTTONUP &&
 			PointInRect(x, y, RaGameDetailStartButtonRect()) &&
-			ra_overlay->CanLaunchSelectedLibraryGame()) {
+			(ra_overlay->CanLaunchSelectedLibraryGame() ||
+				ra_overlay->CanResolveSelectedLibraryConflict())) {
 			return HandleRaOverlayAction(
-				Xm8Ra::RaOverlayAction::OpenLibraryGame);
+				ra_overlay->CanLaunchSelectedLibraryGame() ?
+				Xm8Ra::RaOverlayAction::OpenLibraryGame :
+				Xm8Ra::RaOverlayAction::ResolveLibraryConflict);
 		}
 		return true;
 	}
@@ -2146,9 +2170,12 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
 			if (activate && PointInRect(x, y,
 				RaGameDetailStartButtonRect()) &&
-				ra_overlay->CanLaunchSelectedLibraryGame()) {
+				(ra_overlay->CanLaunchSelectedLibraryGame() ||
+					ra_overlay->CanResolveSelectedLibraryConflict())) {
 				return HandleRaOverlayAction(
-					Xm8Ra::RaOverlayAction::OpenLibraryGame);
+					ra_overlay->CanLaunchSelectedLibraryGame() ?
+					Xm8Ra::RaOverlayAction::OpenLibraryGame :
+					Xm8Ra::RaOverlayAction::ResolveLibraryConflict);
 			}
 			return true;
 		}
@@ -2667,6 +2694,9 @@ void App::DrawRaOverlay()
 					RaHealthLabel(game.health_state);
 			const bool media_conflict = game.identification_state ==
 				Xm8Ra::kRaIdentificationConflict;
+			const bool resolvable_conflict = media_conflict &&
+				(game.conflict_kind == Xm8Ra::RaOverlayConflictKind::Merge ||
+				 game.conflict_kind == Xm8Ra::RaOverlayConflictKind::Split);
 
 			std::vector<std::string> lines;
 			WrapSjisMenuText(&lines,
@@ -2678,7 +2708,9 @@ void App::DrawRaOverlay()
 			lines.push_back(ToSjisMenuText(converter, media));
 			if (media_conflict) {
 				lines.push_back(ToSjisMenuText(converter,
-					"Media conflict: resolve before launch"));
+					resolvable_conflict ?
+					"Media conflict: press Enter to resolve" :
+					"Media conflict: manual configuration required"));
 			}
 
 			const int line_height = 20;
@@ -2696,10 +2728,17 @@ void App::DrawRaOverlay()
 			SDL_Rect start_inner = {start_button.x + 2,
 				start_button.y + 2, start_button.w - 4,
 				start_button.h - 4};
-			font->DrawFillRect(buf, &start_inner, media_conflict ? back :
+			font->DrawFillRect(buf, &start_inner,
+				(media_conflict && !resolvable_conflict) ? back :
 				(MENUITEM_TITLE | alpha));
+			const char *button_label = "START";
+			if (game.conflict_kind == Xm8Ra::RaOverlayConflictKind::Merge)
+				button_label = "MERGE";
+			else if (game.conflict_kind == Xm8Ra::RaOverlayConflictKind::Split)
+				button_label = "SPLIT";
+			else if (media_conflict) button_label = "MANUAL";
 			font->DrawSjisCenterOr(buf, &start_inner,
-				media_conflict ? "CONFLICT" : "START", fore);
+				button_label, fore);
 		}
 		video->DrawCtrl();
 	}
@@ -5486,6 +5525,15 @@ Xm8Ra::RaOverlayLibraryListSnapshot App::MakeRaLibraryOverlaySnapshot() const
 		item.game_id = source.game_id;
 		item.ra_game_id = source.ra_game_id;
 		item.identification_state = source.identification_state;
+		if (source.identification_state == Xm8Ra::kRaIdentificationConflict) {
+			Xm8Ra::RaGameConflictInfo conflict;
+			std::string conflict_error;
+			if (ra_library->InspectGameConflict(source.game_id, &conflict,
+				&conflict_error)) {
+				item.conflict_kind = static_cast<Xm8Ra::RaOverlayConflictKind>(
+					conflict.kind);
+			}
+		}
 		item.title = source.title;
 		item.media_count = source.media_count;
 		item.health_state = source.health_state;
