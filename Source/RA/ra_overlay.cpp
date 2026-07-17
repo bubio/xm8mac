@@ -17,6 +17,7 @@ namespace {
 const size_t kMaxUsernameBytes = 256;
 const size_t kMaxPasswordBytes = 1024;
 const size_t kMenuListVisibleRows = 7;
+const int kIdentificationIdentified = 1;
 
 const int kMenuListRowX = 80;
 const int kMenuListRowY = 80;
@@ -255,7 +256,7 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 			screen_ = RaOverlayScreen::Library;
 			break;
 		case RaOverlayKey::Enter:
-			if (ListItemCount() > 0) {
+			if (CanLaunchSelectedLibraryGame()) {
 				return RaOverlayAction::OpenLibraryGame;
 			}
 			break;
@@ -667,6 +668,16 @@ bool RaOverlay::SelectedLibraryGameId(int64_t *game_id) const
 	}
 	*game_id = library_.games[library_.selected_index].game_id;
 	return true;
+}
+
+bool RaOverlay::CanLaunchSelectedLibraryGame() const
+{
+	return (screen_ == RaOverlayScreen::Library ||
+		screen_ == RaOverlayScreen::GameDetail) &&
+		library_.selected_index < library_.games.size() &&
+		library_.games[library_.selected_index].identification_state ==
+			kIdentificationIdentified &&
+		library_.games[library_.selected_index].ra_game_id > 0;
 }
 
 bool RaOverlay::OpenSelectedLibraryGameDetail()

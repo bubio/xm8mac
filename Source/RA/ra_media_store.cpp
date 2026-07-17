@@ -489,6 +489,25 @@ bool RaMediaStore::ResolveLaunchProfile(int64_t game_id,
 		}
 		return false;
 	}
+	int64_t ra_game_id = 0;
+	int identification_state = kRaIdentificationUnidentified;
+	if (!library_->LoadGameIdentification(game_id, &ra_game_id,
+		&identification_state, error)) {
+		return false;
+	}
+	if (identification_state == kRaIdentificationConflict) {
+		if (error != nullptr) {
+			*error = "media conflict must be resolved before launch";
+		}
+		return false;
+	}
+	if (identification_state != kRaIdentificationIdentified ||
+		ra_game_id <= 0) {
+		if (error != nullptr) {
+			*error = "game is not identified for RetroAchievements";
+		}
+		return false;
+	}
 
 	LaunchProfile launch;
 	if (!library_->LoadLaunchProfile(game_id, &launch, error)) {

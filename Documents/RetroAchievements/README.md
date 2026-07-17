@@ -65,6 +65,8 @@ ePC-8801MAの旧版
 | [15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md) | 同一ゲーム媒体交換、VM失敗時rollback、整合不能時Offline遷移、次回handoff |
 | [16_Phase5Offline状態機械実施記録.md](16_Phase5Offline状態機械実施記録.md) | 起動失敗時Offline、切断・再接続、途中復帰禁止、次回Library同期handoff |
 | [17_Phase5Library同期実施記録.md](17_Phase5Library同期実施記録.md) | bank別hash、hash/title/progress同期、transaction、schema v2、次回handoff |
+| [18_Phase5実VMフレーム計数実施記録.md](18_Phase5実VMフレーム計数実施記録.md) | 実PC-8801MA VMによる通常、複数frame、描画skip、Full Speed相当のcallback計数 |
+| [19_Phase5媒体競合起動制限実施記録.md](19_Phase5媒体競合起動制限実施記録.md) | 競合ゲームのLibrary表示、Game Detail表示、UI／DB二重の起動禁止 |
 
 ## 3. 確定事項
 

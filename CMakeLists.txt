@@ -309,6 +309,44 @@ if(BUILD_TESTING)
   )
   add_test(NAME host_frame_callback_test COMMAND host_frame_callback_test)
 
+  add_executable(event_host_frame_integration_test
+    Tests/event_host_frame_integration_test.cpp
+    Source/UI/file.cpp
+    Source/UI/fileio.cpp
+    Source/ePC-8801MA/common.cpp
+    Source/ePC-8801MA/config.cpp
+    Source/ePC-8801MA/fifo.cpp
+    Source/ePC-8801MA/vm/disk.cpp
+    Source/ePC-8801MA/vm/event.cpp
+    Source/ePC-8801MA/vm/i8251.cpp
+    Source/ePC-8801MA/vm/i8253.cpp
+    Source/ePC-8801MA/vm/i8255.cpp
+    Source/ePC-8801MA/vm/disksub.cpp
+    Source/ePC-8801MA/vm/pcm1bit.cpp
+    Source/ePC-8801MA/vm/upd765a.cpp
+    Source/ePC-8801MA/vm/upd1990a.cpp
+    Source/ePC-8801MA/vm/fmsound.cpp
+    Source/ePC-8801MA/vm/z80.cpp
+    Source/ePC-8801MA/vm/fmgen/opna.cpp
+    Source/ePC-8801MA/vm/fmgen/psg.cpp
+    Source/ePC-8801MA/vm/fmgen/fmgen.cpp
+    Source/ePC-8801MA/vm/fmgen/fmtimer.cpp
+    Source/ePC-8801MA/vm/pc8801/pc88.cpp
+    Source/ePC-8801MA/vm/pc8801/pc8801.cpp
+  )
+  target_include_directories(event_host_frame_integration_test PRIVATE
+    Source/UI
+    Source/ePC-8801MA
+    Source/ePC-8801MA/vm
+    Source/ePC-8801MA/vm/pc8801
+    Source/ePC-8801MA/vm/fmgen
+  )
+  target_compile_definitions(event_host_frame_integration_test PRIVATE
+    SDL _PC8801MA)
+  target_link_libraries(event_host_frame_integration_test PRIVATE XM8::SDL)
+  add_test(NAME event_host_frame_integration_test
+    COMMAND event_host_frame_integration_test)
+
   if(APPLE)
     add_executable(converter_mac_test
       Tests/converter_mac_test.mm

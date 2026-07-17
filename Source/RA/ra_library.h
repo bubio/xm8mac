@@ -14,6 +14,12 @@ namespace Xm8Ra {
 constexpr int kRaModeSoftcore = 1;
 constexpr int kRaModeHardcore = 2;
 
+constexpr int kRaIdentificationUnidentified = 0;
+constexpr int kRaIdentificationIdentified = 1;
+constexpr int kRaIdentificationUnregistered = 2;
+constexpr int kRaIdentificationError = 3;
+constexpr int kRaIdentificationConflict = 4;
+
 constexpr int kRaMediaHealthOk = 0;
 constexpr int kRaMediaHealthSourceMissing = 1;
 constexpr int kRaMediaHealthSourceChanged = 2;
@@ -154,6 +160,8 @@ public:
 		std::string *error);
 	bool SaveLaunchProfile(const LaunchProfile& profile,
 		std::string *error);
+	bool LoadGameIdentification(int64_t game_id, int64_t *ra_game_id,
+		int *identification_state, std::string *error);
 	bool MergeGameMedia(int64_t target_game_id, int64_t source_game_id,
 		std::string *error);
 	bool MarkGameIdentified(int64_t game_id, int64_t ra_game_id,

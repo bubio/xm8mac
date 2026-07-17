@@ -900,6 +900,40 @@ bool RaLibrary::SaveLaunchProfile(const LaunchProfile& profile,
 	return Exec("COMMIT", error);
 }
 
+bool RaLibrary::LoadGameIdentification(int64_t game_id,
+	int64_t *ra_game_id, int *identification_state, std::string *error)
+{
+	if (game_id <= 0 || ra_game_id == nullptr ||
+		identification_state == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid game identification request";
+		}
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT ra_game_id, identification_state FROM games WHERE id = ?",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, game_id);
+	const int rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = rc == SQLITE_DONE ? "game does not exist" :
+				sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		return false;
+	}
+	*ra_game_id = sqlite3_column_type(stmt, 0) == SQLITE_NULL ?
+		0 : sqlite3_column_int64(stmt, 0);
+	*identification_state = sqlite3_column_int(stmt, 1);
+	sqlite3_finalize(stmt);
+	return true;
+}
+
 bool RaLibrary::MergeGameMedia(int64_t target_game_id,
 	int64_t source_game_id, std::string *error)
 {
@@ -1075,7 +1109,7 @@ bool RaLibrary::ListGamesForUser(const std::string& username,
 		" LEFT JOIN media m ON m.game_id = g.id"
 		" LEFT JOIN progress p ON p.ra_game_id = g.ra_game_id"
 		"  AND (? = '*' OR p.username = ?)"
-		" WHERE g.ra_game_id IS NOT NULL AND g.identification_state = 1"
+		" WHERE g.identification_state IN (1, 4)"
 		" GROUP BY g.id"
 		" ORDER BY g.last_played_at IS NULL, g.last_played_at DESC,"
 		" g.sort_title ASC, g.id ASC",

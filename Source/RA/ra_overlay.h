@@ -101,6 +101,7 @@ struct RaOverlayAchievementListSnapshot {
 struct RaOverlayLibraryItem {
 	int64_t game_id = 0;
 	int64_t ra_game_id = 0;
+	int identification_state = 0;
 	std::string title;
 	int media_count = 0;
 	int health_state = 0;
@@ -205,6 +206,7 @@ public:
 	RaOverlayAction OnLoginPointer(int x, int y, bool activate);
 	bool ConsumeSubmittedLogin(std::string *username, std::string *password);
 	bool SelectedLibraryGameId(int64_t *game_id) const;
+	bool CanLaunchSelectedLibraryGame() const;
 	bool OpenSelectedLibraryGameDetail();
 	void SetLoginStatus(const std::string& message);
 	void CloseScreen();

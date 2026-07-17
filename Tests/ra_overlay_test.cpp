@@ -155,7 +155,8 @@ int main()
 	for (int i = 0; i < 9; ++i) {
 		Xm8Ra::RaOverlayLibraryItem game;
 		game.game_id = 100 + i;
-		game.ra_game_id = i == 0 ? 1234 : 0;
+		game.ra_game_id = 1234 + i;
+		game.identification_state = 1;
 		game.title = i == 0 ? "Library First" : "Library Extra";
 		game.media_count = i + 1;
 		game.health_state = 0;
@@ -212,6 +213,21 @@ int main()
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
 		Xm8Ra::RaOverlayAction::Close);
+
+	Xm8Ra::RaOverlayLibraryListSnapshot conflicts;
+	Xm8Ra::RaOverlayLibraryItem conflict;
+	conflict.game_id = 999;
+	conflict.title = "Conflicting Game";
+	conflict.identification_state = 4;
+	conflicts.games.push_back(conflict);
+	overlay.OpenLibrary(conflicts);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
+	assert(!overlay.CanLaunchSelectedLibraryGame());
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Enter) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
 
 	Xm8Ra::RaOverlayLeaderboardListSnapshot leaderboards;
 	leaderboards.game_loaded = true;

@@ -2051,7 +2051,8 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	}
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
 		if (e->type == SDL_MOUSEBUTTONUP &&
-			PointInRect(x, y, RaGameDetailStartButtonRect())) {
+			PointInRect(x, y, RaGameDetailStartButtonRect()) &&
+			ra_overlay->CanLaunchSelectedLibraryGame()) {
 			return HandleRaOverlayAction(
 				Xm8Ra::RaOverlayAction::OpenLibraryGame);
 		}
@@ -2144,7 +2145,8 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 		ra_overlay_finger_scrolled = false;
 		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
 			if (activate && PointInRect(x, y,
-				RaGameDetailStartButtonRect())) {
+				RaGameDetailStartButtonRect()) &&
+				ra_overlay->CanLaunchSelectedLibraryGame()) {
 				return HandleRaOverlayAction(
 					Xm8Ra::RaOverlayAction::OpenLibraryGame);
 			}
@@ -2407,7 +2409,10 @@ void App::DrawRaOverlay()
 			else if (library_screen) {
 				const Xm8Ra::RaOverlayLibraryItem& item =
 					library.games[item_index];
-				std::snprintf(line, sizeof(line), "%s", item.title.c_str());
+				std::snprintf(line, sizeof(line), "%s%s",
+					item.identification_state ==
+						Xm8Ra::kRaIdentificationConflict ? "[!] " : "",
+					item.title.c_str());
 			}
 			else if (achievements_screen) {
 				const Xm8Ra::RaOverlayAchievementItem& item =
@@ -2642,16 +2647,26 @@ void App::DrawRaOverlay()
 			}
 
 			char ids[128];
-			std::snprintf(ids, sizeof(ids), "Game ID %lld  RA ID %lld",
-				static_cast<long long>(game.game_id),
-				static_cast<long long>(game.ra_game_id));
+			if (game.identification_state ==
+				Xm8Ra::kRaIdentificationConflict) {
+				std::snprintf(ids, sizeof(ids),
+					"Game ID %lld  RA ID conflict",
+					static_cast<long long>(game.game_id));
+			}
+			else {
+				std::snprintf(ids, sizeof(ids), "Game ID %lld  RA ID %lld",
+					static_cast<long long>(game.game_id),
+					static_cast<long long>(game.ra_game_id));
+			}
 
 			const std::string last_played =
 				"Last played " + FormatRaUnixTime(game.last_played_at);
 			const std::string media =
 				std::string("Media ") +
 				std::to_string(game.media_count) + "  " +
-				RaHealthLabel(game.health_state);
+					RaHealthLabel(game.health_state);
+			const bool media_conflict = game.identification_state ==
+				Xm8Ra::kRaIdentificationConflict;
 
 			std::vector<std::string> lines;
 			WrapSjisMenuText(&lines,
@@ -2661,6 +2676,10 @@ void App::DrawRaOverlay()
 			lines.push_back(ToSjisMenuText(converter, ids));
 			lines.push_back(ToSjisMenuText(converter, last_played));
 			lines.push_back(ToSjisMenuText(converter, media));
+			if (media_conflict) {
+				lines.push_back(ToSjisMenuText(converter,
+					"Media conflict: resolve before launch"));
+			}
 
 			const int line_height = 20;
 			const int text_x = body.x + 104;
@@ -2677,9 +2696,10 @@ void App::DrawRaOverlay()
 			SDL_Rect start_inner = {start_button.x + 2,
 				start_button.y + 2, start_button.w - 4,
 				start_button.h - 4};
-			font->DrawFillRect(buf, &start_inner,
-				MENUITEM_TITLE | alpha);
-			font->DrawSjisCenterOr(buf, &start_inner, "START", fore);
+			font->DrawFillRect(buf, &start_inner, media_conflict ? back :
+				(MENUITEM_TITLE | alpha));
+			font->DrawSjisCenterOr(buf, &start_inner,
+				media_conflict ? "CONFLICT" : "START", fore);
 		}
 		video->DrawCtrl();
 	}
@@ -5465,6 +5485,7 @@ Xm8Ra::RaOverlayLibraryListSnapshot App::MakeRaLibraryOverlaySnapshot() const
 		Xm8Ra::RaOverlayLibraryItem item;
 		item.game_id = source.game_id;
 		item.ra_game_id = source.ra_game_id;
+		item.identification_state = source.identification_state;
 		item.title = source.title;
 		item.media_count = source.media_count;
 		item.health_state = source.health_state;
@@ -5714,6 +5735,25 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 	if (ra_media_store == NULL || ra_library == NULL) {
 		if (error != NULL) {
 			*error = "RA library unavailable";
+		}
+		return false;
+	}
+	int64_t ra_game_id = 0;
+	int identification_state = Xm8Ra::kRaIdentificationUnidentified;
+	if (!ra_library->LoadGameIdentification(game_id, &ra_game_id,
+		&identification_state, error)) {
+		return false;
+	}
+	if (identification_state == Xm8Ra::kRaIdentificationConflict) {
+		if (error != NULL) {
+			*error = "media conflict must be resolved before launch";
+		}
+		return false;
+	}
+	if (identification_state != Xm8Ra::kRaIdentificationIdentified ||
+		ra_game_id <= 0) {
+		if (error != NULL) {
+			*error = "game is not identified for RetroAchievements";
 		}
 		return false;
 	}

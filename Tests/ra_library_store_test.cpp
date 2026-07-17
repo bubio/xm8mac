@@ -630,6 +630,38 @@ int main()
 		"list games after mark played");
 	Check(!games.empty() && games[0].game_id == first.record.game_id,
 		"recently played game sorts first");
+	Check(ExecSql(library.DatabasePath(),
+		"UPDATE games SET ra_game_id = NULL, identification_state = 4"
+		" WHERE id = 1", &error),
+		"create media conflict launch fixture");
+	int64_t conflict_ra_game_id = -1;
+	int conflict_state = -1;
+	Check(library.LoadGameIdentification(first.record.game_id,
+		&conflict_ra_game_id, &conflict_state, &error),
+		"load conflicted game identification");
+	Check(conflict_ra_game_id == 0 &&
+		conflict_state == Xm8Ra::kRaIdentificationConflict,
+		"conflicted game has no launchable RA game id");
+	Check(library.ListGames(&games, &error),
+		"list library including media conflict");
+	bool found_conflict = false;
+	for (const Xm8Ra::RaLibraryGameListItem& item : games) {
+		if (item.game_id == first.record.game_id) {
+			found_conflict = item.identification_state ==
+				Xm8Ra::kRaIdentificationConflict;
+		}
+	}
+	Check(found_conflict, "media conflict remains visible in RA library");
+	Xm8Ra::ResolvedLaunchProfile conflict_profile;
+	Check(!store.ResolveLaunchProfile(first.record.game_id,
+		&conflict_profile, &error),
+		"media store rejects conflicted game launch");
+	Check(error == "media conflict must be resolved before launch",
+		"conflicted launch reports explicit reason");
+	Check(ExecSql(library.DatabasePath(),
+		"UPDATE games SET ra_game_id = 1234, identification_state = 1"
+		" WHERE id = 1", &error),
+		"restore identified game after conflict test");
 
 	Xm8Ra::ImportedMedia modified;
 	Check(store.ImportDesktopD88(single, &modified, &error),

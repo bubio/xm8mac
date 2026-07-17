@@ -90,23 +90,24 @@ ASCENDを登録済みなら同期後のtitle/progress確認に使用できる。
 
 ## 7. 次回作業handoff
 
-次はFull Speed、描画skip、1回のsound生成で複数VM frameが進む場合を計数できる
-integration testを実装する。既存`host_frame_callback_test`はcallback単体であり、実際の
-`EVENT::drive()`、sound buffer、Appの`DoFrame()`接続を一体では検証していない。
+Full Speed、描画skip、1回のsound生成で複数VM frameが進む場合のintegration testは
+[18_Phase5実VMフレーム計数実施記録.md](18_Phase5実VMフレーム計数実施記録.md)で完了した。
+実PC-8801MA VMの`EVENT::drive()`を使い、完了frame数とcallback回数の一致をRA ON/OFFの
+双方で固定している。
 
-その後の順序:
+現在の順序:
 
 1. 媒体競合を解消する統合・分離UIと競合媒体の起動制限。
 2. ASCENDで実HTTPS Library同期を手動確認。
-3. Phase 5完了判定。
-4. Phase 6のtoast queue、画像cache、全入力、視覚受入。
+3. 実ネットワーク切断・再接続を手動確認。
+4. Phase 5完了判定。
+5. Phase 6のtoast queue、画像cache、全入力、視覚受入。
 
 開始時command:
 
 ```sh
 git status --short
-rg -n "host_frame_callback|create_sound32|extra_frames|app_fullspeed" \
-  Source Tests
-cmake --build build-ra --target xm8 host_frame_callback_test ra_service_test
+rg -n "identification_state|Conflict|ra_game_id" Source/RA Source/UI Tests
+cmake --build build-ra --target xm8 ra_library_store_test ra_service_test
 ctest --test-dir build-ra --output-on-failure
 ```
