@@ -63,6 +63,8 @@ ePC-8801MAの旧版
 | [13_実ROMなしLibrary検証手順.md](13_実ROMなしLibrary検証手順.md) | 生成fixtureを使うLibrary v1手動確認、seed tool、検証結果 |
 | [14_Phase5-6継続実施記録.md](14_Phase5-6継続実施記録.md) | 現状再監査、実フレーム評価、ASCEND媒体検査、Phase 5-6残件 |
 | [15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md) | 同一ゲーム媒体交換、VM失敗時rollback、整合不能時Offline遷移、次回handoff |
+| [16_Phase5Offline状態機械実施記録.md](16_Phase5Offline状態機械実施記録.md) | 起動失敗時Offline、切断・再接続、途中復帰禁止、次回Library同期handoff |
+| [17_Phase5Library同期実施記録.md](17_Phase5Library同期実施記録.md) | bank別hash、hash/title/progress同期、transaction、schema v2、次回handoff |
 
 ## 3. 確定事項
 

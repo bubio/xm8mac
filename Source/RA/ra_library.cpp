@@ -6,6 +6,8 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <map>
+#include <set>
 #include <sstream>
 #include <sys/stat.h>
 #include <vector>
@@ -13,7 +15,7 @@
 namespace Xm8Ra {
 namespace {
 
-constexpr int kSchemaVersion = 1;
+constexpr int kSchemaVersion = 2;
 
 std::string JoinPath(const std::string& base, const char *child)
 {
@@ -123,6 +125,19 @@ std::string SortTitle(const std::string& title)
 		}
 	}
 	return result;
+}
+
+bool IsMd5Hex(const std::string& value)
+{
+	if (value.size() != 32) {
+		return false;
+	}
+	for (char ch : value) {
+		if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f'))) {
+			return false;
+		}
+	}
+	return true;
 }
 
 } // namespace
@@ -345,8 +360,15 @@ bool RaLibrary::InitializeSchema(std::string *error)
 		" media_md5 TEXT NOT NULL REFERENCES media(md5) ON DELETE CASCADE,"
 		" bank_index INTEGER NOT NULL,"
 		" label TEXT NOT NULL,"
+		" ra_hash TEXT,"
+		" ra_game_id INTEGER,"
+		" identification_state INTEGER NOT NULL DEFAULT 0,"
 		" PRIMARY KEY(media_md5, bank_index),"
-		" CHECK(bank_index >= 0)"
+		" CHECK(bank_index >= 0),"
+		" CHECK(ra_hash IS NULL OR (length(ra_hash) = 32 AND"
+		"  ra_hash NOT GLOB '*[^0-9a-f]*')),"
+		" CHECK(ra_game_id IS NULL OR ra_game_id > 0),"
+		" CHECK(identification_state BETWEEN 0 AND 4)"
 		");"
 		"CREATE TABLE IF NOT EXISTS launch_profiles ("
 		" game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,"
@@ -407,7 +429,22 @@ bool RaLibrary::InitializeSchema(std::string *error)
 	if (step == SQLITE_ROW) {
 		const int version = sqlite3_column_int(stmt, 0);
 		sqlite3_finalize(stmt);
-		if (version != kSchemaVersion) {
+		if (version == 1) {
+			const char *migration =
+				"ALTER TABLE media_banks ADD COLUMN ra_hash TEXT;"
+				"ALTER TABLE media_banks ADD COLUMN ra_game_id INTEGER;"
+				"ALTER TABLE media_banks ADD COLUMN identification_state"
+				" INTEGER NOT NULL DEFAULT 0;"
+				"UPDATE media_banks SET ra_hash = media_md5"
+				" WHERE media_md5 IN (SELECT md5 FROM media WHERE bank_count = 1);"
+				"UPDATE schema_meta SET schema_version = 2, migrated_at ="
+				" strftime('%s','now') WHERE singleton = 1;";
+			if (!Exec(migration, error)) {
+				Exec("ROLLBACK", nullptr);
+				return false;
+			}
+		}
+		else if (version != kSchemaVersion) {
 			if (error != nullptr) {
 				*error = "unsupported RA library schema version";
 			}
@@ -1012,6 +1049,12 @@ bool RaLibrary::MergeGameMedia(int64_t target_game_id,
 bool RaLibrary::ListGames(std::vector<RaLibraryGameListItem> *games,
 	std::string *error)
 {
+	return ListGamesForUser("*", games, error);
+}
+
+bool RaLibrary::ListGamesForUser(const std::string& username,
+	std::vector<RaLibraryGameListItem> *games, std::string *error)
+{
 	if (games == nullptr) {
 		if (error != nullptr) {
 			*error = "invalid argument";
@@ -1031,6 +1074,7 @@ bool RaLibrary::ListGames(std::vector<RaLibraryGameListItem> *games,
 		" FROM games g"
 		" LEFT JOIN media m ON m.game_id = g.id"
 		" LEFT JOIN progress p ON p.ra_game_id = g.ra_game_id"
+		"  AND (? = '*' OR p.username = ?)"
 		" WHERE g.ra_game_id IS NOT NULL AND g.identification_state = 1"
 		" GROUP BY g.id"
 		" ORDER BY g.last_played_at IS NULL, g.last_played_at DESC,"
@@ -1038,6 +1082,8 @@ bool RaLibrary::ListGames(std::vector<RaLibraryGameListItem> *games,
 		&stmt, error)) {
 		return false;
 	}
+	sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 2, username.c_str(), -1, SQLITE_TRANSIENT);
 
 	while (true) {
 		const int rc = sqlite3_step(stmt);
@@ -1221,6 +1267,9 @@ bool RaLibrary::RegisterDesktopMediaInternal(const D88MediaInfo& media,
 			}
 			return false;
 		}
+		if (!UpdateMediaBankHashes(media, error)) {
+			return false;
+		}
 		if (record != nullptr) {
 			*record = existing;
 		}
@@ -1295,8 +1344,8 @@ bool RaLibrary::RegisterDesktopMediaInternal(const D88MediaInfo& media,
 
 	for (int i = 0; i < media.banks; i++) {
 		if (!Prepare(db_,
-			"INSERT INTO media_banks(media_md5, bank_index, label)"
-			" VALUES(?, ?, ?)",
+			"INSERT INTO media_banks(media_md5, bank_index, label, ra_hash)"
+			" VALUES(?, ?, ?, ?)",
 			&stmt, error)) {
 			Exec("ROLLBACK", nullptr);
 			return false;
@@ -1306,6 +1355,15 @@ bool RaLibrary::RegisterDesktopMediaInternal(const D88MediaInfo& media,
 		sqlite3_bind_text(stmt, 1, media.md5.c_str(), -1, SQLITE_TRANSIENT);
 		sqlite3_bind_int(stmt, 2, i);
 		sqlite3_bind_text(stmt, 3, label.c_str(), -1, SQLITE_TRANSIENT);
+		const std::string hash =
+			i < static_cast<int>(media.bank_md5s.size()) ?
+			media.bank_md5s[i] : "";
+		if (hash.size() == 32) {
+			sqlite3_bind_text(stmt, 4, hash.c_str(), -1, SQLITE_TRANSIENT);
+		}
+		else {
+			sqlite3_bind_null(stmt, 4);
+		}
 		if (!StepDone(db_, stmt, error)) {
 			Exec("ROLLBACK", nullptr);
 			return false;
@@ -1339,6 +1397,369 @@ bool RaLibrary::RegisterDesktopMediaInternal(const D88MediaInfo& media,
 		record->inserted = true;
 	}
 	return true;
+}
+
+bool RaLibrary::UpdateMediaBankHashes(const D88MediaInfo& media,
+	std::string *error)
+{
+	if (!IsMd5Hex(media.md5) || media.banks <= 0 ||
+		media.bank_md5s.size() != static_cast<size_t>(media.banks)) {
+		if (error != nullptr) {
+			*error = "invalid media bank hashes";
+		}
+		return false;
+	}
+	for (const std::string& hash : media.bank_md5s) {
+		if (!IsMd5Hex(hash)) {
+			if (error != nullptr) {
+				*error = "invalid RA bank hash";
+			}
+			return false;
+		}
+	}
+	if (!Exec("BEGIN IMMEDIATE", error)) {
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	for (int bank = 0; bank < media.banks; bank++) {
+		if (!Prepare(db_,
+			"UPDATE media_banks SET ra_hash = ?"
+			" WHERE media_md5 = ? AND bank_index = ?",
+			&stmt, error)) {
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+		sqlite3_bind_text(stmt, 1, media.bank_md5s[bank].c_str(), -1,
+			SQLITE_TRANSIENT);
+		sqlite3_bind_text(stmt, 2, media.md5.c_str(), -1, SQLITE_TRANSIENT);
+		sqlite3_bind_int(stmt, 3, bank);
+		if (!StepDone(db_, stmt, error) || sqlite3_changes(db_) != 1) {
+			if (error != nullptr && error->empty()) {
+				*error = "media bank is not registered";
+			}
+			Exec("ROLLBACK", nullptr);
+			return false;
+		}
+	}
+	return Exec("COMMIT", error);
+}
+
+bool RaLibrary::ListMediaBankHashes(std::vector<RaMediaBankHash> *hashes,
+	std::string *error)
+{
+	if (hashes == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid argument";
+		}
+		return false;
+	}
+	hashes->clear();
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT media_md5, bank_index, ra_hash FROM media_banks"
+		" WHERE ra_hash IS NOT NULL ORDER BY media_md5, bank_index",
+		&stmt, error)) {
+		return false;
+	}
+	while (true) {
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_DONE) {
+			break;
+		}
+		if (rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			sqlite3_finalize(stmt);
+			return false;
+		}
+		RaMediaBankHash item;
+		item.media_md5 = ColumnText(stmt, 0);
+		item.bank_index = sqlite3_column_int(stmt, 1);
+		item.ra_hash = ColumnText(stmt, 2);
+		if (!IsMd5Hex(item.ra_hash)) {
+			if (error != nullptr) {
+				*error = "invalid stored RA bank hash";
+			}
+			sqlite3_finalize(stmt);
+			return false;
+		}
+		hashes->push_back(item);
+	}
+	sqlite3_finalize(stmt);
+	return true;
+}
+
+bool RaLibrary::ApplyLibrarySync(const RaLibrarySyncPayload& payload,
+	std::string *error)
+{
+	if (payload.username.empty()) {
+		if (error != nullptr) {
+			*error = "library sync username is required";
+		}
+		return false;
+	}
+
+	std::map<std::string, uint32_t> hash_map;
+	std::set<uint32_t> matched_game_ids;
+	for (const RaLibraryHashMatch& item : payload.hashes) {
+		if (!IsMd5Hex(item.hash) || item.ra_game_id == 0 ||
+			!hash_map.emplace(item.hash, item.ra_game_id).second) {
+			if (error != nullptr) {
+				*error = "invalid or duplicate library hash result";
+			}
+			return false;
+		}
+		matched_game_ids.insert(item.ra_game_id);
+	}
+
+	std::map<uint32_t, RaLibraryGameTitle> title_map;
+	for (const RaLibraryGameTitle& item : payload.titles) {
+		if (item.ra_game_id == 0 || item.title.empty() ||
+			!title_map.emplace(item.ra_game_id, item).second) {
+			if (error != nullptr) {
+				*error = "invalid or duplicate game title result";
+			}
+			return false;
+		}
+	}
+	for (uint32_t game_id : matched_game_ids) {
+		if (title_map.find(game_id) == title_map.end()) {
+			if (error != nullptr) {
+				*error = "game title result is incomplete";
+			}
+			return false;
+		}
+	}
+
+	std::set<uint32_t> progress_ids;
+	for (const RaLibraryProgress& item : payload.progress) {
+		if (item.ra_game_id == 0 || item.core_unlocked > item.core_total ||
+			item.hardcore_unlocked > item.core_total ||
+			!progress_ids.insert(item.ra_game_id).second) {
+			if (error != nullptr) {
+				*error = "invalid or duplicate progress result";
+			}
+			return false;
+		}
+	}
+
+	if (!Exec("BEGIN IMMEDIATE", error)) {
+		return false;
+	}
+	auto rollback = [&]() {
+		Exec("ROLLBACK", nullptr);
+		return false;
+	};
+	const int64_t now = NowUnixTime();
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "SELECT media_md5, bank_index, ra_hash FROM media_banks",
+		&stmt, error)) {
+		return rollback();
+	}
+	struct BankUpdate {
+		std::string media_md5;
+		int bank = 0;
+		uint32_t game_id = 0;
+		bool has_hash = false;
+	};
+	std::vector<BankUpdate> bank_updates;
+	while (true) {
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_DONE) {
+			break;
+		}
+		if (rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			sqlite3_finalize(stmt);
+			return rollback();
+		}
+		BankUpdate update;
+		update.media_md5 = ColumnText(stmt, 0);
+		update.bank = sqlite3_column_int(stmt, 1);
+		const std::string hash = ColumnText(stmt, 2);
+		update.has_hash = IsMd5Hex(hash);
+		const auto match = hash_map.find(hash);
+		if (match != hash_map.end()) {
+			update.game_id = match->second;
+		}
+		bank_updates.push_back(update);
+	}
+	sqlite3_finalize(stmt);
+
+	for (const BankUpdate& update : bank_updates) {
+		if (!Prepare(db_,
+			"UPDATE media_banks SET ra_game_id = ?, identification_state = ?"
+			" WHERE media_md5 = ? AND bank_index = ?",
+			&stmt, error)) {
+			return rollback();
+		}
+		if (update.game_id != 0) {
+			sqlite3_bind_int64(stmt, 1, update.game_id);
+		}
+		else {
+			sqlite3_bind_null(stmt, 1);
+		}
+		sqlite3_bind_int(stmt, 2,
+			!update.has_hash ? 0 : (update.game_id != 0 ? 1 : 2));
+		sqlite3_bind_text(stmt, 3, update.media_md5.c_str(), -1,
+			SQLITE_TRANSIENT);
+		sqlite3_bind_int(stmt, 4, update.bank);
+		if (!StepDone(db_, stmt, error)) {
+			return rollback();
+		}
+	}
+
+	const char *aggregate_media =
+		"UPDATE media SET"
+		" ra_game_id = (SELECT CASE WHEN COUNT(DISTINCT ra_game_id) = 1"
+		"  THEN MIN(ra_game_id) ELSE NULL END FROM media_banks"
+		"  WHERE media_md5 = media.md5 AND ra_game_id IS NOT NULL),"
+		" identification_state = (SELECT CASE"
+		"  WHEN SUM(CASE WHEN ra_hash IS NULL THEN 1 ELSE 0 END) > 0 THEN 0"
+		"  WHEN COUNT(DISTINCT ra_game_id) = 0 THEN 2"
+		"  WHEN COUNT(DISTINCT ra_game_id) = 1 THEN 1 ELSE 4 END"
+		"  FROM media_banks WHERE media_md5 = media.md5)";
+	if (!Exec(aggregate_media, error)) {
+		return rollback();
+	}
+
+	struct GameUpdate {
+		int64_t local_game_id = 0;
+		uint32_t ra_game_id = 0;
+		int distinct_ids = 0;
+		int anchor_state = 0;
+	};
+	std::vector<GameUpdate> game_updates;
+	if (!Prepare(db_,
+		"SELECT g.id, mb.ra_game_id,"
+		" (SELECT COUNT(DISTINCT mb2.ra_game_id) FROM media m2"
+		"  JOIN media_banks mb2 ON mb2.media_md5 = m2.md5"
+		"  WHERE m2.game_id = g.id AND mb2.ra_game_id IS NOT NULL),"
+		" mb.identification_state"
+		" FROM games g"
+		" LEFT JOIN launch_profiles lp ON lp.game_id = g.id"
+		"  AND lp.is_ra_anchor = 1"
+		" LEFT JOIN media_banks mb ON mb.media_md5 = lp.media_md5"
+		"  AND mb.bank_index = lp.bank_index",
+		&stmt, error)) {
+		return rollback();
+	}
+	std::map<uint32_t, int> game_id_counts;
+	while (true) {
+		const int rc = sqlite3_step(stmt);
+		if (rc == SQLITE_DONE) {
+			break;
+		}
+		if (rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			sqlite3_finalize(stmt);
+			return rollback();
+		}
+		GameUpdate update;
+		update.local_game_id = sqlite3_column_int64(stmt, 0);
+		update.ra_game_id = static_cast<uint32_t>(sqlite3_column_int64(stmt, 1));
+		update.distinct_ids = sqlite3_column_int(stmt, 2);
+		update.anchor_state = sqlite3_column_int(stmt, 3);
+		if (update.ra_game_id != 0 && update.distinct_ids == 1) {
+			game_id_counts[update.ra_game_id]++;
+		}
+		game_updates.push_back(update);
+	}
+	sqlite3_finalize(stmt);
+	if (!Exec("UPDATE games SET ra_game_id = NULL", error)) {
+		return rollback();
+	}
+
+	for (const GameUpdate& update : game_updates) {
+		const bool conflict = update.distinct_ids > 1 ||
+			(update.ra_game_id != 0 && game_id_counts[update.ra_game_id] > 1);
+		const int state = conflict ? 4 :
+			(update.anchor_state == 0 ? 0 : (update.ra_game_id == 0 ? 2 : 1));
+		if (state == 1) {
+			const RaLibraryGameTitle& title = title_map.at(update.ra_game_id);
+			if (!Prepare(db_,
+				"UPDATE games SET ra_game_id = ?,"
+				" title = CASE WHEN title_source = 2 THEN title ELSE ? END,"
+				" sort_title = CASE WHEN title_source = 2 THEN sort_title ELSE ? END,"
+				" title_source = CASE WHEN title_source = 2 THEN 2 ELSE 1 END,"
+				" badge_url = ?, identification_state = 1, updated_at = ?"
+				" WHERE id = ?",
+				&stmt, error)) {
+				return rollback();
+			}
+			sqlite3_bind_int64(stmt, 1, update.ra_game_id);
+			sqlite3_bind_text(stmt, 2, title.title.c_str(), -1, SQLITE_TRANSIENT);
+			const std::string sort_title = SortTitle(title.title);
+			sqlite3_bind_text(stmt, 3, sort_title.c_str(), -1, SQLITE_TRANSIENT);
+			sqlite3_bind_text(stmt, 4, title.badge_url.c_str(), -1,
+				SQLITE_TRANSIENT);
+			sqlite3_bind_int64(stmt, 5, now);
+			sqlite3_bind_int64(stmt, 6, update.local_game_id);
+		}
+		else {
+			if (!Prepare(db_,
+				"UPDATE games SET identification_state = ?, updated_at = ?"
+				" WHERE id = ?",
+				&stmt, error)) {
+				return rollback();
+			}
+			sqlite3_bind_int(stmt, 1, state);
+			sqlite3_bind_int64(stmt, 2, now);
+			sqlite3_bind_int64(stmt, 3, update.local_game_id);
+		}
+		if (!StepDone(db_, stmt, error)) {
+			return rollback();
+		}
+	}
+
+	if (!Prepare(db_, "DELETE FROM progress WHERE username = ?", &stmt,
+		error)) {
+		return rollback();
+	}
+	sqlite3_bind_text(stmt, 1, payload.username.c_str(), -1, SQLITE_TRANSIENT);
+	if (!StepDone(db_, stmt, error)) {
+		return rollback();
+	}
+	for (const RaLibraryProgress& item : payload.progress) {
+		if (!Prepare(db_,
+			"INSERT INTO progress(username, ra_game_id, core_total,"
+			" core_unlocked, hardcore_unlocked, points_total,"
+			" points_unlocked, synced_at) VALUES(?, ?, ?, ?, ?, NULL, NULL, ?)",
+			&stmt, error)) {
+			return rollback();
+		}
+		sqlite3_bind_text(stmt, 1, payload.username.c_str(), -1,
+			SQLITE_TRANSIENT);
+		sqlite3_bind_int64(stmt, 2, item.ra_game_id);
+		sqlite3_bind_int64(stmt, 3, item.core_total);
+		sqlite3_bind_int64(stmt, 4, item.core_unlocked);
+		sqlite3_bind_int64(stmt, 5, item.hardcore_unlocked);
+		sqlite3_bind_int64(stmt, 6, now);
+		if (!StepDone(db_, stmt, error)) {
+			return rollback();
+		}
+	}
+
+	if (!Prepare(db_,
+		"INSERT INTO sync_state(sync_key, completed_at, result_code)"
+		" VALUES(?, ?, 0) ON CONFLICT(sync_key) DO UPDATE SET"
+		" completed_at = excluded.completed_at, result_code = 0",
+		&stmt, error)) {
+		return rollback();
+	}
+	const std::string sync_key = "library:" + payload.username + ":pc8800";
+	sqlite3_bind_text(stmt, 1, sync_key.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(stmt, 2, now);
+	if (!StepDone(db_, stmt, error)) {
+		return rollback();
+	}
+	return Exec("COMMIT", error);
 }
 
 } // namespace Xm8Ra

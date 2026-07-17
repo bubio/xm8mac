@@ -88,38 +88,28 @@ ASCENDは単一媒体なので媒体交換成功経路の手動試験には使�
 
 ### 6.1 最初に行うこと
 
-Phase 5の一般的なOffline session状態機械を実装する。媒体交換専用の
-`EnterRaOfflineSession()`は存在するが、起動時認証失敗、ゲーム識別失敗、session開始
-失敗、Active中切断を統一管理する状態機械にはなっていない。
-
-必要な状態と遷移を先に文書化し、少なくとも次を自動testで固定する。
-
-1. 起動時の認証・識別・session開始失敗ではゲームを継続し、RA評価を開始しない。
-2. Offline sessionへ入った後、接続が戻っても同じゲーム実行中は復帰しない。
-3. 明示的なゲーム再起動、RA mode切替、logout/loginのどれがOfflineを解除するかを
-   一意にする。
-4. Active中の一時切断と、sessionを継続できないserver errorを区別する。
-5. Offline中はHardcore制約を解除し、menuとoverlayの双方で状態を明示する。
-6. `DoFrame()`、送信、再識別がOffline中に行われないことをfake HTTPで確認する。
+この項目は
+[16_Phase5Offline状態機械実施記録.md](16_Phase5Offline状態機械実施記録.md)で実装した。
+現在の次回作業は同文書のLibrary同期handoffを正とする。
 
 ### 6.2 その次の順序
 
-1. Offline session状態機械と切断・再接続試験。
-2. hash library、game titles、all user progressによるLibrary同期。
-3. 媒体競合解決、title/progress更新、同期時刻transaction。
-4. Full Speedと描画skipを含む実VM frame計数integration test。
-5. 実RA複数ディスクゲームでmedia change/rollbackを手動確認。
-6. Phase 6のtoast queue、画像cache、全入力、視覚受入。
+1. hash library、game titles、all user progressによるLibrary同期。
+2. 媒体競合解決、title/progress更新、同期時刻transaction。
+3. Full Speedと描画skipを含む実VM frame計数integration test。
+4. 実RA複数ディスクゲームでmedia change/rollbackを手動確認。
+5. Phase 6のtoast queue、画像cache、全入力、視覚受入。
 
 ### 6.3 次回の開始時確認
 
 ```sh
 git status --short
 cmake --build build-ra --target xm8 ra_service_test \
-  ra_media_change_policy_test
+  ra_media_change_policy_test ra_session_state_test
 ctest --test-dir build-ra \
-  -R 'ra_service_test|ra_media_change_policy_test' --output-on-failure
+  -R 'ra_service_test|ra_media_change_policy_test|ra_session_state_test' \
+  --output-on-failure
 ```
 
-媒体交換コードを変更する場合は、RA ON全17件、RA OFF全8件、ASCEND hash不変を
+媒体交換コードを変更する場合は、RA ON全18件、RA OFF全8件、ASCEND hash不変を
 再確認すること。

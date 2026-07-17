@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <set>
 #include <sys/stat.h>
 #include <string>
 #include <vector>
@@ -172,6 +173,55 @@ bool ExecSql(const std::string& database_path, const char *sql,
 	}
 	sqlite3_close(db);
 	return true;
+}
+
+int QueryInt(const std::string& database_path, const char *sql)
+{
+	sqlite3 *db = nullptr;
+	if (sqlite3_open_v2(database_path.c_str(), &db, SQLITE_OPEN_READONLY,
+		nullptr) != SQLITE_OK) {
+		if (db != nullptr) {
+			sqlite3_close(db);
+		}
+		return -1;
+	}
+	sqlite3_stmt *stmt = nullptr;
+	int value = -1;
+	if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK &&
+		sqlite3_step(stmt) == SQLITE_ROW) {
+		value = sqlite3_column_int(stmt, 0);
+	}
+	if (stmt != nullptr) {
+		sqlite3_finalize(stmt);
+	}
+	sqlite3_close(db);
+	return value;
+}
+
+std::string QueryText(const std::string& database_path, const char *sql)
+{
+	sqlite3 *db = nullptr;
+	if (sqlite3_open_v2(database_path.c_str(), &db, SQLITE_OPEN_READONLY,
+		nullptr) != SQLITE_OK) {
+		if (db != nullptr) {
+			sqlite3_close(db);
+		}
+		return "";
+	}
+	sqlite3_stmt *stmt = nullptr;
+	std::string value;
+	if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK &&
+		sqlite3_step(stmt) == SQLITE_ROW) {
+		const unsigned char *text = sqlite3_column_text(stmt, 0);
+		if (text != nullptr) {
+			value = reinterpret_cast<const char *>(text);
+		}
+	}
+	if (stmt != nullptr) {
+		sqlite3_finalize(stmt);
+	}
+	sqlite3_close(db);
+	return value;
 }
 
 bool DirectoryHasPrefix(const std::string& path, const char *prefix)
@@ -468,12 +518,92 @@ int main()
 		"check modified original health");
 	Check(health.health_state == Xm8Ra::kRaMediaHealthSourceChanged,
 		"modified original health state");
-	const std::string progress_sql =
-		"INSERT OR REPLACE INTO progress(username, ra_game_id, core_total,"
-		" core_unlocked, hardcore_unlocked, points_total, points_unlocked,"
-		" synced_at) VALUES('tester', 1234, 10, 4, 2, 100, 40, 1);";
-	Check(ExecSql(library.DatabasePath(), progress_sql.c_str(), &error),
-		"insert progress fixture");
+	std::vector<Xm8Ra::RaMediaBankHash> local_hashes;
+	Check(library.ListMediaBankHashes(&local_hashes, &error),
+		"list bank hashes for library sync");
+	Check(local_hashes.size() >= 4,
+		"library sync sees single and multi-bank hashes");
+	Xm8Ra::RaLibrarySyncPayload sync;
+	sync.username = "tester";
+	std::set<std::string> unique_sync_hashes;
+	for (const Xm8Ra::RaMediaBankHash& local : local_hashes) {
+		if (!unique_sync_hashes.insert(local.ra_hash).second) {
+			continue;
+		}
+		Xm8Ra::RaLibraryHashMatch match;
+		match.hash = local.ra_hash;
+		match.ra_game_id = 1234;
+		sync.hashes.push_back(match);
+	}
+	Xm8Ra::RaLibraryGameTitle sync_title;
+	sync_title.ra_game_id = 1234;
+	sync_title.title = "RA Synced Game";
+	sync_title.badge_url = "https://media.example/synced.png";
+	sync.titles.push_back(sync_title);
+	Xm8Ra::RaLibraryProgress sync_progress;
+	sync_progress.ra_game_id = 1234;
+	sync_progress.core_total = 10;
+	sync_progress.core_unlocked = 4;
+	sync_progress.hardcore_unlocked = 2;
+	sync.progress.push_back(sync_progress);
+	const bool sync_ok = library.ApplyLibrarySync(sync, &error);
+	Check(sync_ok, "apply complete library sync transaction");
+	if (!sync_ok) {
+		std::cerr << "library sync error: " << error << '\n';
+	}
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM sync_state WHERE sync_key ="
+		" 'library:tester:pc8800'") == 1,
+		"successful sync records completion");
+
+	Xm8Ra::RaLibrarySyncPayload incomplete = sync;
+	incomplete.username = "incomplete";
+	incomplete.titles.clear();
+	Check(!library.ApplyLibrarySync(incomplete, &error),
+		"reject partial sync before database mutation");
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM sync_state WHERE sync_key ="
+		" 'library:incomplete:pc8800'") == 0,
+		"partial sync does not advance completion state");
+
+	Check(ExecSql(library.DatabasePath(),
+		"CREATE TRIGGER fail_library_sync BEFORE INSERT ON progress"
+		" WHEN NEW.username = 'rollback' BEGIN"
+		" SELECT RAISE(ABORT, 'forced sync failure'); END;", &error),
+		"install forced sync failure trigger");
+	Xm8Ra::RaLibrarySyncPayload rollback_sync = sync;
+	rollback_sync.username = "rollback";
+	rollback_sync.titles[0].title = "Should Roll Back";
+	Check(!library.ApplyLibrarySync(rollback_sync, &error),
+		"database failure rolls back library sync");
+	Check(QueryText(library.DatabasePath(),
+		"SELECT title FROM games WHERE id = 1") == "RA Synced Game",
+		"failed sync rolls back title update");
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM sync_state WHERE sync_key ="
+		" 'library:rollback:pc8800'") == 0,
+		"failed transaction does not record completion");
+	Check(ExecSql(library.DatabasePath(), "DROP TRIGGER fail_library_sync",
+		&error), "remove forced sync failure trigger");
+
+	Xm8Ra::RaLibrarySyncPayload other_user = sync;
+	other_user.username = "other";
+	other_user.progress[0].core_unlocked = 1;
+	Check(library.ApplyLibrarySync(other_user, &error),
+		"sync a second user independently");
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM progress WHERE ra_game_id = 1234") == 2,
+		"progress rows remain separated by username");
+	std::vector<Xm8Ra::RaLibraryGameListItem> tester_games;
+	std::vector<Xm8Ra::RaLibraryGameListItem> other_games;
+	Check(library.ListGamesForUser("tester", &tester_games, &error),
+		"list library progress for first user");
+	Check(library.ListGamesForUser("other", &other_games, &error),
+		"list library progress for second user");
+	Check(!tester_games.empty() && tester_games[0].core_unlocked == 4,
+		"first user sees only first user progress");
+	Check(!other_games.empty() && other_games[0].core_unlocked == 1,
+		"second user sees only second user progress");
 	Check(library.ListGames(&games, &error),
 		"list games with progress and health error");
 	bool found_first_game = false;
@@ -486,8 +616,8 @@ int main()
 				"library list progress values");
 			Check(item.hardcore_unlocked == 2,
 				"library list hardcore progress");
-			Check(item.points_total == 100 && item.points_unlocked == 40,
-				"library list points");
+			Check(item.points_total == 0 && item.points_unlocked == 0,
+				"all-progress sync leaves unavailable points null");
 			Check(item.health_state ==
 				Xm8Ra::kRaMediaHealthSourceChanged,
 				"library list reports health error");
@@ -540,6 +670,33 @@ int main()
 	Check(!reopened.SaveSettings(invalid, &error),
 		"reject invalid RA mode");
 	reopened.Close();
+
+	const std::string legacy_root = JoinPath(base, "legacy-ra");
+	Xm8Ra::RaLibrary legacy_seed;
+	Check(legacy_seed.Open(legacy_root, &error),
+		"create library before v1 migration fixture");
+	legacy_seed.Close();
+	Check(ExecSql(JoinPath(legacy_root, "library.sqlite3"),
+		"PRAGMA foreign_keys=OFF; BEGIN;"
+		"CREATE TABLE media_banks_v1("
+		" media_md5 TEXT NOT NULL REFERENCES media(md5) ON DELETE CASCADE,"
+		" bank_index INTEGER NOT NULL, label TEXT NOT NULL,"
+		" PRIMARY KEY(media_md5, bank_index), CHECK(bank_index >= 0));"
+		"DROP TABLE media_banks;"
+		"ALTER TABLE media_banks_v1 RENAME TO media_banks;"
+		"UPDATE schema_meta SET schema_version = 1 WHERE singleton = 1;"
+		"COMMIT; PRAGMA foreign_keys=ON;", &error),
+		"downgrade empty fixture to schema v1");
+	Xm8Ra::RaLibrary migrated;
+	Check(migrated.Open(legacy_root, &error), "migrate schema v1 to v2");
+	Check(QueryInt(migrated.DatabasePath(),
+		"SELECT schema_version FROM schema_meta WHERE singleton = 1") == 2,
+		"migration advances schema version");
+	Check(QueryInt(migrated.DatabasePath(),
+		"SELECT COUNT(*) FROM pragma_table_info('media_banks')"
+		" WHERE name IN ('ra_hash','ra_game_id','identification_state')") == 3,
+		"migration adds bank-level RA columns");
+	migrated.Close();
 
 	const std::string corrupt_root = JoinPath(base, "corrupt-ra");
 	Check(MakeDirectoryTree(corrupt_root, &error), "create corrupt DB root");

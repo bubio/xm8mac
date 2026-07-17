@@ -150,18 +150,17 @@ cmake --build build-ra --target ra_inspect_media
 ## 6. Phase 5残件
 
 媒体交換とrollbackは
-[15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md)で実装した。
+[15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md)、Offline状態機械は
+[16_Phase5Offline状態機械実施記録.md](16_Phase5Offline状態機械実施記録.md)、Library同期は
+[17_Phase5Library同期実施記録.md](17_Phase5Library同期実施記録.md)で実装した。
 Phase 5はまだ完了扱いにしない。残件は次のとおりである。
 
-- 起動時offline、識別失敗、session開始失敗を区別するOffline session状態機械。
-- Active中切断・再接続と「起動時Offlineから途中復帰しない」試験。
-- hash library、game titles、all user progressによるライブラリ同期。
-- 媒体競合解決、title更新、`progress`更新、同期時刻のtransaction管理。
+- 媒体競合を解消する統合・分離UIと、競合媒体の起動制限。
 - Full Speed、描画skip、実VM複数frameについての計数可能なintegration test。
 - ASCENDの実RA Game ID、タイトル、実績一覧取得とrequest packet確認。
+- 実HTTPSによるLibrary同期とLibrary画面へのtitle/progress反映確認。
 
-Phase 5の次の実装単位は、起動時を含むOffline session状態機械である。
-その後にライブラリ同期を行う。
+Phase 5の次の実装単位は、実VM frame計数integration testである。
 
 ## 7. 後続Phase
 

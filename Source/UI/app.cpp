@@ -329,8 +329,8 @@ App::App()
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
-	ra_session_disabled = false;
-	ra_offline_session = false;
+	ra_library_sync_started_for_login = false;
+	ra_session_state = Xm8Ra::RaSessionState::Ready;
 	ra_overlay_joystick_prev = 0;
 	ra_overlay_mouse_target_valid = false;
 	ra_overlay_mouse_target = Xm8Ra::RaOverlayLoginTarget::Username;
@@ -880,7 +880,8 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 			return false;
 		}
 		const std::string& ra_hash = imported.media_info.bank_md5s[bank];
-		const bool game_loaded = ra_service != NULL && !ra_session_disabled &&
+		const bool game_loaded = ra_service != NULL &&
+			Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
 			ra_service->GameSessionSnapshot().state ==
 				Xm8Ra::RaGameSessionState::Loaded;
 		const bool same_working_media = game_loaded && diskmgr[0] != NULL &&
@@ -907,7 +908,8 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 				*ra_hash_to_identify = ra_hash;
 			}
 		}
-		else if (!game_loaded || ra_session_disabled) {
+		else if (!game_loaded ||
+			Xm8Ra::IsRaSessionOffline(ra_session_state)) {
 			if (ra_hash_to_identify != NULL) {
 				*ra_hash_to_identify = ra_hash;
 			}
@@ -1052,8 +1054,8 @@ void App::EnterRaOfflineSession(const std::string& message)
 	if (ra_service != NULL) {
 		ra_service->UnloadGame();
 	}
-	ra_session_disabled = true;
-	ra_offline_session = true;
+	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+		Xm8Ra::RaSessionSignal::SessionInvalidated);
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -1064,6 +1066,94 @@ void App::EnterRaOfflineSession(const std::string& message)
 	RefreshRaAchievementsOverlay();
 	RefreshRaLeaderboardsOverlay();
 	menu->UpdateRaStatus();
+}
+
+void App::StopRaSession()
+{
+	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+		Xm8Ra::RaSessionSignal::StopGame);
+}
+
+void App::ProcessRaLibrarySync()
+{
+	if (ra_service == NULL || ra_library == NULL) {
+		return;
+	}
+	const Xm8Ra::RaLibrarySyncSnapshot snapshot =
+		ra_service->LibrarySyncSnapshot();
+	if (snapshot.state == Xm8Ra::RaLibrarySyncState::Succeeded) {
+		Xm8Ra::RaLibrarySyncPayload payload;
+		payload.username = snapshot.username;
+		for (const Xm8Ra::RaLibrarySyncHash& source : snapshot.hashes) {
+			Xm8Ra::RaLibraryHashMatch item;
+			item.hash = source.hash;
+			item.ra_game_id = source.game_id;
+			payload.hashes.push_back(item);
+		}
+		for (const Xm8Ra::RaLibrarySyncTitle& source : snapshot.titles) {
+			Xm8Ra::RaLibraryGameTitle item;
+			item.ra_game_id = source.game_id;
+			item.title = source.title;
+			item.badge_url = source.badge_url;
+			payload.titles.push_back(item);
+		}
+		for (const Xm8Ra::RaLibrarySyncProgress& source : snapshot.progress) {
+			Xm8Ra::RaLibraryProgress item;
+			item.ra_game_id = source.game_id;
+			item.core_total = source.total;
+			item.core_unlocked = source.unlocked;
+			item.hardcore_unlocked = source.hardcore_unlocked;
+			payload.progress.push_back(item);
+		}
+		std::string error;
+		if (ra_library->ApplyLibrarySync(payload, &error)) {
+			AddRaNotice("RA: library synchronized");
+			if (ra_overlay != NULL &&
+				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library) {
+				ra_overlay->OpenLibrary(MakeRaLibraryOverlaySnapshot());
+			}
+		}
+		else {
+			AddRaNotice("RA: library sync apply failed");
+		}
+		ra_service->ClearLibrarySyncResult();
+		return;
+	}
+	if (snapshot.state == Xm8Ra::RaLibrarySyncState::Failed) {
+		AddRaNotice("RA: library sync failed");
+		ra_service->ClearLibrarySyncResult();
+		return;
+	}
+	if (snapshot.state != Xm8Ra::RaLibrarySyncState::None ||
+		ra_library_sync_started_for_login ||
+		ra_session_state != Xm8Ra::RaSessionState::Ready ||
+		!ra_pending_game_hash.empty() ||
+		ra_service->LoginSnapshot().state != Xm8Ra::RaLoginState::LoggedIn ||
+		ra_service->GameSessionSnapshot().state !=
+			Xm8Ra::RaGameSessionState::NoGame) {
+		return;
+	}
+
+	ra_library_sync_started_for_login = true;
+	std::vector<Xm8Ra::RaMediaBankHash> media_hashes;
+	std::string error;
+	if (!ra_library->ListMediaBankHashes(&media_hashes, &error)) {
+		AddRaNotice("RA: library sync preparation failed");
+		return;
+	}
+	std::map<std::string, bool> unique_hashes;
+	for (const Xm8Ra::RaMediaBankHash& media : media_hashes) {
+		unique_hashes[media.ra_hash] = true;
+	}
+	std::vector<std::string> hashes;
+	for (const auto& hash : unique_hashes) {
+		hashes.push_back(hash.first);
+	}
+	if (!ra_service->BeginLibrarySync(hashes, &error)) {
+		AddRaNotice("RA: library sync did not start");
+		return;
+	}
+	AddRaNotice("RA: synchronizing library");
 }
 
 //
@@ -1267,10 +1357,9 @@ bool App::BeginRaSavedTokenLogin(bool notify_missing_token)
 		return false;
 	}
 
-	ra_session_disabled = false;
-	ra_offline_session = false;
 	ra_saved_login_started = true;
 	ra_manual_login_started = false;
+	ra_library_sync_started_for_login = false;
 	if (notify_missing_token) {
 		AddRaNotice("RA: token login started");
 	}
@@ -1310,9 +1399,18 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 		return;
 	}
 
-	ra_session_disabled = false;
-	ra_offline_session = false;
+	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+		Xm8Ra::RaSessionSignal::StopGame);
+	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+		Xm8Ra::RaSessionSignal::BeginLaunch);
 	if (ra_service != NULL) {
+		const Xm8Ra::RaLibrarySyncState sync_state =
+			ra_service->LibrarySyncSnapshot().state;
+		if (sync_state == Xm8Ra::RaLibrarySyncState::PendingHashes ||
+			sync_state == Xm8Ra::RaLibrarySyncState::PendingTitles ||
+			sync_state == Xm8Ra::RaLibrarySyncState::PendingProgress) {
+			ra_library_sync_started_for_login = false;
+		}
 		ra_service->UnloadGame();
 	}
 	ra_pending_game_hash = md5;
@@ -1395,7 +1493,9 @@ void App::AttachRaHostFrameCallback()
 //
 void App::ProcessRaEmulationFrame()
 {
-	if (!ra_mode_enabled || ra_session_disabled || ra_service == NULL ||
+	if (!ra_mode_enabled ||
+		!Xm8Ra::IsRaSessionEvaluating(ra_session_state) ||
+		ra_service == NULL ||
 		ra_media_change_pending) {
 		return;
 	}
@@ -1483,7 +1583,8 @@ void App::ProcessRaService(bool emulation_idle)
 		}
 	}
 
-	if (!ra_session_disabled && !ra_pending_game_hash.empty()) {
+	if (ra_session_state == Xm8Ra::RaSessionState::Starting &&
+		!ra_pending_game_hash.empty()) {
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
 		const Xm8Ra::RaGameSessionSnapshot game =
 			ra_service->GameSessionSnapshot();
@@ -1494,10 +1595,7 @@ void App::ProcessRaService(bool emulation_idle)
 			ra_saved_login_started =
 				ra_service->BeginLoginWithSavedToken(&error);
 			if (!ra_saved_login_started) {
-				ra_session_disabled = true;
-				AddRaNotice("RA: login required");
-				RefreshRaAchievementsOverlay();
-				menu->UpdateRaStatus();
+				EnterRaOfflineSession("login required");
 			}
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&
@@ -1510,13 +1608,12 @@ void App::ProcessRaService(bool emulation_idle)
 				menu->UpdateRaStatus();
 			}
 			else {
-				ra_session_disabled = true;
-				AddRaNotice("RA: game load failed");
-				RefreshRaAchievementsOverlay();
-				menu->UpdateRaStatus();
+				EnterRaOfflineSession("game load failed");
 			}
 		}
 		else if (game.state == Xm8Ra::RaGameSessionState::Loaded) {
+			ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+				Xm8Ra::RaSessionSignal::LaunchSucceeded);
 			ra_loaded_library_game_id = ra_pending_library_game_id;
 			if (ra_pending_library_game_id > 0 && ra_library != NULL) {
 				std::string error;
@@ -1535,31 +1632,20 @@ void App::ProcessRaService(bool emulation_idle)
 		}
 		else if (login.state == Xm8Ra::RaLoginState::Failed ||
 			game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
-			ra_session_disabled = true;
-			if (game.state == Xm8Ra::RaGameSessionState::DisabledForSession) {
-				ra_pending_game_hash.clear();
-				ra_pending_library_game_id = 0;
-			}
-			ra_loaded_game_hash.clear();
-			ra_loaded_library_game_id = 0;
-			ra_leaderboard_scoreboards.clear();
-			if (login.state == Xm8Ra::RaLoginState::Failed) {
-				AddRaNotice("RA: login failed");
-			}
-			else {
-				AddRaNotice(RaGameLoadFailureNotice(game));
-			}
-			RefreshRaAchievementsOverlay();
-			RefreshRaLeaderboardsOverlay();
-			menu->UpdateRaStatus();
+			const std::string failure =
+				login.state == Xm8Ra::RaLoginState::Failed ?
+				"login failed" : RaGameLoadFailureNotice(game).substr(4);
+			EnterRaOfflineSession(failure);
 		}
 	}
 
-	if (emulation_idle ||
+	if (!Xm8Ra::IsRaSessionOffline(ra_session_state) &&
+		(emulation_idle ||
 		ra_service->GameSessionSnapshot().state !=
-			Xm8Ra::RaGameSessionState::Loaded) {
+			Xm8Ra::RaGameSessionState::Loaded)) {
 		ra_service->Idle();
 	}
+	ProcessRaLibrarySync();
 	AddRaEventsAsNotices(ra_service->TakeEvents());
 }
 
@@ -1729,7 +1815,20 @@ void App::AddRaNotice(const std::string& text)
 void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 {
 	bool leaderboards_changed = false;
+	bool session_state_changed = false;
 	for (const Xm8Ra::RaEvent& event : events) {
+		if (event.type == Xm8Ra::RaEventType::Disconnected ||
+			event.type == Xm8Ra::RaEventType::Reconnected) {
+			const Xm8Ra::RaSessionState previous = ra_session_state;
+			ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+				event.type == Xm8Ra::RaEventType::Disconnected ?
+				Xm8Ra::RaSessionSignal::Disconnected :
+				Xm8Ra::RaSessionSignal::Reconnected);
+			if (ra_session_state == previous) {
+				continue;
+			}
+			session_state_changed = true;
+		}
 		if (event.type == Xm8Ra::RaEventType::LeaderboardScoreboard &&
 			event.scoreboard.leaderboard_id != 0) {
 			ra_leaderboard_scoreboards[event.scoreboard.leaderboard_id] =
@@ -1743,6 +1842,9 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 	}
 	if (leaderboards_changed) {
 		RefreshRaLeaderboardsOverlay();
+	}
+	if (session_state_changed) {
+		menu->UpdateRaStatus();
 	}
 }
 
@@ -2155,10 +2257,9 @@ bool App::SubmitRaOverlayLogin()
 		return false;
 	}
 
-	ra_session_disabled = false;
-	ra_offline_session = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = true;
+	ra_library_sync_started_for_login = false;
 	SDL_StopTextInput();
 	ClearRaOverlayPointerState();
 	AddRaNotice("RA: login started");
@@ -3089,8 +3190,7 @@ void App::Deinit()
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
-	ra_session_disabled = false;
-	ra_offline_session = false;
+	StopRaSession();
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -4621,8 +4721,7 @@ void App::ChangeSystem(bool load)
 	if (ra_service != NULL) {
 		ra_service->UnloadGame();
 	}
-	ra_session_disabled = false;
-	ra_offline_session = false;
+	StopRaSession();
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -4790,8 +4889,7 @@ void App::Reset()
 	if (ra_service != NULL) {
 		ra_service->UnloadGame();
 	}
-	ra_session_disabled = false;
-	ra_offline_session = false;
+	StopRaSession();
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -4998,10 +5096,10 @@ bool App::ToggleRaMode()
 	}
 
 	ra_mode_enabled = enable;
-	ra_session_disabled = false;
-	ra_offline_session = false;
+	StopRaSession();
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
+	ra_library_sync_started_for_login = false;
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -5348,7 +5446,11 @@ Xm8Ra::RaOverlayLibraryListSnapshot App::MakeRaLibraryOverlaySnapshot() const
 
 	std::vector<Xm8Ra::RaLibraryGameListItem> games;
 	std::string error;
-	if (!ra_library->ListGames(&games, &error)) {
+	std::string username;
+	if (ra_service != NULL) {
+		username = ra_service->LoginSnapshot().username;
+	}
+	if (!ra_library->ListGamesForUser(username, &games, &error)) {
 		overlay_snapshot.status_message = error.empty() ?
 			"Cannot load RA library" : error;
 		return overlay_snapshot;
@@ -5396,7 +5498,10 @@ Xm8Ra::RaOverlayAchievementListSnapshot App::MakeRaAchievementsOverlaySnapshot()
 		overlay_snapshot.has_achievements =
 			service_snapshot.has_achievements;
 		overlay_snapshot.game_title = service_snapshot.game_title;
-		if (!service_snapshot.game_loaded) {
+		if (Xm8Ra::IsRaSessionOffline(ra_session_state)) {
+			overlay_snapshot.status_message = "RA offline for this session";
+		}
+		else if (!service_snapshot.game_loaded) {
 			const Xm8Ra::RaLoginSnapshot login =
 				ra_service->LoginSnapshot();
 			const Xm8Ra::RaGameSessionSnapshot game =
@@ -5443,7 +5548,10 @@ Xm8Ra::RaOverlayLeaderboardListSnapshot App::MakeRaLeaderboardsOverlaySnapshot()
 			ra_service->LeaderboardEntriesSnapshot();
 		overlay_snapshot.game_loaded = service_snapshot.game_loaded;
 		overlay_snapshot.game_title = service_snapshot.game_title;
-		if (!service_snapshot.game_loaded) {
+		if (Xm8Ra::IsRaSessionOffline(ra_session_state)) {
+			overlay_snapshot.status_message = "RA offline for this session";
+		}
+		else if (!service_snapshot.game_loaded) {
 			const Xm8Ra::RaLoginSnapshot login =
 				ra_service->LoginSnapshot();
 			const Xm8Ra::RaGameSessionSnapshot game =
@@ -5715,8 +5823,6 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 	ra_loaded_game_hash.clear();
 	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
-	ra_session_disabled = false;
-	ra_offline_session = false;
 	BeginRaSessionForMedia(anchor_hash, game_id);
 	ra_library->MarkGamePlayed(game_id, nullptr);
 	return true;
@@ -5833,10 +5939,11 @@ void App::LogoutRa()
 	if (ra_service != NULL) {
 		ra_service->Logout();
 	}
-	ra_session_disabled = false;
-	ra_offline_session = false;
+	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+		Xm8Ra::RaSessionSignal::SessionInvalidated);
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
+	ra_library_sync_started_for_login = false;
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -5866,8 +5973,12 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();
 		const Xm8Ra::RaGameSessionSnapshot game =
 			ra_service->GameSessionSnapshot();
-		if (ra_offline_session) {
+		if (Xm8Ra::IsRaSessionOffline(ra_session_state)) {
 			text = "RA: offline for session";
+		}
+		else if (ra_session_state ==
+			Xm8Ra::RaSessionState::ActiveDisconnected) {
+			text = "RA: disconnected";
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoginPending) {
 			text = "RA: login pending";

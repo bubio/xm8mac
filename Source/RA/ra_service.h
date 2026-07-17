@@ -201,6 +201,43 @@ struct RaMediaChangeSnapshot {
 	std::string hash;
 };
 
+enum class RaLibrarySyncState {
+	None,
+	PendingHashes,
+	PendingTitles,
+	PendingProgress,
+	Succeeded,
+	Failed,
+};
+
+struct RaLibrarySyncHash {
+	std::string hash;
+	uint32_t game_id = 0;
+};
+
+struct RaLibrarySyncTitle {
+	uint32_t game_id = 0;
+	std::string title;
+	std::string badge_url;
+};
+
+struct RaLibrarySyncProgress {
+	uint32_t game_id = 0;
+	uint32_t total = 0;
+	uint32_t unlocked = 0;
+	uint32_t hardcore_unlocked = 0;
+};
+
+struct RaLibrarySyncSnapshot {
+	RaLibrarySyncState state = RaLibrarySyncState::None;
+	int result = 0;
+	std::string message;
+	std::string username;
+	std::vector<RaLibrarySyncHash> hashes;
+	std::vector<RaLibrarySyncTitle> titles;
+	std::vector<RaLibrarySyncProgress> progress;
+};
+
 struct RaServerErrorEvent {
 	int result = 0;
 	uint32_t related_id = 0;
@@ -252,6 +289,9 @@ public:
 	bool BeginLoadGameByHash(const std::string& hash, std::string *error);
 	bool BeginChangeMediaByHash(const std::string& hash, std::string *error);
 	void ClearMediaChangeResult();
+	bool BeginLibrarySync(const std::vector<std::string>& local_hashes,
+		std::string *error);
+	void ClearLibrarySyncResult();
 	bool BeginFetchLeaderboardEntries(uint32_t leaderboard_id,
 		uint32_t first_entry, uint32_t count, std::string *error);
 	void DrainHttp();
@@ -266,6 +306,7 @@ public:
 	RaLoginSnapshot LoginSnapshot() const;
 	RaGameSessionSnapshot GameSessionSnapshot() const;
 	RaMediaChangeSnapshot MediaChangeSnapshot() const;
+	RaLibrarySyncSnapshot LibrarySyncSnapshot() const;
 	std::string RichPresence() const;
 	RaAchievementListSnapshot AchievementListSnapshot() const;
 	RaLeaderboardListSnapshot LeaderboardListSnapshot() const;
@@ -295,6 +336,15 @@ private:
 		const char *error_message, rc_client_t *client, void *userdata);
 	static void RC_CCONV ResolveMediaHashCallback(
 		const rc_api_server_response_t *server_response, void *userdata);
+	static void RC_CCONV LibraryHashesCallback(int result,
+		const char *error_message, rc_client_hash_library_t *list,
+		rc_client_t *client, void *userdata);
+	static void RC_CCONV LibraryTitlesCallback(int result,
+		const char *error_message, rc_client_game_title_list_t *list,
+		rc_client_t *client, void *userdata);
+	static void RC_CCONV LibraryProgressCallback(int result,
+		const char *error_message, rc_client_all_user_progress_t *list,
+		rc_client_t *client, void *userdata);
 	static void RC_CCONV LeaderboardEntriesCallback(int result,
 		const char *error_message, rc_client_leaderboard_entry_list_t *list,
 		rc_client_t *client, void *userdata);
@@ -310,6 +360,15 @@ private:
 	void HandleResolveMediaHashCallback(
 		const rc_api_server_response_t *server_response);
 	bool StartClientMediaChange(std::string *error);
+	void HandleLibraryHashesCallback(int result, const char *error_message,
+		rc_client_hash_library_t *list);
+	void HandleLibraryTitlesCallback(int result, const char *error_message,
+		rc_client_game_title_list_t *list);
+	void HandleLibraryProgressCallback(int result, const char *error_message,
+		rc_client_all_user_progress_t *list);
+	bool StartNextLibraryTitleBatch(std::string *error);
+	bool StartLibraryProgress(std::string *error);
+	void FailLibrarySync(int result, const char *message);
 	void HandleLeaderboardEntriesCallback(int result, const char *error_message,
 		rc_client_leaderboard_entry_list_t *list);
 	void HandleClientEvent(const rc_client_event_t *event);
@@ -320,6 +379,7 @@ private:
 	void AbortLoginInProgress();
 	void AbortLeaderboardEntriesInProgress();
 	void AbortMediaChangeInProgress();
+	void AbortLibrarySyncInProgress();
 
 	std::unique_ptr<RaHttpClient> http_client_;
 	std::unique_ptr<RaCredentialsStore> credentials_;
@@ -331,10 +391,15 @@ private:
 	rc_client_async_handle_t *login_async_handle_ = nullptr;
 	rc_client_async_handle_t *leaderboard_entries_async_handle_ = nullptr;
 	rc_client_async_handle_t *media_change_async_handle_ = nullptr;
+	rc_client_async_handle_t *library_sync_async_handle_ = nullptr;
 	RaLoginSnapshot login_;
 	RaGameSessionSnapshot game_session_;
 	RaLeaderboardEntriesSnapshot leaderboard_entries_;
 	RaMediaChangeSnapshot media_change_;
+	RaLibrarySyncSnapshot library_sync_;
+	std::map<std::string, bool> library_sync_local_hashes_;
+	std::vector<uint32_t> library_sync_title_game_ids_;
+	size_t library_sync_title_offset_ = 0;
 	std::map<std::string, uint32_t> verified_media_game_ids_;
 	bool media_change_preflight_pending_ = false;
 	std::vector<RaEvent> events_;

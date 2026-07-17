@@ -2,6 +2,7 @@
 
 #include "rc_error.h"
 #include "rc_api_runtime.h"
+#include "rc_consoles.h"
 
 #include <cctype>
 #include <cstring>
@@ -469,6 +470,70 @@ void RaService::ClearMediaChangeResult()
 	}
 }
 
+bool RaService::BeginLibrarySync(const std::vector<std::string>& local_hashes,
+	std::string *error)
+{
+	if (!IsReady() || login_.state != RaLoginState::LoggedIn ||
+		game_session_.state != RaGameSessionState::NoGame) {
+		if (error != nullptr) {
+			*error = "RA library sync requires an idle logged-in service";
+		}
+		return false;
+	}
+	if (library_sync_.state == RaLibrarySyncState::PendingHashes ||
+		library_sync_.state == RaLibrarySyncState::PendingTitles ||
+		library_sync_.state == RaLibrarySyncState::PendingProgress) {
+		if (error != nullptr) {
+			*error = "RA library sync is already pending";
+		}
+		return false;
+	}
+
+	library_sync_ = RaLibrarySyncSnapshot();
+	library_sync_.state = RaLibrarySyncState::PendingHashes;
+	library_sync_.username = login_.username;
+	library_sync_local_hashes_.clear();
+	for (const std::string& hash : local_hashes) {
+		if (!IsMd5Hex(hash)) {
+			FailLibrarySync(RC_INVALID_STATE, "invalid local RA hash");
+			if (error != nullptr) {
+				*error = library_sync_.message;
+			}
+			return false;
+		}
+		library_sync_local_hashes_[hash] = true;
+	}
+	library_sync_title_game_ids_.clear();
+	library_sync_title_offset_ = 0;
+	rc_client_async_handle_t *handle = rc_client_begin_fetch_hash_library(
+		client_, RC_CONSOLE_PC8800, LibraryHashesCallback, this);
+	library_sync_async_handle_ =
+		library_sync_.state == RaLibrarySyncState::PendingHashes ? handle : nullptr;
+	if (handle == nullptr &&
+		library_sync_.state == RaLibrarySyncState::PendingHashes) {
+		FailLibrarySync(RC_INVALID_STATE, "RA hash library request did not start");
+	}
+	if (library_sync_.state == RaLibrarySyncState::Failed) {
+		if (error != nullptr) {
+			*error = library_sync_.message;
+		}
+		return false;
+	}
+	return true;
+}
+
+void RaService::ClearLibrarySyncResult()
+{
+	if (library_sync_.state != RaLibrarySyncState::PendingHashes &&
+		library_sync_.state != RaLibrarySyncState::PendingTitles &&
+		library_sync_.state != RaLibrarySyncState::PendingProgress) {
+		library_sync_ = RaLibrarySyncSnapshot();
+		library_sync_local_hashes_.clear();
+		library_sync_title_game_ids_.clear();
+		library_sync_title_offset_ = 0;
+	}
+}
+
 bool RaService::BeginFetchLeaderboardEntries(uint32_t leaderboard_id,
 	uint32_t first_entry, uint32_t count, std::string *error)
 {
@@ -571,6 +636,7 @@ std::vector<RaEvent> RaService::TakeEvents()
 
 void RaService::UnloadGame()
 {
+	AbortLibrarySyncInProgress();
 	AbortMediaChangeInProgress();
 	AbortLeaderboardEntriesInProgress();
 	if (client_ != nullptr) {
@@ -607,6 +673,7 @@ void RaService::Shutdown()
 	shutdown_ = true;
 
 	AbortLoginInProgress();
+	AbortLibrarySyncInProgress();
 	AbortMediaChangeInProgress();
 	AbortLeaderboardEntriesInProgress();
 	if (http_bridge_ != nullptr) {
@@ -641,6 +708,11 @@ RaGameSessionSnapshot RaService::GameSessionSnapshot() const
 RaMediaChangeSnapshot RaService::MediaChangeSnapshot() const
 {
 	return media_change_;
+}
+
+RaLibrarySyncSnapshot RaService::LibrarySyncSnapshot() const
+{
+	return library_sync_;
 }
 
 std::string RaService::RichPresence() const
@@ -806,6 +878,45 @@ void RC_CCONV RaService::ResolveMediaHashCallback(
 	RaService *service = static_cast<RaService *>(userdata);
 	if (service != nullptr) {
 		service->HandleResolveMediaHashCallback(server_response);
+	}
+}
+
+void RC_CCONV RaService::LibraryHashesCallback(int result,
+	const char *error_message, rc_client_hash_library_t *list,
+	rc_client_t *, void *userdata)
+{
+	RaService *service = static_cast<RaService *>(userdata);
+	if (service != nullptr) {
+		service->HandleLibraryHashesCallback(result, error_message, list);
+	}
+	else if (list != nullptr) {
+		rc_client_destroy_hash_library(list);
+	}
+}
+
+void RC_CCONV RaService::LibraryTitlesCallback(int result,
+	const char *error_message, rc_client_game_title_list_t *list,
+	rc_client_t *, void *userdata)
+{
+	RaService *service = static_cast<RaService *>(userdata);
+	if (service != nullptr) {
+		service->HandleLibraryTitlesCallback(result, error_message, list);
+	}
+	else if (list != nullptr) {
+		rc_client_destroy_game_title_list(list);
+	}
+}
+
+void RC_CCONV RaService::LibraryProgressCallback(int result,
+	const char *error_message, rc_client_all_user_progress_t *list,
+	rc_client_t *, void *userdata)
+{
+	RaService *service = static_cast<RaService *>(userdata);
+	if (service != nullptr) {
+		service->HandleLibraryProgressCallback(result, error_message, list);
+	}
+	else if (list != nullptr) {
+		rc_client_destroy_all_user_progress(list);
 	}
 }
 
@@ -979,6 +1090,180 @@ void RaService::HandleMediaChangeCallback(int result,
 	game_session_.hash = media_change_.hash;
 }
 
+void RaService::HandleLibraryHashesCallback(int result,
+	const char *error_message, rc_client_hash_library_t *list)
+{
+	library_sync_async_handle_ = nullptr;
+	if (library_sync_.state != RaLibrarySyncState::PendingHashes) {
+		if (list != nullptr) {
+			rc_client_destroy_hash_library(list);
+		}
+		return;
+	}
+	if (result != RC_OK || list == nullptr) {
+		FailLibrarySync(result, error_message);
+		if (list != nullptr) {
+			rc_client_destroy_hash_library(list);
+		}
+		return;
+	}
+
+	std::map<std::string, uint32_t> matches;
+	std::map<uint32_t, bool> game_ids;
+	for (uint32_t i = 0; i < list->num_entries; i++) {
+		const rc_client_hash_library_entry_t& source = list->entries[i];
+		const std::string hash = source.hash;
+		if (library_sync_local_hashes_.find(hash) ==
+			library_sync_local_hashes_.end()) {
+			continue;
+		}
+		const auto inserted = matches.emplace(hash, source.game_id);
+		if (!inserted.second && inserted.first->second != source.game_id) {
+			rc_client_destroy_hash_library(list);
+			FailLibrarySync(RC_INVALID_STATE,
+				"RA hash library contains conflicting entries");
+			return;
+		}
+		game_ids[source.game_id] = true;
+	}
+	rc_client_destroy_hash_library(list);
+	for (const auto& match : matches) {
+		RaLibrarySyncHash item;
+		item.hash = match.first;
+		item.game_id = match.second;
+		library_sync_.hashes.push_back(item);
+	}
+	for (const auto& game_id : game_ids) {
+		library_sync_title_game_ids_.push_back(game_id.first);
+	}
+	library_sync_title_offset_ = 0;
+	if (!library_sync_title_game_ids_.empty()) {
+		library_sync_.state = RaLibrarySyncState::PendingTitles;
+		StartNextLibraryTitleBatch(nullptr);
+	}
+	else {
+		StartLibraryProgress(nullptr);
+	}
+}
+
+bool RaService::StartNextLibraryTitleBatch(std::string *error)
+{
+	if (library_sync_title_offset_ >= library_sync_title_game_ids_.size()) {
+		return StartLibraryProgress(error);
+	}
+	const size_t remaining =
+		library_sync_title_game_ids_.size() - library_sync_title_offset_;
+	const uint32_t count = static_cast<uint32_t>(remaining > 100 ? 100 : remaining);
+	rc_client_async_handle_t *handle = rc_client_begin_fetch_game_titles(client_,
+		&library_sync_title_game_ids_[library_sync_title_offset_], count,
+		LibraryTitlesCallback, this);
+	library_sync_async_handle_ =
+		library_sync_.state == RaLibrarySyncState::PendingTitles ? handle : nullptr;
+	if (handle == nullptr &&
+		library_sync_.state == RaLibrarySyncState::PendingTitles) {
+		FailLibrarySync(RC_INVALID_STATE, "RA game titles request did not start");
+	}
+	if (library_sync_.state == RaLibrarySyncState::Failed) {
+		if (error != nullptr) {
+			*error = library_sync_.message;
+		}
+		return false;
+	}
+	return true;
+}
+
+void RaService::HandleLibraryTitlesCallback(int result,
+	const char *error_message, rc_client_game_title_list_t *list)
+{
+	library_sync_async_handle_ = nullptr;
+	if (library_sync_.state != RaLibrarySyncState::PendingTitles) {
+		if (list != nullptr) {
+			rc_client_destroy_game_title_list(list);
+		}
+		return;
+	}
+	if (result != RC_OK || list == nullptr) {
+		FailLibrarySync(result, error_message);
+		if (list != nullptr) {
+			rc_client_destroy_game_title_list(list);
+		}
+		return;
+	}
+	for (uint32_t i = 0; i < list->num_entries; i++) {
+		const rc_client_game_title_entry_t& source = list->entries[i];
+		RaLibrarySyncTitle item;
+		item.game_id = source.game_id;
+		item.title = source.title != nullptr ? source.title : "";
+		item.badge_url = source.badge_url != nullptr ? source.badge_url : "";
+		library_sync_.titles.push_back(item);
+	}
+	library_sync_title_offset_ +=
+		library_sync_title_game_ids_.size() - library_sync_title_offset_ > 100 ?
+		100 : library_sync_title_game_ids_.size() - library_sync_title_offset_;
+	rc_client_destroy_game_title_list(list);
+	StartNextLibraryTitleBatch(nullptr);
+}
+
+bool RaService::StartLibraryProgress(std::string *error)
+{
+	library_sync_.state = RaLibrarySyncState::PendingProgress;
+	rc_client_async_handle_t *handle = rc_client_begin_fetch_all_user_progress(
+		client_, RC_CONSOLE_PC8800, LibraryProgressCallback, this);
+	library_sync_async_handle_ =
+		library_sync_.state == RaLibrarySyncState::PendingProgress ? handle : nullptr;
+	if (handle == nullptr &&
+		library_sync_.state == RaLibrarySyncState::PendingProgress) {
+		FailLibrarySync(RC_INVALID_STATE, "RA progress request did not start");
+	}
+	if (library_sync_.state == RaLibrarySyncState::Failed) {
+		if (error != nullptr) {
+			*error = library_sync_.message;
+		}
+		return false;
+	}
+	return true;
+}
+
+void RaService::HandleLibraryProgressCallback(int result,
+	const char *error_message, rc_client_all_user_progress_t *list)
+{
+	library_sync_async_handle_ = nullptr;
+	if (library_sync_.state != RaLibrarySyncState::PendingProgress) {
+		if (list != nullptr) {
+			rc_client_destroy_all_user_progress(list);
+		}
+		return;
+	}
+	if (result != RC_OK || list == nullptr) {
+		FailLibrarySync(result, error_message);
+		if (list != nullptr) {
+			rc_client_destroy_all_user_progress(list);
+		}
+		return;
+	}
+	for (uint32_t i = 0; i < list->num_entries; i++) {
+		const rc_client_all_user_progress_entry_t& source = list->entries[i];
+		RaLibrarySyncProgress item;
+		item.game_id = source.game_id;
+		item.total = source.num_achievements;
+		item.unlocked = source.num_unlocked_achievements;
+		item.hardcore_unlocked =
+			source.num_unlocked_achievements_hardcore;
+		library_sync_.progress.push_back(item);
+	}
+	rc_client_destroy_all_user_progress(list);
+	library_sync_.state = RaLibrarySyncState::Succeeded;
+}
+
+void RaService::FailLibrarySync(int result, const char *message)
+{
+	library_sync_async_handle_ = nullptr;
+	library_sync_.state = RaLibrarySyncState::Failed;
+	library_sync_.result = result;
+	library_sync_.message = message != nullptr && message[0] != '\0' ?
+		message : rc_error_str(result);
+}
+
 void RaService::HandleLeaderboardEntriesCallback(int result,
 	const char *error_message, rc_client_leaderboard_entry_list_t *list)
 {
@@ -1124,6 +1409,18 @@ void RaService::AbortMediaChangeInProgress()
 	if (media_change_.state == RaMediaChangeState::Pending) {
 		media_change_ = RaMediaChangeSnapshot();
 	}
+}
+
+void RaService::AbortLibrarySyncInProgress()
+{
+	if (client_ != nullptr && library_sync_async_handle_ != nullptr) {
+		rc_client_abort_async(client_, library_sync_async_handle_);
+	}
+	library_sync_async_handle_ = nullptr;
+	library_sync_ = RaLibrarySyncSnapshot();
+	library_sync_local_hashes_.clear();
+	library_sync_title_game_ids_.clear();
+	library_sync_title_offset_ = 0;
 }
 
 } // namespace Xm8Ra

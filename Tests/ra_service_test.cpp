@@ -360,6 +360,91 @@ int main()
 			"saved token login succeeds before load game");
 
 		const std::string hash = kKnownSupportedPc8800Hash;
+		Check(service.BeginLibrarySync({hash}, &error),
+			"begin idle library sync");
+		Check(service.LibrarySyncSnapshot().state ==
+			Xm8Ra::RaLibrarySyncState::PendingHashes,
+			"library sync starts with hash library");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"r=hashlibrary") != std::string::npos,
+			"library sync requests PC-8800 hash library");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			std::string("{\"Success\":true,\"MD5List\":{\"") + hash +
+			"\":1234,\"ffffffffffffffffffffffffffffffff\":9999}}"));
+		service.DrainHttp();
+		Check(service.LibrarySyncSnapshot().state ==
+			Xm8Ra::RaLibrarySyncState::PendingTitles,
+			"library sync advances to matched titles");
+		Check(service.LibrarySyncSnapshot().hashes.size() == 1 &&
+			service.LibrarySyncSnapshot().hashes[0].game_id == 1234,
+			"hash library is filtered to local hashes");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"r=gameinfolist") != std::string::npos,
+			"library sync requests matched game titles");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"Response\":[{\"ID\":1234,"
+			"\"Title\":\"Synced Game\",\"ImageIcon\":\"/Images/1234.png\","
+			"\"ImageUrl\":\"https://media.example/1234.png\"}]}"));
+		service.DrainHttp();
+		Check(service.LibrarySyncSnapshot().state ==
+			Xm8Ra::RaLibrarySyncState::PendingProgress,
+			"library sync advances to all progress");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"r=allprogress") != std::string::npos,
+			"library sync requests all user progress");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"Response\":{\"1234\":{"
+			"\"Achievements\":10,\"Unlocked\":4,"
+			"\"UnlockedHardcore\":2}}}"));
+		service.DrainHttp();
+		const Xm8Ra::RaLibrarySyncSnapshot library_sync =
+			service.LibrarySyncSnapshot();
+		Check(library_sync.state == Xm8Ra::RaLibrarySyncState::Succeeded,
+			"library sync succeeds only after all three responses");
+		Check(library_sync.username == "player" &&
+			library_sync.titles.size() == 1 &&
+			library_sync.progress.size() == 1,
+			"library sync copies username, title, and progress");
+		Check(library_sync.progress[0].total == 10 &&
+			library_sync.progress[0].unlocked == 4 &&
+			library_sync.progress[0].hardcore_unlocked == 2,
+			"library sync progress values are copied");
+		service.ClearLibrarySyncResult();
+		Check(service.LibrarySyncSnapshot().state ==
+			Xm8Ra::RaLibrarySyncState::None,
+			"completed library sync result can be consumed");
+
+		Check(service.BeginLibrarySync({hash}, &error),
+			"begin library sync that will partially fail");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			std::string("{\"Success\":true,\"MD5List\":{\"") + hash +
+			"\":1234}}"));
+		service.DrainHttp();
+		const size_t requests_before_title_failure =
+			fake_http_raw->SentRequests().size();
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":false,\"Error\":\"Titles unavailable\"}"));
+		service.DrainHttp();
+		Check(service.LibrarySyncSnapshot().state ==
+			Xm8Ra::RaLibrarySyncState::Failed,
+			"partial library sync is reported as failed");
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_before_title_failure,
+			"failed title stage does not request progress");
+		service.ClearLibrarySyncResult();
+
+		Check(service.BeginLibrarySync({hash}, &error),
+			"begin library sync before game start");
+		const uint64_t pending_sync_request = service.LastIssuedRequestId();
+		service.UnloadGame();
+		fake_http_raw->Complete(MakeJsonResponse(pending_sync_request,
+			std::string("{\"Success\":true,\"MD5List\":{\"") + hash +
+			"\":1234}}"));
+		service.DrainHttp();
+		Check(service.LibrarySyncSnapshot().state ==
+			Xm8Ra::RaLibrarySyncState::None,
+			"game start aborts pending library sync and ignores late response");
+
 		Check(service.BeginLoadGameByHash(hash, &error),
 			"begin load game by hash");
 		Check(service.GameSessionSnapshot().state ==
@@ -693,6 +778,19 @@ int main()
 			"achievement event measured progress is copied");
 		Check(service.TakeEvents().empty(),
 			"take events drains the event queue");
+
+		event = {};
+		event.type = RC_CLIENT_EVENT_DISCONNECTED;
+		service.QueueEventForTesting(&event);
+		event.type = RC_CLIENT_EVENT_RECONNECTED;
+		service.QueueEventForTesting(&event);
+		events = service.TakeEvents();
+		Check(events.size() == 2,
+			"connection state events are queued in order");
+		Check(events[0].type == Xm8Ra::RaEventType::Disconnected,
+			"disconnected event is mapped");
+		Check(events[1].type == Xm8Ra::RaEventType::Reconnected,
+			"reconnected event is mapped");
 	}
 
 	{

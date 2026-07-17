@@ -76,6 +76,37 @@ struct RaLibraryGameListItem {
 	int points_unlocked = 0;
 };
 
+struct RaMediaBankHash {
+	std::string media_md5;
+	int bank_index = 0;
+	std::string ra_hash;
+};
+
+struct RaLibraryHashMatch {
+	std::string hash;
+	uint32_t ra_game_id = 0;
+};
+
+struct RaLibraryGameTitle {
+	uint32_t ra_game_id = 0;
+	std::string title;
+	std::string badge_url;
+};
+
+struct RaLibraryProgress {
+	uint32_t ra_game_id = 0;
+	uint32_t core_total = 0;
+	uint32_t core_unlocked = 0;
+	uint32_t hardcore_unlocked = 0;
+};
+
+struct RaLibrarySyncPayload {
+	std::string username;
+	std::vector<RaLibraryHashMatch> hashes;
+	std::vector<RaLibraryGameTitle> titles;
+	std::vector<RaLibraryProgress> progress;
+};
+
 struct LaunchDrive {
 	bool assigned = false;
 	std::string media_md5;
@@ -130,7 +161,13 @@ public:
 		std::string *error);
 	bool ListGames(std::vector<RaLibraryGameListItem> *games,
 		std::string *error);
+	bool ListGamesForUser(const std::string& username,
+		std::vector<RaLibraryGameListItem> *games, std::string *error);
 	bool MarkGamePlayed(int64_t game_id, std::string *error);
+	bool ListMediaBankHashes(std::vector<RaMediaBankHash> *hashes,
+		std::string *error);
+	bool ApplyLibrarySync(const RaLibrarySyncPayload& payload,
+		std::string *error);
 
 private:
 	bool Exec(const char *sql, std::string *error);
@@ -145,6 +182,8 @@ private:
 		const std::string& source_path, const std::string& display_name,
 		int64_t source_mtime, int64_t game_id, int ordinal,
 		bool create_anchor_profile, MediaRecord *record,
+		std::string *error);
+	bool UpdateMediaBankHashes(const D88MediaInfo& media,
 		std::string *error);
 	int64_t NowUnixTime() const;
 	void CloseDatabaseOnly();

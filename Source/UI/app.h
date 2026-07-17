@@ -28,6 +28,7 @@
 #include "ra_media_store.h"
 #include "ra_overlay.h"
 #include "ra_service.h"
+#include "ra_session_state.h"
 #endif
 
 const char* GetAppVersionString();
@@ -210,7 +211,11 @@ private:
 	void ClearRaMediaChangeState();
 										// clear App media change transaction
 	void EnterRaOfflineSession(const std::string& message);
-										// stop RA evaluation after consistency failure
+										// stop RA evaluation for the current game
+	void StopRaSession();
+										// end current game session and allow a new launch
+	void ProcessRaLibrarySync();
+										// start or commit idle library synchronization
 	bool RememberRaSourceDirForMountedDisk(int drive);
 										// remember source dir for mounted RA media
 	bool RememberRaLaunchDriveForMountedDisk(int drive, std::string *error);
@@ -374,10 +379,10 @@ private:
 										// saved token login started
 	bool ra_manual_login_started;
 										// manual password login started
-	bool ra_session_disabled;
-										// RA disabled for current launch session
-	bool ra_offline_session;
-										// RA stopped after an unrecoverable consistency failure
+	bool ra_library_sync_started_for_login;
+										// current login already attempted library sync
+	Xm8Ra::RaSessionState ra_session_state;
+										// current launch/active/disconnected/offline state
 	Uint32 ra_overlay_joystick_prev;
 										// RA overlay joystick previous state
 	bool ra_overlay_mouse_target_valid;
