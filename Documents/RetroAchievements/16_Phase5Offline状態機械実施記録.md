@@ -71,7 +71,10 @@ git diff --check
 - `git diff --check`: 成功。
 - ASCENDのsize、bank数、RA hashは前回から不変。
 
-実ネットワークを切断して`ActiveDisconnected`表示と再接続を確認する手動試験は未実施。
+実ネットワーク確認で、rcheevosイベントだけでは通信要求のない期間の切断を検出できないことが
+判明した。macOSの到達性監視を
+[21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md)で追加した。
+修正後の切断・復旧表示は実機で再確認する。
 またApp全体をfake HTTPで駆動するtest harnessはまだないため、サービスevent変換と状態遷移を
 別々の自動testで固定している。
 

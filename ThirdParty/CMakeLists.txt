@@ -90,6 +90,7 @@ add_library(xm8_ra_platform OBJECT
 )
 if(APPLE)
   target_sources(xm8_ra_platform PRIVATE
+    ${PROJECT_SOURCE_DIR}/Source/RA/ra_connectivity_mac.cpp
     ${PROJECT_SOURCE_DIR}/Source/RA/ra_http_mac.mm
   )
 endif()
@@ -120,6 +121,7 @@ if(APPLE)
   target_link_libraries(xm8_ra_dependencies INTERFACE
     "-framework Foundation"
     "-framework Security"
+    "-framework SystemConfiguration"
   )
 elseif(UNIX AND NOT ANDROID)
   find_package(PkgConfig REQUIRED)

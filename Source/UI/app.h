@@ -24,6 +24,7 @@
 #include <vector>
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+#include "ra_connectivity.h"
 #include "ra_library.h"
 #include "ra_media_store.h"
 #include "ra_overlay.h"
@@ -240,6 +241,8 @@ private:
 										// evaluate one completed VM frame
 	void ProcessRaService(bool emulation_idle);
 										// progress async RA service work
+	void ProcessRaConnectivity();
+										// observe platform connectivity changes
 	void ProcessRaImages();
 										// progress RA badge image HTTP
 	void RequestRaBadgeImage(const std::string& url);
@@ -349,6 +352,10 @@ private:
 										// RA media store
 	Xm8Ra::RaService *ra_service;
 										// RA client service
+	std::unique_ptr<Xm8Ra::RaConnectivityMonitor> ra_connectivity_monitor;
+										// platform network reachability monitor
+	Xm8Ra::RaConnectivityTracker ra_connectivity_tracker;
+										// deduplicated reachability transitions
 	Xm8Ra::RaOverlay *ra_overlay;
 										// RA overlay state
 	std::map<uint32_t, Xm8Ra::RaLeaderboardScoreboardEvent>

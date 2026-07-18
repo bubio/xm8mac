@@ -1306,6 +1306,7 @@ bool App::EnsureRaService(std::string *error)
 		}
 		return false;
 	}
+	ra_connectivity_monitor = Xm8Ra::CreatePlatformRaConnectivityMonitor();
 	return true;
 }
 
@@ -1513,6 +1514,7 @@ void App::ProcessRaService(bool emulation_idle)
 	}
 
 	ProcessRaImages();
+	ProcessRaConnectivity();
 
 	const Xm8Ra::RaLoginState login_state_before =
 		ra_service->LoginSnapshot().state;
@@ -1647,6 +1649,31 @@ void App::ProcessRaService(bool emulation_idle)
 	}
 	ProcessRaLibrarySync();
 	AddRaEventsAsNotices(ra_service->TakeEvents());
+}
+
+//
+// ProcessRaConnectivity()
+// map platform reachability changes into the active RA session
+//
+void App::ProcessRaConnectivity()
+{
+	if (ra_connectivity_monitor == nullptr) {
+		return;
+	}
+	const Xm8Ra::RaReachabilityTransition transition =
+		ra_connectivity_tracker.Observe(ra_connectivity_monitor->Poll());
+	if (!transition.has_signal) {
+		return;
+	}
+	const Xm8Ra::RaSessionState previous = ra_session_state;
+	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
+		transition.signal);
+	if (ra_session_state == previous) {
+		return;
+	}
+	AddRaNotice(transition.signal == Xm8Ra::RaSessionSignal::Disconnected ?
+		"RA: disconnected" : "RA: reconnected");
+	menu->UpdateRaStatus();
 }
 
 //
@@ -3142,6 +3169,7 @@ void App::Deinit()
 		delete ra_service;
 		ra_service = NULL;
 	}
+	ra_connectivity_monitor.reset();
 	if (ra_overlay != NULL) {
 		delete ra_overlay;
 		ra_overlay = NULL;

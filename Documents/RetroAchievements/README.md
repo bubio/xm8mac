@@ -68,6 +68,7 @@ ePC-8801MAの旧版
 | [18_Phase5実VMフレーム計数実施記録.md](18_Phase5実VMフレーム計数実施記録.md) | 実PC-8801MA VMによる通常、複数frame、描画skip、Full Speed相当のcallback計数 |
 | [19_Phase5媒体競合起動制限実施記録.md](19_Phase5媒体競合起動制限実施記録.md) | 競合ゲームのLibrary表示、Game Detail表示、UI／DB二重の起動禁止 |
 | [20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md) | 競合分類、明示MERGE／SPLIT、MANUAL拒否、transaction rollback検証 |
+| [21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md) | macOS到達性監視、即時切断・復旧、重複通知抑止、手動再確認手順 |
 
 ## 3. 確定事項
 

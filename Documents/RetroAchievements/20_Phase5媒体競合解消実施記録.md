@@ -53,7 +53,8 @@ working D88のファイル内容は変更しない。
 
 1. ASCENDを起動して実RA Game ID、タイトル、実績一覧、request packetを確認する。
 2. 実HTTPSのLibrary同期後に、Libraryのtitle、badge、progress反映を確認する。
-3. RAセッション中にネットワークを切断し、`ActiveDisconnected`、再接続、途中復帰禁止を確認する。
+3. RAセッション中のネットワーク切断・復旧は、実機確認で見つかった検出不足を
+   [21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md)で修正した。再確認する。
 
 テスト媒体は`/Volumes/CrucialX6/roms/PC88/TEST/ascend.d88`を使用する。外部サービス状態と
 利用者資格情報を伴うため、これらはローカル自動テストの合格条件には含めない。
