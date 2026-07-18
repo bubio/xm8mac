@@ -681,6 +681,91 @@ int main()
 	Check(ReadFile(first.working_path) == original_single,
 		"existing working save is not overwritten");
 
+	static const uint8_t cache_png_bytes[] = {
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x04, 0x00, 0x00, 0x00, 0xb5, 0x1c, 0x0c,
+		0x02, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41,
+		0x54, 0x78, 0xda, 0x63, 0x64, 0xf8, 0x0f, 0x00,
+		0x01, 0x05, 0x01, 0x01, 0x27, 0x18, 0xe3, 0x66,
+		0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44,
+		0xae, 0x42, 0x60, 0x82
+	};
+	const std::vector<uint8_t> cache_png(cache_png_bytes,
+		cache_png_bytes + sizeof(cache_png_bytes));
+	const std::string cache_url_1 = "https://media.example/cache-1.png";
+	const std::string cache_url_2 = "https://media.example/cache-2.png";
+	std::vector<uint8_t> cached_data;
+	std::string cached_type;
+	Check(library.LoadCachedImage(cache_url_1, 1, &cached_data,
+		&cached_type, &error) == Xm8Ra::RaImageCacheLoadResult::Miss,
+		"image cache miss");
+	Check(library.StoreCachedImage(cache_url_1, Xm8Ra::RaImageKind::GameBadge,
+		"Image/PNG; charset=binary", cache_png, 10, 1024, {}, &error),
+		"store validated PNG image");
+	Check(library.StoreCachedImage(cache_url_2,
+		Xm8Ra::RaImageKind::AchievementBadge, "image/png", cache_png, 20,
+		1024, {}, &error), "store second PNG image");
+	Check(library.LoadCachedImage(cache_url_1, 30, &cached_data, &cached_type,
+		&error) == Xm8Ra::RaImageCacheLoadResult::Hit,
+		"image cache hit");
+	Check(cached_data == cache_png && cached_type == "image/png",
+		"image cache preserves validated bytes and normalized type");
+	Check(library.PruneImageCache(static_cast<int64_t>(cache_png.size()), {},
+		&error), "prune image cache to one image");
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM image_cache WHERE url ="
+		" 'https://media.example/cache-1.png'") == 1,
+		"LRU keeps recently used image");
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM image_cache WHERE url ="
+		" 'https://media.example/cache-2.png'") == 0,
+		"LRU evicts oldest image");
+	Check(library.StoreCachedImage(cache_url_2,
+		Xm8Ra::RaImageKind::AchievementBadge, "image/png", cache_png, 40,
+		1024, {}, &error), "restore second image for protected eviction");
+	Check(library.PruneImageCache(0, {cache_url_1}, &error),
+		"prune skips protected image");
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM image_cache") == 1,
+		"only protected image remains above zero-byte limit");
+	Check(ExecSql(library.DatabasePath(),
+		"UPDATE image_cache SET relative_path = 'images/999.png'"
+		" WHERE url = 'https://media.example/cache-1.png'", &error),
+		"tamper cached relative path");
+	Check(WriteTextFile(JoinPath(ra_root, "images/999.png"), "sentinel"),
+		"create non-owned image path");
+	Check(library.LoadCachedImage(cache_url_1, 45, &cached_data, &cached_type,
+		&error) == Xm8Ra::RaImageCacheLoadResult::Miss,
+		"mismatched cache id becomes a miss");
+	Check(PathExists(JoinPath(ra_root, "images/999.png")),
+		"mismatched cache id does not delete another file");
+	Check(library.StoreCachedImage(cache_url_1, Xm8Ra::RaImageKind::GameBadge,
+		"image/png", cache_png, 46, 1024, {}, &error),
+		"restore image after mismatched cache id");
+	const std::string cached_relative = QueryText(library.DatabasePath(),
+		"SELECT relative_path FROM image_cache WHERE url ="
+		" 'https://media.example/cache-1.png'");
+	Check(WriteTextFile(JoinPath(ra_root, cached_relative.c_str()), "broken"),
+		"corrupt cached image file");
+	Check(library.LoadCachedImage(cache_url_1, 50, &cached_data, &cached_type,
+		&error) == Xm8Ra::RaImageCacheLoadResult::Miss,
+		"corrupt cached image becomes a miss");
+	Check(QueryInt(library.DatabasePath(),
+		"SELECT COUNT(*) FROM image_cache") == 0,
+		"corrupt cached image metadata is removed");
+	Check(!library.StoreCachedImage("https://media.example/text",
+		Xm8Ra::RaImageKind::Other, "text/plain", cache_png, 60, 1024, {},
+		&error), "reject non-image content type");
+	std::vector<uint8_t> oversized(1024U * 1024U + 1U, 0);
+	Check(!library.StoreCachedImage("https://media.example/oversize.png",
+		Xm8Ra::RaImageKind::Other, "image/png", oversized, 70,
+		2 * 1024 * 1024, {}, &error), "reject oversized encoded image");
+	Check(library.StoreCachedImage(cache_url_1, Xm8Ra::RaImageKind::GameBadge,
+		"image/png", cache_png, 80, 1024, {}, &error),
+		"store image before library reopen");
+
 	library.Close();
 
 	Xm8Ra::RaLibrary reopened;
@@ -688,6 +773,13 @@ int main()
 	Xm8Ra::RaSettings persisted;
 	Check(reopened.LoadSettings(&persisted, &error),
 		"load persisted RA settings");
+	cached_data.clear();
+	cached_type.clear();
+	Check(reopened.LoadCachedImage(cache_url_1, 90, &cached_data, &cached_type,
+		&error) == Xm8Ra::RaImageCacheLoadResult::Hit,
+		"persistent image cache survives library reopen");
+	Check(cached_data == cache_png,
+		"reopened image cache preserves encoded bytes");
 	Check(persisted.enabled, "RA enabled setting persisted");
 	Check(persisted.last_mode == Xm8Ra::kRaModeHardcore,
 		"RA hardcore setting persisted");

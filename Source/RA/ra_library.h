@@ -113,6 +113,19 @@ struct RaLibrarySyncPayload {
 	std::vector<RaLibraryProgress> progress;
 };
 
+enum class RaImageCacheLoadResult {
+	Hit,
+	Miss,
+	Error,
+};
+
+enum class RaImageKind {
+	GameBadge = 0,
+	AchievementBadge = 1,
+	AchievementBadgeLocked = 2,
+	Other = 3,
+};
+
 enum class RaGameConflictKind {
 	None = 0,
 	Merge = 1,
@@ -195,6 +208,16 @@ public:
 		std::string *error);
 	bool ApplyLibrarySync(const RaLibrarySyncPayload& payload,
 		std::string *error);
+	RaImageCacheLoadResult LoadCachedImage(const std::string& url,
+		int64_t now, std::vector<uint8_t> *data, std::string *content_type,
+		std::string *error);
+	bool StoreCachedImage(const std::string& url, RaImageKind image_kind,
+		const std::string& content_type, const std::vector<uint8_t>& data,
+		int64_t now, int64_t cache_limit_bytes,
+		const std::vector<std::string>& protected_urls, std::string *error);
+	bool RemoveCachedImage(const std::string& url, std::string *error);
+	bool PruneImageCache(int64_t cache_limit_bytes,
+		const std::vector<std::string>& protected_urls, std::string *error);
 
 private:
 	bool Exec(const char *sql, std::string *error);
@@ -205,6 +228,8 @@ private:
 	bool IsDatabaseDamage() const;
 	bool QuarantineDatabase(std::string *error);
 	bool ValidateSettings(const RaSettings& settings, std::string *error) const;
+	bool RemoveCachedImageById(int64_t id, const std::string& relative_path,
+		std::string *error);
 	bool RegisterDesktopMediaInternal(const D88MediaInfo& media,
 		const std::string& source_path, const std::string& display_name,
 		int64_t source_mtime, int64_t game_id, int ordinal,

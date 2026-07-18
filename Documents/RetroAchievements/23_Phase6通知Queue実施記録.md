@@ -48,6 +48,5 @@ priority queueと寿命管理は完了したが、通知UI全体には次が残�
 
 ## 4. 次回作業handoff
 
-次はbadge画像cacheを永続化する。SQLiteの既存`image_cache` tableを使用し、cache hit/miss、
-破損画像、oversize、LRU eviction、容量設定64/128/256MiB、取得失敗時placeholderを
-自動テストで固定してからAppの画像取得・描画へ接続する。
+badge画像cacheは[24_Phase6画像cache実施記録.md](24_Phase6画像cache実施記録.md)で
+永続化した。次は全入力導線の監査と補完へ進む。

@@ -167,6 +167,25 @@ std::string MakeRaUserAgent()
 	return stream.str();
 }
 
+bool DecodeRaBadgePixels(const std::vector<uint8_t>& encoded, int *width,
+	int *height, std::vector<uint32_t> *pixels)
+{
+	std::vector<uint8_t> rgba;
+	if (!Xm8RaBuildInfo::DecodeImageRgba(encoded.data(), encoded.size(),
+		width, height, &rgba) || *width > 2048 || *height > 2048 ||
+		static_cast<int64_t>(*width) * *height > 4194304) {
+		return false;
+	}
+	pixels->clear();
+	pixels->reserve(static_cast<size_t>(*width) *
+		static_cast<size_t>(*height));
+	for (size_t index = 0; index + 3 < rgba.size(); index += 4) {
+		pixels->push_back((static_cast<uint32_t>(rgba[index + 3]) << 24) |
+			RGB_COLOR(rgba[index], rgba[index + 1], rgba[index + 2]));
+	}
+	return !pixels->empty();
+}
+
 std::string RaEventNotice(const Xm8Ra::RaEvent& event)
 {
 	switch (event.type) {
@@ -346,6 +365,7 @@ App::App()
 	ra_service = NULL;
 	ra_overlay = NULL;
 	ra_next_image_request_id = 1000000;
+	ra_image_cache_limit_bytes = 128LL * 1024 * 1024;
 	ra_notification_duration_ms = 5000;
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
@@ -484,6 +504,9 @@ bool App::Init(const CliOptions& options)
 				ra_mode_enabled = ra_settings.enabled;
 				ra_notification_duration_ms =
 					static_cast<uint32_t>(ra_settings.notification_seconds) * 1000;
+				ra_image_cache_limit_bytes =
+					static_cast<int64_t>(ra_settings.image_cache_limit_mib) *
+					1024 * 1024;
 			}
 			ra_media_store = new Xm8Ra::RaMediaStore(ra_library);
 		}
@@ -1732,26 +1755,33 @@ void App::ProcessRaImages()
 
 			int width = 0;
 			int height = 0;
-			std::vector<uint8_t> rgba;
-			if (!Xm8RaBuildInfo::DecodeImageRgba(response.body.data(),
-				response.body.size(), &width, &height, &rgba)) {
+			std::vector<uint32_t> pixels;
+			if (!DecodeRaBadgePixels(response.body, &width, &height, &pixels)) {
 				image.state = RaBadgeImage::Failed;
 				break;
 			}
 
 			image.width = width;
 			image.height = height;
-			image.pixels.clear();
-			image.pixels.reserve(static_cast<size_t>(width) *
-				static_cast<size_t>(height));
-			for (size_t i = 0; i + 3 < rgba.size(); i += 4) {
-				const uint32_t pixel =
-					(static_cast<uint32_t>(rgba[i + 3]) << 24) |
-					RGB_COLOR(rgba[i], rgba[i + 1], rgba[i + 2]);
-				image.pixels.push_back(pixel);
-			}
+			image.pixels = std::move(pixels);
 			image.state = image.pixels.empty() ? RaBadgeImage::Failed :
 				RaBadgeImage::Ready;
+			if (image.state == RaBadgeImage::Ready && ra_library != nullptr) {
+				std::vector<std::string> protected_urls;
+				const uint32_t ticks = SDL_GetTicks();
+				for (const auto& candidate : ra_badge_images) {
+					if (candidate.second.last_draw_ticks != 0 &&
+						static_cast<int32_t>(ticks -
+							candidate.second.last_draw_ticks) < 1000) {
+						protected_urls.push_back(candidate.first);
+					}
+				}
+				std::string cache_error;
+				ra_library->StoreCachedImage(entry.first, image.image_kind,
+					response.content_type, response.body,
+					static_cast<int64_t>(std::time(nullptr)),
+					ra_image_cache_limit_bytes, protected_urls, &cache_error);
+			}
 			break;
 		}
 	}
@@ -1761,7 +1791,8 @@ void App::ProcessRaImages()
 // RequestRaBadgeImage()
 // request RA badge image if needed
 //
-void App::RequestRaBadgeImage(const std::string& url)
+void App::RequestRaBadgeImage(const std::string& url,
+	Xm8Ra::RaImageKind image_kind)
 {
 	if (url.empty()) {
 		return;
@@ -1770,6 +1801,22 @@ void App::RequestRaBadgeImage(const std::string& url)
 	RaBadgeImage& image = ra_badge_images[url];
 	if (image.state != RaBadgeImage::NotRequested) {
 		return;
+	}
+	image.image_kind = image_kind;
+	if (ra_library != nullptr) {
+		std::vector<uint8_t> cached;
+		std::string content_type;
+		std::string cache_error;
+		const Xm8Ra::RaImageCacheLoadResult result =
+			ra_library->LoadCachedImage(url,
+				static_cast<int64_t>(std::time(nullptr)), &cached,
+				&content_type, &cache_error);
+		if (result == Xm8Ra::RaImageCacheLoadResult::Hit &&
+			DecodeRaBadgePixels(cached, &image.width, &image.height,
+				&image.pixels)) {
+			image.state = RaBadgeImage::Ready;
+			return;
+		}
 	}
 
 	if (ra_image_http_client == nullptr) {
@@ -1798,18 +1845,31 @@ void App::RequestRaBadgeImage(const std::string& url)
 // draw RA badge image if cached
 //
 void App::DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
-	const std::string& url)
+	const std::string& url, Xm8Ra::RaImageKind image_kind)
 {
-	if (buf == NULL || rect == NULL || url.empty()) {
+	if (buf == NULL || rect == NULL) {
+		return;
+	}
+	const char *placeholder = image_kind == Xm8Ra::RaImageKind::GameBadge ?
+		"Game" : image_kind == Xm8Ra::RaImageKind::AchievementBadgeLocked ?
+		"Locked" : "Badge";
+	if (url.empty()) {
+		font->DrawSjisCenterOr(buf, rect, placeholder,
+			RGB_COLOR(255, 255, 255));
 		return;
 	}
 
-	RequestRaBadgeImage(url);
+	RequestRaBadgeImage(url, image_kind);
 	const auto found = ra_badge_images.find(url);
+	if (found != ra_badge_images.end()) {
+		found->second.last_draw_ticks = SDL_GetTicks();
+	}
 	if (found == ra_badge_images.end() ||
 		found->second.state != RaBadgeImage::Ready ||
 		found->second.width <= 0 || found->second.height <= 0 ||
 		found->second.pixels.empty()) {
+		font->DrawSjisCenterOr(buf, rect, placeholder,
+			RGB_COLOR(255, 255, 255));
 		return;
 	}
 
@@ -2712,8 +2772,8 @@ void App::DrawRaOverlay()
 				badge_outer.y + 2, badge_outer.w - 4,
 				badge_outer.h - 4};
 			font->DrawFillRect(buf, &badge_inner, MENUITEM_BACK | alpha);
-			font->DrawSjisCenterOr(buf, &badge_inner, "Badge", fore);
-			DrawRaBadgeImage(buf, &badge_inner, game.badge_url);
+			DrawRaBadgeImage(buf, &badge_inner, game.badge_url,
+				Xm8Ra::RaImageKind::GameBadge);
 
 			char progress[80];
 			if (game.has_progress && game.core_total > 0) {
@@ -2837,7 +2897,6 @@ void App::DrawRaOverlay()
 		SDL_Rect badge_inner = {badge_outer.x + 2, badge_outer.y + 2,
 			badge_outer.w - 4, badge_outer.h - 4};
 		font->DrawFillRect(buf, &badge_inner, MENUITEM_BACK | alpha);
-		font->DrawSjisCenterOr(buf, &badge_inner, "Badge", fore);
 		std::string badge_url = detail.achievement.unlocked != 0 ?
 			detail.achievement.badge_url :
 			detail.achievement.badge_locked_url;
@@ -2846,7 +2905,10 @@ void App::DrawRaOverlay()
 				detail.achievement.badge_locked_url :
 				detail.achievement.badge_url;
 		}
-		DrawRaBadgeImage(buf, &badge_inner, badge_url);
+		DrawRaBadgeImage(buf, &badge_inner, badge_url,
+			detail.achievement.unlocked != 0 ?
+				Xm8Ra::RaImageKind::AchievementBadge :
+				Xm8Ra::RaImageKind::AchievementBadgeLocked);
 
 		char summary[128];
 		const char *state = detail.achievement.unlocked != 0 ?

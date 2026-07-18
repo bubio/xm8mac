@@ -1,12 +1,16 @@
 #include "ra_library.h"
 
+#include "ra_build_info.h"
 #include "sqlite3.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <set>
 #include <sstream>
@@ -137,6 +141,87 @@ bool IsMd5Hex(const std::string& value)
 		if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f'))) {
 			return false;
 		}
+	}
+	return true;
+}
+
+std::string NormalizeImageContentType(const std::string& value)
+{
+	const size_t separator = value.find(';');
+	std::string normalized = value.substr(0, separator);
+	while (!normalized.empty() &&
+		(normalized.back() == ' ' || normalized.back() == '\t')) {
+		normalized.pop_back();
+	}
+	size_t first = 0;
+	while (first < normalized.size() &&
+		(normalized[first] == ' ' || normalized[first] == '\t')) {
+		++first;
+	}
+	normalized.erase(0, first);
+	std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+		[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+	return normalized;
+}
+
+bool IsSafeImageRelativePath(const std::string& value)
+{
+	const std::string prefix = "images/";
+	if (value.compare(0, prefix.size(), prefix) != 0) {
+		return false;
+	}
+	const std::string name = value.substr(prefix.size());
+	const size_t dot = name.find('.');
+	if (dot == 0 || dot == std::string::npos ||
+		name.find('.', dot + 1) != std::string::npos) {
+		return false;
+	}
+	for (size_t index = 0; index < dot; ++index) {
+		if (name[index] < '0' || name[index] > '9') {
+			return false;
+		}
+	}
+	const std::string extension = name.substr(dot);
+	return extension == ".png" || extension == ".jpg";
+}
+
+bool IsOwnedImageRelativePath(int64_t id, const std::string& value)
+{
+	if (id <= 0 || !IsSafeImageRelativePath(value)) {
+		return false;
+	}
+	const std::string prefix = "images/" + std::to_string(id);
+	return value == prefix + ".png" || value == prefix + ".jpg";
+}
+
+bool ReadBinaryFile(const std::string& path, std::vector<uint8_t> *data)
+{
+	std::ifstream stream(path, std::ios::binary);
+	if (!stream) {
+		return false;
+	}
+	data->assign(std::istreambuf_iterator<char>(stream),
+		std::istreambuf_iterator<char>());
+	return stream.good() || stream.eof();
+}
+
+bool WriteBinaryFile(const std::string& path, const std::vector<uint8_t>& data,
+	std::string *error)
+{
+	std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+	if (!stream || (!data.empty() &&
+		!stream.write(reinterpret_cast<const char*>(data.data()), data.size()))) {
+		if (error != nullptr) {
+			*error = "cannot write image cache file";
+		}
+		return false;
+	}
+	stream.close();
+	if (!stream) {
+		if (error != nullptr) {
+			*error = "cannot finish image cache file";
+		}
+		return false;
 	}
 	return true;
 }
@@ -405,7 +490,9 @@ bool RaLibrary::InitializeSchema(std::string *error)
 		" byte_size INTEGER NOT NULL,"
 		" last_used_at INTEGER NOT NULL,"
 		" etag TEXT,"
-		" modified TEXT"
+		" modified TEXT,"
+		" CHECK(image_kind BETWEEN 0 AND 3),"
+		" CHECK(byte_size > 0)"
 		");"
 		"CREATE TABLE IF NOT EXISTS sync_state ("
 		" sync_key TEXT PRIMARY KEY,"
@@ -2224,6 +2311,302 @@ bool RaLibrary::ApplyLibrarySync(const RaLibrarySyncPayload& payload,
 		return rollback();
 	}
 	return Exec("COMMIT", error);
+}
+
+RaImageCacheLoadResult RaLibrary::LoadCachedImage(const std::string& url,
+	int64_t now, std::vector<uint8_t> *data, std::string *content_type,
+	std::string *error)
+{
+	if (db_ == nullptr || url.empty() || data == nullptr ||
+		content_type == nullptr) {
+		if (error != nullptr) {
+			*error = "invalid image cache lookup";
+		}
+		return RaImageCacheLoadResult::Error;
+	}
+	data->clear();
+	content_type->clear();
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "SELECT id, relative_path, content_type, byte_size"
+		" FROM image_cache WHERE url = ?", &stmt, error)) {
+		return RaImageCacheLoadResult::Error;
+	}
+	sqlite3_bind_text(stmt, 1, url.c_str(), -1, SQLITE_TRANSIENT);
+	const int rc = sqlite3_step(stmt);
+	if (rc == SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		return RaImageCacheLoadResult::Miss;
+	}
+	if (rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		return RaImageCacheLoadResult::Error;
+	}
+	const int64_t id = sqlite3_column_int64(stmt, 0);
+	const std::string relative_path = ColumnText(stmt, 1);
+	const std::string stored_type = ColumnText(stmt, 2);
+	const int64_t byte_size = sqlite3_column_int64(stmt, 3);
+	sqlite3_finalize(stmt);
+
+	std::vector<uint8_t> loaded;
+	int width = 0;
+	int height = 0;
+	std::vector<uint8_t> rgba;
+	const std::string normalized_type = NormalizeImageContentType(stored_type);
+	const bool valid = IsOwnedImageRelativePath(id, relative_path) &&
+		(normalized_type == "image/png" ||
+			normalized_type == "image/jpeg") &&
+		((normalized_type == "image/png" &&
+			relative_path.size() >= 4 &&
+			relative_path.compare(relative_path.size() - 4, 4, ".png") == 0) ||
+		(normalized_type == "image/jpeg" &&
+			relative_path.size() >= 4 &&
+			relative_path.compare(relative_path.size() - 4, 4, ".jpg") == 0)) &&
+		byte_size > 0 && byte_size <= 1024 * 1024 &&
+		ReadBinaryFile(JoinPath(root_, relative_path.c_str()), &loaded) &&
+		static_cast<int64_t>(loaded.size()) == byte_size &&
+		Xm8RaBuildInfo::DecodeImageRgba(loaded.data(), loaded.size(),
+			&width, &height, &rgba) && width <= 2048 && height <= 2048 &&
+		static_cast<int64_t>(width) * height <= 4194304;
+	if (!valid) {
+		RemoveCachedImageById(id, relative_path, nullptr);
+		return RaImageCacheLoadResult::Miss;
+	}
+
+	if (!Prepare(db_, "UPDATE image_cache SET last_used_at = ? WHERE id = ?",
+		&stmt, error)) {
+		return RaImageCacheLoadResult::Error;
+	}
+	sqlite3_bind_int64(stmt, 1, now);
+	sqlite3_bind_int64(stmt, 2, id);
+	if (!StepDone(db_, stmt, error)) {
+		return RaImageCacheLoadResult::Error;
+	}
+	*data = std::move(loaded);
+	*content_type = normalized_type;
+	return RaImageCacheLoadResult::Hit;
+}
+
+bool RaLibrary::StoreCachedImage(const std::string& url,
+	RaImageKind image_kind, const std::string& content_type,
+	const std::vector<uint8_t>& data, int64_t now, int64_t cache_limit_bytes,
+	const std::vector<std::string>& protected_urls, std::string *error)
+{
+	const std::string normalized_type = NormalizeImageContentType(content_type);
+	const int image_kind_value = static_cast<int>(image_kind);
+	int width = 0;
+	int height = 0;
+	std::vector<uint8_t> rgba;
+	if (db_ == nullptr || url.empty() ||
+		(normalized_type != "image/png" &&
+			normalized_type != "image/jpeg") ||
+		data.empty() || data.size() > 1024U * 1024U ||
+		!Xm8RaBuildInfo::DecodeImageRgba(data.data(), data.size(), &width,
+			&height, &rgba) || width > 2048 || height > 2048 ||
+		static_cast<int64_t>(width) * height > 4194304 ||
+		image_kind_value < 0 || image_kind_value > 3 ||
+		cache_limit_bytes < 0) {
+		if (error != nullptr) {
+			*error = "invalid image cache entry";
+		}
+		return false;
+	}
+
+	int64_t id = 0;
+	std::string old_relative_path;
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "SELECT id, relative_path FROM image_cache WHERE url = ?",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_text(stmt, 1, url.c_str(), -1, SQLITE_TRANSIENT);
+	const int existing_rc = sqlite3_step(stmt);
+	if (existing_rc == SQLITE_ROW) {
+		id = sqlite3_column_int64(stmt, 0);
+		old_relative_path = ColumnText(stmt, 1);
+	}
+	sqlite3_finalize(stmt);
+	if (existing_rc != SQLITE_ROW && existing_rc != SQLITE_DONE) {
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		return false;
+	}
+	if (id == 0) {
+		if (!Prepare(db_, "SELECT COALESCE(MAX(id), 0) + 1 FROM image_cache",
+			&stmt, error)) {
+			return false;
+		}
+		const int id_rc = sqlite3_step(stmt);
+		if (id_rc == SQLITE_ROW) {
+			id = sqlite3_column_int64(stmt, 0);
+		}
+		sqlite3_finalize(stmt);
+		if (id_rc != SQLITE_ROW) {
+			if (error != nullptr) {
+				*error = sqlite3_errmsg(db_);
+			}
+			return false;
+		}
+	}
+	if (id <= 0) {
+		if (error != nullptr) {
+			*error = "cannot allocate image cache id";
+		}
+		return false;
+	}
+
+	const std::string relative_path = "images/" + std::to_string(id) +
+		(normalized_type == "image/png" ? ".png" : ".jpg");
+	const std::string final_path = JoinPath(root_, relative_path.c_str());
+	const std::string temporary_path = final_path + ".tmp";
+	if (!WriteBinaryFile(temporary_path, data, error) ||
+		std::rename(temporary_path.c_str(), final_path.c_str()) != 0) {
+		std::remove(temporary_path.c_str());
+		if (error != nullptr && error->empty()) {
+			*error = "cannot install image cache file";
+		}
+		return false;
+	}
+
+	if (!Prepare(db_, "INSERT INTO image_cache(id, url, image_kind,"
+		" relative_path, content_type, byte_size, last_used_at)"
+		" VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(url) DO UPDATE SET"
+		" image_kind = excluded.image_kind,"
+		" relative_path = excluded.relative_path,"
+		" content_type = excluded.content_type,"
+		" byte_size = excluded.byte_size,"
+		" last_used_at = excluded.last_used_at", &stmt, error)) {
+		std::remove(final_path.c_str());
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, id);
+	sqlite3_bind_text(stmt, 2, url.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(stmt, 3, image_kind_value);
+	sqlite3_bind_text(stmt, 4, relative_path.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 5, normalized_type.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(stmt, 6, static_cast<int64_t>(data.size()));
+	sqlite3_bind_int64(stmt, 7, now);
+	if (!StepDone(db_, stmt, error)) {
+		std::remove(final_path.c_str());
+		return false;
+	}
+	if (!old_relative_path.empty() && old_relative_path != relative_path &&
+		IsOwnedImageRelativePath(id, old_relative_path)) {
+		std::remove(JoinPath(root_, old_relative_path.c_str()).c_str());
+	}
+	return PruneImageCache(cache_limit_bytes, protected_urls, error);
+}
+
+bool RaLibrary::RemoveCachedImageById(int64_t id,
+	const std::string& relative_path, std::string *error)
+{
+	if (IsOwnedImageRelativePath(id, relative_path)) {
+		const std::string path = JoinPath(root_, relative_path.c_str());
+		if (std::remove(path.c_str()) != 0 && errno != ENOENT) {
+			if (error != nullptr) {
+				*error = "cannot remove image cache file";
+			}
+			return false;
+		}
+	}
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "DELETE FROM image_cache WHERE id = ?", &stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_int64(stmt, 1, id);
+	return StepDone(db_, stmt, error);
+}
+
+bool RaLibrary::RemoveCachedImage(const std::string& url, std::string *error)
+{
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "SELECT id, relative_path FROM image_cache WHERE url = ?",
+		&stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_text(stmt, 1, url.c_str(), -1, SQLITE_TRANSIENT);
+	const int rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		sqlite3_finalize(stmt);
+		if (rc == SQLITE_DONE) {
+			return true;
+		}
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		return false;
+	}
+	const int64_t id = sqlite3_column_int64(stmt, 0);
+	const std::string relative_path = ColumnText(stmt, 1);
+	sqlite3_finalize(stmt);
+	return RemoveCachedImageById(id, relative_path, error);
+}
+
+bool RaLibrary::PruneImageCache(int64_t cache_limit_bytes,
+	const std::vector<std::string>& protected_urls, std::string *error)
+{
+	if (cache_limit_bytes < 0) {
+		return false;
+	}
+	std::set<std::string> protected_set(protected_urls.begin(),
+		protected_urls.end());
+	struct Candidate {
+		int64_t id;
+		std::string url;
+		std::string path;
+		int64_t size;
+		bool valid;
+	};
+	std::vector<Candidate> candidates;
+	int64_t total = 0;
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "SELECT id, url, relative_path, byte_size"
+		" FROM image_cache ORDER BY last_used_at, id", &stmt, error)) {
+		return false;
+	}
+	int rc = SQLITE_ROW;
+	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		Candidate item;
+		item.id = sqlite3_column_int64(stmt, 0);
+		item.url = ColumnText(stmt, 1);
+		item.path = ColumnText(stmt, 2);
+		item.size = sqlite3_column_int64(stmt, 3);
+		item.valid = item.size > 0 &&
+			IsOwnedImageRelativePath(item.id, item.path);
+		if (item.valid) {
+			total += item.size;
+		}
+		candidates.push_back(item);
+	}
+	sqlite3_finalize(stmt);
+	if (rc != SQLITE_DONE) {
+		if (error != nullptr) {
+			*error = sqlite3_errmsg(db_);
+		}
+		return false;
+	}
+	for (const Candidate& item : candidates) {
+		if (!item.valid) {
+			if (!RemoveCachedImageById(item.id, item.path, error)) {
+				return false;
+			}
+			continue;
+		}
+		if (total <= cache_limit_bytes) {
+			continue;
+		}
+		if (protected_set.find(item.url) != protected_set.end()) {
+			continue;
+		}
+		if (!RemoveCachedImageById(item.id, item.path, error)) {
+			return false;
+		}
+		total -= item.size;
+	}
+	return true;
 }
 
 } // namespace Xm8Ra

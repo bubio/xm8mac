@@ -71,6 +71,7 @@ ePC-8801MAの旧版
 | [21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md) | macOS到達性監視、即時切断・復旧、重複通知抑止、手動再確認手順 |
 | [22_Phase5完了判定.md](22_Phase5完了判定.md) | Phase 5受入条件、実HTTPS・ASCEND・切断復旧確認、Phase 6 handoff |
 | [23_Phase6通知Queue実施記録.md](23_Phase6通知Queue実施記録.md) | 優先度付きtoast、同時3件、待機・中断再開、設定寿命、queue上限 |
+| [24_Phase6画像cache実施記録.md](24_Phase6画像cache実施記録.md) | badge永続cache、デコード検証、LRU容量制御、破損自己修復、placeholder |
 
 ## 3. 確定事項
 

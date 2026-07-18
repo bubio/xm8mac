@@ -245,10 +245,11 @@ private:
 										// observe platform connectivity changes
 	void ProcessRaImages();
 										// progress RA badge image HTTP
-	void RequestRaBadgeImage(const std::string& url);
+	void RequestRaBadgeImage(const std::string& url,
+		Xm8Ra::RaImageKind image_kind);
 										// request RA badge image if needed
 	void DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
-		const std::string& url);
+		const std::string& url, Xm8Ra::RaImageKind image_kind);
 										// draw RA badge image if cached
 	Xm8Ra::RaOverlayLibraryListSnapshot MakeRaLibraryOverlaySnapshot() const;
 										// build library overlay snapshot
@@ -375,12 +376,16 @@ private:
 		uint64_t request_id = 0;
 		int width = 0;
 		int height = 0;
+		uint32_t last_draw_ticks = 0;
+		Xm8Ra::RaImageKind image_kind = Xm8Ra::RaImageKind::Other;
 		std::vector<uint32_t> pixels;
 	};
 	std::map<std::string, RaBadgeImage> ra_badge_images;
 										// RA badge image memory cache
 	uint64_t ra_next_image_request_id;
 										// RA image request id allocator
+	int64_t ra_image_cache_limit_bytes;
+										// persistent RA image cache capacity
 	uint32_t ra_notification_duration_ms;
 										// configured RA toast lifetime
 	bool ra_mode_enabled;
