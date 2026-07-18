@@ -69,6 +69,7 @@ ePC-8801MAの旧版
 | [19_Phase5媒体競合起動制限実施記録.md](19_Phase5媒体競合起動制限実施記録.md) | 競合ゲームのLibrary表示、Game Detail表示、UI／DB二重の起動禁止 |
 | [20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md) | 競合分類、明示MERGE／SPLIT、MANUAL拒否、transaction rollback検証 |
 | [21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md) | macOS到達性監視、即時切断・復旧、重複通知抑止、手動再確認手順 |
+| [22_Phase5完了判定.md](22_Phase5完了判定.md) | Phase 5受入条件、実HTTPS・ASCEND・切断復旧確認、Phase 6 handoff |
 
 ## 3. 確定事項
 

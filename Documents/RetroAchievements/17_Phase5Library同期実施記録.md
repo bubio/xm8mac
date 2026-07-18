@@ -74,19 +74,16 @@ schema versionを2へ更新した。v1からの移行では単一bank媒体を`m
 - ASCEND: 348848 bytes、1 bank、RA hash
   `5def00835e061a54fe6d1fa2d5a8d2b0`で不変。
 
-実RetroAchievements HTTPSでの3 API連続同期と画面反映は未確認である。
+実RetroAchievements HTTPSでの3 API連続同期と画面反映をASCENDで確認済みである。
 
-## 6. 手動確認手順
+## 6. 手動確認結果
 
-1. Drive 1を空にした状態でRA modeを有効にする。
-2. RAへログインする。
-3. `RA: synchronizing library`の後に`RA: library synchronized`が表示されることを確認する。
-4. RetroAchievementsメニューからLibraryを開く。
-5. 識別済みゲームのRA title、badge、解除数が現在のユーザーの値になっていることを確認する。
-6. 同期失敗時は既存Library内容が消えず、再ログインまで自動retryしないことを確認する。
+Drive 1を空にしてRAへログインし、`RA: synchronizing library`から
+`RA: library synchronized`までの実HTTPS同期を実行した。LibraryでASCENDのRA title、
+badge、解除数・pointsを含むprogress表示に問題がないことを確認した。
 
-ASCENDを登録済みなら同期後のtitle/progress確認に使用できる。D88本体やローカルpathが
-通信requestへ含まれないことも通信診断時に確認する。
+D88本体やローカルpathはRA serviceのrequest生成境界へ渡さず、32文字のbank hashだけを
+渡す。fake HTTP testでgame load requestが対応hashを送ることを固定している。
 
 ## 7. 次回作業handoff
 
@@ -100,10 +97,11 @@ Full Speed、描画skip、1回のsound生成で複数VM frameが進む場合のi
 
 現在の順序:
 
-1. ASCENDで実HTTPS Library同期を手動確認。
-2. 実ネットワーク切断・再接続を手動確認。
-3. Phase 5完了判定。
-4. Phase 6のtoast queue、画像cache、全入力、視覚受入。
+1. Phase 6のtoast queue、画像cache、全入力、視覚受入。
+
+実ネットワーク切断・再接続は
+[21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md)で確認済みである。
+Phase 5完了判定は[22_Phase5完了判定.md](22_Phase5完了判定.md)を正とする。
 
 開始時command:
 

@@ -147,7 +147,7 @@ cmake --build build-ra --target ra_inspect_media
 実RA Game ID、タイトル、実績定義の取得とゲーム実行中の解除確認は、実HTTPS、
 利用者アカウント、外部RA状態を伴うため本ローカル媒体検査には含めない。
 
-## 6. Phase 5残件
+## 6. Phase 5完了
 
 媒体交換とrollbackは
 [15_Phase5媒体交換実施記録.md](15_Phase5媒体交換実施記録.md)、Offline状態機械は
@@ -157,13 +157,11 @@ cmake --build build-ra --target ra_inspect_media
 媒体競合の起動制限と明示解消は
 [19_Phase5媒体競合起動制限実施記録.md](19_Phase5媒体競合起動制限実施記録.md)および
 [20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md)で実装した。
-Phase 5はまだ完了扱いにしない。残件は次のとおりである。
+接続監視は[21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md)、
+最終判定は[22_Phase5完了判定.md](22_Phase5完了判定.md)に記録した。
 
-- ASCENDの実RA Game ID、タイトル、実績一覧取得とrequest packet確認。
-- 実HTTPSによるLibrary同期とLibrary画面へのtitle/progress反映確認。
-- 実ネットワーク切断時の`ActiveDisconnected`と再接続確認。
-
-Phase 5の次の確認単位は、実アカウントと実HTTPSを使うLibrary同期・画面反映である。
+ASCENDの実RAセッション、実HTTPS Library同期、title・badge・progress反映、
+ネットワーク切断・復旧を実機確認済みとし、Phase 5を完了する。
 
 ## 7. 後続Phase
 

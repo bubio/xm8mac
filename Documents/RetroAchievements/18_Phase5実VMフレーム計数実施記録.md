@@ -57,9 +57,11 @@ git diff --check
 その後の順序:
 
 1. ASCENDで実HTTPS Library同期、Game ID、title、progress反映を手動確認する。
-2. 実ネットワーク切断時の`ActiveDisconnected`と再接続を手動確認する。
-3. Phase 5の完了判定を行う。
-4. Phase 6のtoast queue、画像cache、全入力、視覚受入へ進む。
+2. Phase 5の完了判定を行う。
+3. Phase 6のtoast queue、画像cache、全入力、視覚受入へ進む。
+
+実ネットワーク切断時の`ActiveDisconnected`と再接続は
+[21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md)で確認済みである。
 
 媒体競合解決では、自動統合しない既存方針を維持する。競合状態のままRAゲームを起動したり、
 別Game IDの媒体を同一ゲームへ暗黙にまとめたりしない。

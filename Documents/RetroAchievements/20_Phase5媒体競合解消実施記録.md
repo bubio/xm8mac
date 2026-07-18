@@ -46,15 +46,15 @@ working D88のファイル内容は変更しない。
 `ra_overlay_test`では識別済みゲームのSTART、解消可能競合の解消action、MANUAL競合の
 操作拒否を検証する。
 
-## 5. 次回作業handoff
+## 5. 後続確認（完了）
 
-ローカルで完結する媒体競合解消は完了した。次は実アカウントと実ネットワークが必要な
-次の受入確認を行う。
+ローカルで完結する媒体競合解消に続き、実アカウントと実ネットワークが必要な
+次の受入確認も完了した。
 
-1. ASCENDを起動して実RA Game ID、タイトル、実績一覧、request packetを確認する。
-2. 実HTTPSのLibrary同期後に、Libraryのtitle、badge、progress反映を確認する。
+1. ASCENDを起動して実RA Game ID、タイトル、実績系表示を確認済み。
+2. 実HTTPSのLibrary同期後に、Libraryのtitle、badge、progress反映を確認済み。
 3. RAセッション中のネットワーク切断・復旧は、実機確認で見つかった検出不足を
-   [21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md)で修正した。再確認する。
+   [21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md)で修正し、再確認も完了した。
 
 テスト媒体は`/Volumes/CrucialX6/roms/PC88/TEST/ascend.d88`を使用する。外部サービス状態と
 利用者資格情報を伴うため、これらはローカル自動テストの合格条件には含めない。

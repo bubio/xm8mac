@@ -28,13 +28,10 @@ macOS以外ではmonitor factoryが未対応を返し、既存動作を維持す
 `ra_session_state_test`へbaseline、重複抑止、Unknown保持、切断、復旧の順序テストを追加した。
 既存のActive／ActiveDisconnected／Offline状態機械とrcheevos event mappingも継続して検証する。
 
-## 4. 手動再確認
+## 4. 手動再確認結果
 
-1. ASCENDをRAセッションとして起動する。
-2. macOSの使用中ネットワークインターフェースを切断する。
-3. 約1秒以内に`RA: disconnected`が表示されることを確認する。
-4. ネットワークを復旧する。
-5. 約1秒以内に`RA: reconnected`が表示されることを確認する。
-6. resetなしでプレイとRAフレーム評価が継続していることを確認する。
+ASCENDをRAセッションとして起動し、macOSの使用中ネットワークインターフェースを
+切断・復旧する実機確認を行った。resetなしで`RA: disconnected`、
+`RA: reconnected`へ変化し、問題がないことを確認した。
 
 テスト媒体は`/Volumes/CrucialX6/roms/PC88/TEST/ascend.d88`を使用する。
