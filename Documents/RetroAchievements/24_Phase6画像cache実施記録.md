@@ -35,8 +35,18 @@ RA有効構成19テストとRA無効構成9テストはすべて成功した。
 `ra_library_store_test`はAddressSanitizerとUndefinedBehaviorSanitizerを有効にした
 ビルドでも成功した。
 
-## 3. 次回作業handoff
+## 3. 手動受入
 
-次は入力導線を完成させる。keyboard、mouse、controller、touchの実装状況を
-画面ごとに監査し、欠けているfocus、Back、scroll、Login入力を自動テストで
-固定する。その後に640x400とmacOS各倍率で視覚受入を行う。
+2026-07-18に利用者が実際のbadgeで次を確認した。
+
+- 取得したbadgeが永続化される。
+- 永続化後はbadgeが待ち時間なく即時表示される。
+
+これにより、実HTTPS取得から永続cache hit、App描画までの受入を
+完了とする。
+
+## 4. 次回作業handoff
+
+入力導線の監査と補完は
+[25_Phase6入力導線実施記録.md](25_Phase6入力導線実施記録.md)で実施した。
+入力導線の補完後は、Phase 6の視覚受入と通知UI残件へ進む。

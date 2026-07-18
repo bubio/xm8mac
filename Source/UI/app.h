@@ -404,10 +404,22 @@ private:
 										// RA mouse pressed target valid
 	Xm8Ra::RaOverlayLoginTarget ra_overlay_mouse_target;
 										// RA mouse pressed target
+	int ra_overlay_mouse_detail_target;
+										// RA detail mouse target: 0 none, 2 primary
+	bool ra_overlay_mouse_list_target_valid;
+										// RA mouse list press target valid
+	size_t ra_overlay_mouse_list_target;
+										// RA mouse list pressed row
 	bool ra_overlay_finger_target_valid;
 										// RA touch pressed target valid
 	Xm8Ra::RaOverlayLoginTarget ra_overlay_finger_target;
 										// RA touch pressed target
+	int ra_overlay_finger_detail_target;
+										// RA detail touch target: 0 none, 2 primary
+	bool ra_overlay_finger_list_target_valid;
+										// RA touch list press target valid
+	size_t ra_overlay_finger_list_target;
+										// RA touch list pressed row
 	bool ra_overlay_finger_scroll_valid;
 										// RA touch scroll tracking valid
 	bool ra_overlay_finger_scrolled;

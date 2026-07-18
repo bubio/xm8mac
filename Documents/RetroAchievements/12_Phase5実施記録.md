@@ -65,7 +65,7 @@ RA専用の状態オブジェクトへ集約する。描画自体は既存UI資�
 
 - オーバーレイ画面状態遷移
 - キーボード、コントローラ、マウス、タッチ入力
-- ログインフォームとオンスクリーンキーボード
+- ログインフォームと物理キーボード／OS software keyboard入力
 - 実績、Leaderboard、Rich Presence表示
 - バッジ画像cacheとの接続
 
@@ -114,8 +114,9 @@ git diff --check
 > 実装済みとなった。現在の実装状況と残件は
 > [14_Phase5-6継続実施記録.md](14_Phase5-6継続実施記録.md)を参照すること。
 
-- ASCIIオンスクリーンキーボード。
-- 既存softkeyはVMへのPC-88キー入力経路であり、RA Login文字列入力へ渡す変換層は未接続。
+- 2026-07-18の方針更新により、RA独自のASCIIオンスクリーンキーボードは
+  実装対象外となった。AndroidはOS software keyboardを使い、実機で支障が
+  確認された場合だけAndroid APIのLogin専用native画面を実装する。
 - RetroAchievementsメニューとLogin画面の視覚確認とスクリーンショット比較。
 - Library画面とゲーム詳細画面。
 - 実績一覧のスクロール、フィルタ、詳細表示。

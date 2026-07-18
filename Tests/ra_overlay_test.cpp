@@ -157,6 +157,15 @@ int main()
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down) ==
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.AchievementDetailSnapshot().scroll_offset == 1);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::PageDown) ==
+		Xm8Ra::RaOverlayAction::None);
+	const size_t page_down_offset =
+		overlay.AchievementDetailSnapshot().scroll_offset;
+	assert(page_down_offset > 1);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::PageUp) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.AchievementDetailSnapshot().scroll_offset <
+		page_down_offset);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Achievements);
@@ -232,9 +241,18 @@ int main()
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down) ==
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.LibraryListSnapshot().selected_index == 1);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::PageDown) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LibraryListSnapshot().selected_index == 8);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::PageUp) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.LibraryListSnapshot().selected_index == 1);
 	assert(overlay.OnListScroll(7) == Xm8Ra::RaOverlayAction::None);
 	assert(overlay.LibraryListSnapshot().selected_index == 8);
 	assert(overlay.LibraryListSnapshot().first_visible_index == 2);
+	size_t list_target = 0;
+	assert(overlay.ListTargetAt(90, 86, &list_target));
+	assert(list_target == 2);
 	assert(overlay.OnListPointer(90, 86, false) ==
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.LibraryListSnapshot().selected_index == 2);
@@ -258,6 +276,9 @@ int main()
 		Xm8Ra::RaOverlayAction::OpenLibraryGame);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Left) ==
 		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Right) ==
 		Xm8Ra::RaOverlayAction::None);
@@ -266,6 +287,9 @@ int main()
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::GameDetail);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
+		Xm8Ra::RaOverlayAction::None);
+	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
+	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Backspace) ==
 		Xm8Ra::RaOverlayAction::None);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
 	assert(overlay.OnControlKey(Xm8Ra::RaOverlayKey::Escape) ==
@@ -449,6 +473,12 @@ int main()
 	overlay.SetLoginStatus("retry");
 
 	overlay.OpenLogin();
+	overlay.OnControlKey(Xm8Ra::RaOverlayKey::PageDown);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Password);
+	overlay.OnControlKey(Xm8Ra::RaOverlayKey::PageUp);
+	assert(overlay.LoginSnapshot().focus ==
+		Xm8Ra::RaOverlayLoginTarget::Username);
 	overlay.OnControlKey(Xm8Ra::RaOverlayKey::Down);
 	assert(overlay.LoginSnapshot().focus ==
 		Xm8Ra::RaOverlayLoginTarget::Password);

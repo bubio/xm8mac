@@ -46,6 +46,8 @@ enum class RaOverlayKey {
 	Down,
 	Left,
 	Right,
+	PageUp,
+	PageDown,
 };
 
 enum class RaOverlayAction {
@@ -226,6 +228,7 @@ public:
 	RaOverlayAction OnControlKey(RaOverlayKey key);
 	RaOverlayAction OnAchievementPointer(int x, int y, bool activate);
 	RaOverlayAction OnListPointer(int x, int y, bool activate);
+	bool ListTargetAt(int x, int y, size_t *index) const;
 	RaOverlayAction OnListScroll(int delta);
 	RaOverlayAction OnLoginTarget(RaOverlayLoginTarget target, bool activate);
 	bool LoginTargetAt(int x, int y, RaOverlayLoginTarget *target) const;
@@ -243,7 +246,6 @@ private:
 	void OpenAchievementDetail();
 	void CloseAchievementDetail();
 	void MoveAchievementDetailScroll(int delta);
-	bool ListIndexAt(int x, int y, size_t *index) const;
 	void NormalizeListSelection();
 	size_t ListItemCount() const;
 	void MoveLoginFocus(int delta);

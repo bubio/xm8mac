@@ -363,8 +363,6 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 	if (screen_ == RaOverlayScreen::GameDetail) {
 		switch (key) {
 		case RaOverlayKey::Escape:
-		case RaOverlayKey::Backspace:
-		case RaOverlayKey::Left:
 			screen_ = RaOverlayScreen::Library;
 			break;
 		case RaOverlayKey::Enter:
@@ -377,8 +375,12 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 			break;
 		case RaOverlayKey::Up:
 		case RaOverlayKey::Down:
+		case RaOverlayKey::Left:
 		case RaOverlayKey::Right:
 		case RaOverlayKey::Tab:
+		case RaOverlayKey::Backspace:
+		case RaOverlayKey::PageUp:
+		case RaOverlayKey::PageDown:
 			break;
 		}
 		return RaOverlayAction::None;
@@ -387,8 +389,9 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 	if (screen_ == RaOverlayScreen::AchievementDetail) {
 		switch (key) {
 		case RaOverlayKey::Escape:
-		case RaOverlayKey::Backspace:
 			CloseAchievementDetail();
+			break;
+		case RaOverlayKey::Backspace:
 			break;
 		case RaOverlayKey::Up:
 		case RaOverlayKey::Left:
@@ -398,6 +401,12 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 		case RaOverlayKey::Right:
 		case RaOverlayKey::Tab:
 			MoveAchievementDetailScroll(1);
+			break;
+		case RaOverlayKey::PageUp:
+			MoveAchievementDetailScroll(-static_cast<int>(kMenuListVisibleRows));
+			break;
+		case RaOverlayKey::PageDown:
+			MoveAchievementDetailScroll(static_cast<int>(kMenuListVisibleRows));
 			break;
 		case RaOverlayKey::Enter:
 			break;
@@ -438,6 +447,12 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 			break;
 		case RaOverlayKey::Backspace:
 			break;
+		case RaOverlayKey::PageUp:
+			MoveListSelection(-static_cast<int>(kMenuListVisibleRows));
+			break;
+		case RaOverlayKey::PageDown:
+			MoveListSelection(static_cast<int>(kMenuListVisibleRows));
+			break;
 		}
 		return RaOverlayAction::None;
 	}
@@ -469,6 +484,12 @@ RaOverlayAction RaOverlay::OnControlKey(RaOverlayKey key)
 	case RaOverlayKey::Escape:
 		CloseScreen();
 		return RaOverlayAction::Close;
+	case RaOverlayKey::PageUp:
+		MoveLoginFocus(-1);
+		break;
+	case RaOverlayKey::PageDown:
+		MoveLoginFocus(1);
+		break;
 	}
 	return RaOverlayAction::None;
 }
@@ -488,7 +509,7 @@ RaOverlayAction RaOverlay::OnListPointer(int x, int y, bool activate)
 	}
 
 	size_t index = 0;
-	if (ListIndexAt(x, y, &index)) {
+	if (ListTargetAt(x, y, &index)) {
 		if (screen_ == RaOverlayScreen::Library) {
 			library_.selected_index = index;
 			if (activate) {
@@ -699,8 +720,13 @@ void RaOverlay::MoveAchievementDetailScroll(int delta)
 	}
 }
 
-bool RaOverlay::ListIndexAt(int x, int y, size_t *index) const
+bool RaOverlay::ListTargetAt(int x, int y, size_t *index) const
 {
+	if (screen_ != RaOverlayScreen::Library &&
+		screen_ != RaOverlayScreen::Achievements &&
+		screen_ != RaOverlayScreen::Leaderboards) {
+		return false;
+	}
 	const size_t count = ListItemCount();
 	const size_t first_visible = screen_ == RaOverlayScreen::Library ?
 		library_.first_visible_index : (screen_ == RaOverlayScreen::Achievements ?

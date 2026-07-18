@@ -258,8 +258,12 @@ Phase 4は完了扱いとする。
 Phase 5へ送るもの:
 
 1. SDLオーバーレイlogin UIからpassword loginを開始する。
-2. ASCIIオンスクリーンキーボードと`SDL_TEXTINPUT`を接続する。
+2. Login文字入力と`SDL_TEXTINPUT`を接続する。
 3. 実績一覧、実績詳細、Leaderboard一覧、Rich Presence表示を実装する。
 4. `RaImageCache`とバッジ/アバター表示を接続する。
 5. Challenge Indicator、進捗indicator、通知優先順位を本格実装する。
 6. 実RAアカウントを使ったmacOS HTTPS手動疎通試験を実施する。
+
+> 2026-07-18追記: PCは物理キーボード、AndroidはOS software keyboardを使う。
+> RA独自キー配列は実装せず、Android実機で支障がある場合だけLogin専用
+> native画面を検討する。

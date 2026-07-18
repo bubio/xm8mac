@@ -375,8 +375,14 @@ App::App()
 	ra_overlay_joystick_prev = 0;
 	ra_overlay_mouse_target_valid = false;
 	ra_overlay_mouse_target = Xm8Ra::RaOverlayLoginTarget::Username;
+	ra_overlay_mouse_detail_target = 0;
+	ra_overlay_mouse_list_target_valid = false;
+	ra_overlay_mouse_list_target = 0;
 	ra_overlay_finger_target_valid = false;
 	ra_overlay_finger_target = Xm8Ra::RaOverlayLoginTarget::Username;
+	ra_overlay_finger_detail_target = 0;
+	ra_overlay_finger_list_target_valid = false;
+	ra_overlay_finger_list_target = 0;
 	ra_overlay_finger_scroll_valid = false;
 	ra_overlay_finger_scrolled = false;
 	ra_overlay_finger_scroll_y = 0;
@@ -2002,6 +2008,12 @@ bool App::HandleRaOverlayKeyDown(SDL_Event *e)
 	case SDL_SCANCODE_RIGHT:
 		key = Xm8Ra::RaOverlayKey::Right;
 		break;
+	case SDL_SCANCODE_PAGEUP:
+		key = Xm8Ra::RaOverlayKey::PageUp;
+		break;
+	case SDL_SCANCODE_PAGEDOWN:
+		key = Xm8Ra::RaOverlayKey::PageDown;
+		break;
 	default:
 		return true;
 	}
@@ -2100,7 +2112,11 @@ void App::UpdateRaOverlayTextInput()
 void App::ClearRaOverlayPointerState()
 {
 	ra_overlay_mouse_target_valid = false;
+	ra_overlay_mouse_detail_target = 0;
+	ra_overlay_mouse_list_target_valid = false;
 	ra_overlay_finger_target_valid = false;
+	ra_overlay_finger_detail_target = 0;
+	ra_overlay_finger_list_target_valid = false;
 	ra_overlay_finger_scroll_valid = false;
 	ra_overlay_finger_scrolled = false;
 	ra_overlay_finger_scroll_y = 0;
@@ -2174,6 +2190,8 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	if (!video->ConvertPoint(&x, &y)) {
 		if (e->type == SDL_MOUSEBUTTONUP) {
 			ra_overlay_mouse_target_valid = false;
+			ra_overlay_mouse_detail_target = 0;
+			ra_overlay_mouse_list_target_valid = false;
 		}
 		return true;
 	}
@@ -2181,11 +2199,30 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
-		return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
-			e->type == SDL_MOUSEBUTTONUP));
+		size_t target = 0;
+		const bool target_valid = ra_overlay->ListTargetAt(x, y, &target);
+		if (e->type == SDL_MOUSEBUTTONDOWN) {
+			ra_overlay_mouse_list_target_valid = target_valid;
+			ra_overlay_mouse_list_target = target;
+			return HandleRaOverlayAction(
+				ra_overlay->OnListPointer(x, y, false));
+		}
+		const bool activate = target_valid &&
+			ra_overlay_mouse_list_target_valid &&
+			ra_overlay_mouse_list_target == target;
+		ra_overlay_mouse_list_target_valid = false;
+		return HandleRaOverlayAction(
+			ra_overlay->OnListPointer(x, y, activate));
 	}
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
-		if (e->type == SDL_MOUSEBUTTONUP &&
+		if (e->type == SDL_MOUSEBUTTONDOWN) {
+			ra_overlay_mouse_detail_target =
+				PointInRect(x, y, RaGameDetailStartButtonRect()) ? 2 : 0;
+			return true;
+		}
+		const int pressed_target = ra_overlay_mouse_detail_target;
+		ra_overlay_mouse_detail_target = 0;
+		if (pressed_target == 2 &&
 			PointInRect(x, y, RaGameDetailStartButtonRect()) &&
 			(ra_overlay->CanLaunchSelectedLibraryGame() ||
 				ra_overlay->CanResolveSelectedLibraryConflict())) {
@@ -2198,6 +2235,7 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	}
 	if (ra_overlay->Screen() ==
 		Xm8Ra::RaOverlayScreen::AchievementDetail) {
+		ra_overlay_mouse_detail_target = 0;
 		return true;
 	}
 
@@ -2244,6 +2282,8 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 	if (!video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y)) {
 		if (e->type == SDL_FINGERUP) {
 			ra_overlay_finger_target_valid = false;
+			ra_overlay_finger_detail_target = 0;
+			ra_overlay_finger_list_target_valid = false;
 			ra_overlay_finger_scroll_valid = false;
 			ra_overlay_finger_scrolled = false;
 		}
@@ -2260,6 +2300,13 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 			ra_overlay_finger_scroll_valid = true;
 			ra_overlay_finger_scrolled = false;
 			ra_overlay_finger_scroll_y = y;
+			ra_overlay_finger_detail_target =
+				(ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail &&
+				 PointInRect(x, y, RaGameDetailStartButtonRect())) ? 2 : 0;
+			size_t list_target = 0;
+			ra_overlay_finger_list_target_valid =
+				ra_overlay->ListTargetAt(x, y, &list_target);
+			ra_overlay_finger_list_target = list_target;
 			return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
 				false));
 		}
@@ -2279,10 +2326,12 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 			return true;
 		}
 		const bool activate = !ra_overlay_finger_scrolled;
+		const int pressed_target = ra_overlay_finger_detail_target;
+		ra_overlay_finger_detail_target = 0;
 		ra_overlay_finger_scroll_valid = false;
 		ra_overlay_finger_scrolled = false;
 		if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::GameDetail) {
-			if (activate && PointInRect(x, y,
+			if (activate && pressed_target == 2 && PointInRect(x, y,
 				RaGameDetailStartButtonRect()) &&
 				(ra_overlay->CanLaunchSelectedLibraryGame() ||
 					ra_overlay->CanResolveSelectedLibraryConflict())) {
@@ -2295,10 +2344,17 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 		}
 		if (ra_overlay->Screen() ==
 			Xm8Ra::RaOverlayScreen::AchievementDetail) {
+			ra_overlay_finger_list_target_valid = false;
 			return true;
 		}
+		size_t list_target = 0;
+		const bool same_list_target = activate &&
+			ra_overlay_finger_list_target_valid &&
+			ra_overlay->ListTargetAt(x, y, &list_target) &&
+			ra_overlay_finger_list_target == list_target;
+		ra_overlay_finger_list_target_valid = false;
 		return HandleRaOverlayAction(ra_overlay->OnListPointer(x, y,
-			activate));
+			same_list_target));
 	}
 
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
@@ -2356,6 +2412,12 @@ bool App::HandleRaOverlayJoystick()
 	}
 	else if ((pressed & 0x0010) != 0) {
 		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Enter);
+	}
+	else if ((pressed & 0x2000) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::PageUp);
+	}
+	else if ((pressed & 0x4000) != 0) {
+		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::PageDown);
 	}
 	else if ((pressed & 0x0020) != 0 || (pressed & 0x0100) != 0) {
 		action = ra_overlay->OnControlKey(Xm8Ra::RaOverlayKey::Escape);
