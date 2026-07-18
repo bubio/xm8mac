@@ -73,6 +73,8 @@ ePC-8801MAの旧版
 | [23_Phase6通知Queue実施記録.md](23_Phase6通知Queue実施記録.md) | 優先度付きtoast、同時3件、待機・中断再開、設定寿命、queue上限 |
 | [24_Phase6画像cache実施記録.md](24_Phase6画像cache実施記録.md) | badge永続cache、デコード検証、LRU容量制御、破損自己修復、placeholder |
 | [25_Phase6入力導線実施記録.md](25_Phase6入力導線実施記録.md) | keyboard、mouse、controller、touch、page移動、pointer安全化、Android Login入力方針 |
+| [26_Phase6動的ステータス行表示計画.md](26_Phase6動的ステータス行表示計画.md) | 通知、Challenge、Progress、Leaderboard trackerの排他的なステータス行表示と検証計画 |
+| [27_Phase6動的ステータス行表示実施記録.md](27_Phase6動的ステータス行表示実施記録.md) | 全幅ステータス行、単一通知、3秒page切替、入力透過、自動検証、ASCEND手動受入 |
 
 ## 3. 確定事項
 

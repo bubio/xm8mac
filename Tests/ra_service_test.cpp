@@ -779,6 +779,40 @@ int main()
 		Check(service.TakeEvents().empty(),
 			"take events drains the event queue");
 
+		std::snprintf(achievement.measured_progress,
+			sizeof(achievement.measured_progress), "%s", "2/3");
+		event = {};
+		event.type = RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE;
+		event.achievement = &achievement;
+		service.QueueEventForTesting(&event);
+		std::snprintf(achievement.measured_progress,
+			sizeof(achievement.measured_progress), "%s", "mutated");
+		events = service.TakeEvents();
+		Check(events.size() == 1,
+			"progress indicator event is queued");
+		Check(events[0].type ==
+			Xm8Ra::RaEventType::AchievementProgressIndicatorUpdate,
+			"progress indicator event type is mapped");
+		Check(events[0].achievement.measured_progress == "2/3",
+			"progress indicator value is deep copied");
+
+		rc_client_leaderboard_tracker_t tracker = {};
+		tracker.id = 77;
+		std::snprintf(tracker.display, sizeof(tracker.display), "%s", "01:23");
+		event = {};
+		event.type = RC_CLIENT_EVENT_LEADERBOARD_TRACKER_SHOW;
+		event.leaderboard_tracker = &tracker;
+		service.QueueEventForTesting(&event);
+		std::snprintf(tracker.display, sizeof(tracker.display), "%s", "mutated");
+		events = service.TakeEvents();
+		Check(events.size() == 1,
+			"leaderboard tracker event is queued");
+		Check(events[0].type == Xm8Ra::RaEventType::LeaderboardTrackerShow,
+			"leaderboard tracker event type is mapped");
+		Check(events[0].leaderboard.id == 77 &&
+			events[0].leaderboard.display == "01:23",
+			"leaderboard tracker is deep copied");
+
 		event = {};
 		event.type = RC_CLIENT_EVENT_DISCONNECTED;
 		service.QueueEventForTesting(&event);

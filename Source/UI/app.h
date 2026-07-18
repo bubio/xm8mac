@@ -249,7 +249,8 @@ private:
 		Xm8Ra::RaImageKind image_kind);
 										// request RA badge image if needed
 	void DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
-		const std::string& url, Xm8Ra::RaImageKind image_kind);
+		const std::string& url, Xm8Ra::RaImageKind image_kind,
+		bool show_placeholder_text = true);
 										// draw RA badge image if cached
 	Xm8Ra::RaOverlayLibraryListSnapshot MakeRaLibraryOverlaySnapshot() const;
 										// build library overlay snapshot
@@ -266,7 +267,8 @@ private:
 	void EnsureRaLeaderboardEntriesForSelection();
 										// fetch selected leaderboard entries if needed
 	void AddRaNotice(const std::string& text,
-		Xm8Ra::RaNoticePriority priority = Xm8Ra::RaNoticePriority::Important);
+		Xm8Ra::RaNoticePriority priority = Xm8Ra::RaNoticePriority::Important,
+		const std::string& badge_url = std::string());
 										// add RA overlay notice
 	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);
 										// translate RA events to notices
@@ -278,6 +280,10 @@ private:
 										// handle RA overlay mouse input
 	bool HandleRaOverlayFinger(SDL_Event *e);
 										// handle RA overlay touch input
+	bool HandleRaStatusMouse(SDL_Event *e);
+										// handle RA status-line mouse input
+	bool HandleRaStatusFinger(SDL_Event *e);
+										// handle RA status-line touch input
 	bool HandleRaOverlayJoystick();
 										// handle RA overlay joystick input
 	bool HandleRaOverlayAction(Xm8Ra::RaOverlayAction action);
@@ -426,6 +432,18 @@ private:
 										// RA touch moved enough to scroll
 	int ra_overlay_finger_scroll_y;
 										// RA touch scroll anchor y
+	bool ra_status_mouse_pressed;
+										// RA status mouse press candidate
+	bool ra_status_mouse_dragged;
+										// RA status mouse moved outside row
+	bool ra_status_finger_pressed;
+										// RA status touch press candidate
+	bool ra_status_finger_dragged;
+										// RA status touch moved
+	Sint64 ra_status_finger_id;
+										// RA status active touch id
+	int ra_status_finger_start_x;
+	int ra_status_finger_start_y;
 	uint32_t ra_overlay_auto_scroll_revision;
 										// RA auto-scroll selected text revision
 	Uint32 ra_overlay_auto_scroll_started;

@@ -190,7 +190,8 @@ std::string RaEventNotice(const Xm8Ra::RaEvent& event)
 {
 	switch (event.type) {
 	case Xm8Ra::RaEventType::AchievementTriggered:
-		return "RA: unlocked " + event.achievement.title;
+		return "RA: unlocked " + event.achievement.title + " (" +
+			std::to_string(event.achievement.points) + " points)";
 	case Xm8Ra::RaEventType::LeaderboardStarted:
 		return "RA: leaderboard started " + event.leaderboard.title;
 	case Xm8Ra::RaEventType::LeaderboardFailed:
@@ -386,6 +387,13 @@ App::App()
 	ra_overlay_finger_scroll_valid = false;
 	ra_overlay_finger_scrolled = false;
 	ra_overlay_finger_scroll_y = 0;
+	ra_status_mouse_pressed = false;
+	ra_status_mouse_dragged = false;
+	ra_status_finger_pressed = false;
+	ra_status_finger_dragged = false;
+	ra_status_finger_id = -1;
+	ra_status_finger_start_x = 0;
+	ra_status_finger_start_y = 0;
 	ra_overlay_auto_scroll_revision = 0;
 	ra_overlay_auto_scroll_started = 0;
 	ra_menu_presence_scroll_active = false;
@@ -1114,6 +1122,9 @@ void App::EnterRaOfflineSession(const std::string& message)
 	ra_loaded_game_hash.clear();
 	ra_leaderboard_scoreboards.clear();
 	ClearRaMediaChangeState();
+	if (ra_overlay != NULL) {
+		ra_overlay->ClearGameplayStatus();
+	}
 	AddRaNotice(message.empty() ? "RA: offline" : "RA: offline - " + message);
 	RefreshRaAchievementsOverlay();
 	RefreshRaLeaderboardsOverlay();
@@ -1125,7 +1136,7 @@ void App::StopRaSession()
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::StopGame);
 	if (ra_overlay != NULL) {
-		ra_overlay->ClearNotices();
+		ra_overlay->ClearGameplayStatus();
 	}
 }
 
@@ -1851,7 +1862,8 @@ void App::RequestRaBadgeImage(const std::string& url,
 // draw RA badge image if cached
 //
 void App::DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
-	const std::string& url, Xm8Ra::RaImageKind image_kind)
+	const std::string& url, Xm8Ra::RaImageKind image_kind,
+	bool show_placeholder_text)
 {
 	if (buf == NULL || rect == NULL) {
 		return;
@@ -1860,8 +1872,14 @@ void App::DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
 		"Game" : image_kind == Xm8Ra::RaImageKind::AchievementBadgeLocked ?
 		"Locked" : "Badge";
 	if (url.empty()) {
-		font->DrawSjisCenterOr(buf, rect, placeholder,
-			RGB_COLOR(255, 255, 255));
+		if (show_placeholder_text) {
+			font->DrawSjisCenterOr(buf, rect, placeholder,
+				RGB_COLOR(255, 255, 255));
+		}
+		else {
+			font->DrawRect(buf, rect, RGB_COLOR(127, 127, 127),
+				RGB_COLOR(0, 0, 0));
+		}
 		return;
 	}
 
@@ -1874,8 +1892,14 @@ void App::DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
 		found->second.state != RaBadgeImage::Ready ||
 		found->second.width <= 0 || found->second.height <= 0 ||
 		found->second.pixels.empty()) {
-		font->DrawSjisCenterOr(buf, rect, placeholder,
-			RGB_COLOR(255, 255, 255));
+		if (show_placeholder_text) {
+			font->DrawSjisCenterOr(buf, rect, placeholder,
+				RGB_COLOR(255, 255, 255));
+		}
+		else {
+			font->DrawRect(buf, rect, RGB_COLOR(127, 127, 127),
+				RGB_COLOR(0, 0, 0));
+		}
 		return;
 	}
 
@@ -1919,13 +1943,13 @@ void App::DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
 // add RA overlay notice
 //
 void App::AddRaNotice(const std::string& text,
-	Xm8Ra::RaNoticePriority priority)
+	Xm8Ra::RaNoticePriority priority, const std::string& badge_url)
 {
 	if (ra_overlay == NULL) {
 		return;
 	}
 	ra_overlay->AddNotice(text, SDL_GetTicks(),
-		ra_notification_duration_ms, priority);
+		ra_notification_duration_ms, priority, badge_url);
 }
 
 //
@@ -1937,6 +1961,7 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 	bool leaderboards_changed = false;
 	bool session_state_changed = false;
 	for (const Xm8Ra::RaEvent& event : events) {
+		const uint32_t event_now = SDL_GetTicks();
 		if (event.type == Xm8Ra::RaEventType::Disconnected ||
 			event.type == Xm8Ra::RaEventType::Reconnected) {
 			const Xm8Ra::RaSessionState previous = ra_session_state;
@@ -1955,9 +1980,60 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 				event.scoreboard;
 			leaderboards_changed = true;
 		}
+		switch (event.type) {
+		case Xm8Ra::RaEventType::AchievementChallengeIndicatorShow:
+			ra_overlay->ShowChallenge(event.achievement.id,
+				event.achievement.title, event.achievement.badge_url,
+				event_now);
+			break;
+		case Xm8Ra::RaEventType::AchievementChallengeIndicatorHide:
+			ra_overlay->HideChallenge(event.achievement.id, event_now);
+			break;
+		case Xm8Ra::RaEventType::AchievementProgressIndicatorShow:
+		case Xm8Ra::RaEventType::AchievementProgressIndicatorUpdate: {
+			std::string progress = event.achievement.measured_progress;
+			if (progress.empty()) {
+				char percent[32];
+				std::snprintf(percent, sizeof(percent), "%.0f%%",
+					event.achievement.measured_percent);
+				progress = percent;
+			}
+			if (event.type ==
+				Xm8Ra::RaEventType::AchievementProgressIndicatorShow) {
+				ra_overlay->ShowProgress(event.achievement.id,
+					event.achievement.title, progress,
+					event.achievement.badge_url, event_now);
+			}
+			else {
+				ra_overlay->UpdateProgress(event.achievement.id,
+					event.achievement.title, progress,
+					event.achievement.badge_url, event_now);
+			}
+			break;
+		}
+		case Xm8Ra::RaEventType::AchievementProgressIndicatorHide:
+			ra_overlay->HideProgress(event_now);
+			break;
+		case Xm8Ra::RaEventType::LeaderboardTrackerShow:
+			ra_overlay->ShowLeaderboardTracker(event.leaderboard.id,
+				event.leaderboard.display, event_now);
+			break;
+		case Xm8Ra::RaEventType::LeaderboardTrackerUpdate:
+			ra_overlay->UpdateLeaderboardTracker(event.leaderboard.id,
+				event.leaderboard.display, event_now);
+			break;
+		case Xm8Ra::RaEventType::LeaderboardTrackerHide:
+			ra_overlay->HideLeaderboardTracker(event.leaderboard.id,
+				event_now);
+			break;
+		default:
+			break;
+		}
 		const std::string notice = RaEventNotice(event);
 		if (!notice.empty()) {
-			AddRaNotice(notice, RaEventNoticePriority(event));
+			AddRaNotice(notice, RaEventNoticePriority(event),
+				event.type == Xm8Ra::RaEventType::AchievementTriggered ?
+					event.achievement.badge_url : std::string());
 		}
 	}
 	if (leaderboards_changed) {
@@ -2120,6 +2196,13 @@ void App::ClearRaOverlayPointerState()
 	ra_overlay_finger_scroll_valid = false;
 	ra_overlay_finger_scrolled = false;
 	ra_overlay_finger_scroll_y = 0;
+	ra_status_mouse_pressed = false;
+	ra_status_mouse_dragged = false;
+	ra_status_finger_pressed = false;
+	ra_status_finger_dragged = false;
+	ra_status_finger_id = -1;
+	ra_status_finger_start_x = 0;
+	ra_status_finger_start_y = 0;
 }
 
 //
@@ -2136,13 +2219,140 @@ bool App::HandleRaOverlayTextInput(SDL_Event *e)
 }
 
 //
+// HandleRaStatusMouse()
+// cycle RA status pages without consuming game-area input
+//
+bool App::HandleRaStatusMouse(SDL_Event *e)
+{
+	if (!ra_mode_enabled || !setting->HasStatusLine()) {
+		ra_status_mouse_pressed = false;
+		ra_status_mouse_dragged = false;
+		return false;
+	}
+
+	if (e->type == SDL_MOUSEMOTION) {
+		if (!ra_status_mouse_pressed) {
+			return false;
+		}
+		int x = e->motion.x;
+		int y = e->motion.y;
+		if (!video->ConvertPoint(&x, &y) ||
+			!video->IsDedicatedStatusPoint(x, y)) {
+			ra_status_mouse_dragged = true;
+		}
+		return true;
+	}
+	if (e->type != SDL_MOUSEBUTTONDOWN && e->type != SDL_MOUSEBUTTONUP) {
+		return false;
+	}
+	if (e->button.which == SDL_TOUCH_MOUSEID ||
+		e->button.button != SDL_BUTTON_LEFT) {
+		return false;
+	}
+
+	int x = e->button.x;
+	int y = e->button.y;
+	const bool in_status = video->ConvertPoint(&x, &y) &&
+		video->IsDedicatedStatusPoint(x, y);
+	const uint32_t now = SDL_GetTicks();
+	const bool notice_visible = ra_overlay->HasVisibleNotice(now);
+	const bool status_visible = notice_visible ||
+		ra_overlay->StatusPageCount() != 0;
+	const bool can_cycle = !notice_visible &&
+		ra_overlay->StatusPageCount() > 1;
+
+	if (e->type == SDL_MOUSEBUTTONDOWN) {
+		ra_status_mouse_pressed = in_status && status_visible;
+		ra_status_mouse_dragged = !can_cycle;
+		return in_status && status_visible;
+	}
+
+	const bool activate = ra_status_mouse_pressed &&
+		!ra_status_mouse_dragged && in_status && can_cycle;
+	const bool consume = ra_status_mouse_pressed ||
+		(in_status && status_visible);
+	ra_status_mouse_pressed = false;
+	ra_status_mouse_dragged = false;
+	if (activate && ra_overlay->NextStatusPage(now)) {
+		video->DrawCtrl();
+	}
+	return consume;
+}
+
+//
+// HandleRaStatusFinger()
+// cycle RA status pages only in the dedicated status area
+//
+bool App::HandleRaStatusFinger(SDL_Event *e)
+{
+	if (!ra_mode_enabled || !setting->HasStatusLine()) {
+		ra_status_finger_pressed = false;
+		ra_status_finger_dragged = false;
+		ra_status_finger_id = -1;
+		return false;
+	}
+	if (e->type != SDL_FINGERDOWN && e->type != SDL_FINGERUP &&
+		e->type != SDL_FINGERMOTION) {
+		return false;
+	}
+
+	int x = 0;
+	int y = 0;
+	const bool converted = video->ConvertFinger(e->tfinger.x,
+		e->tfinger.y, &x, &y);
+	const bool in_status = converted && video->IsDedicatedStatusPoint(x, y);
+	const uint32_t now = SDL_GetTicks();
+	const bool notice_visible = ra_overlay->HasVisibleNotice(now);
+	const bool status_visible = notice_visible ||
+		ra_overlay->StatusPageCount() != 0;
+	const bool can_cycle = !notice_visible &&
+		ra_overlay->StatusPageCount() > 1;
+
+	if (e->type == SDL_FINGERDOWN) {
+		ra_status_finger_pressed = in_status && status_visible;
+		ra_status_finger_dragged = !can_cycle;
+		ra_status_finger_id = ra_status_finger_pressed ?
+			e->tfinger.fingerId : -1;
+		ra_status_finger_start_x = x;
+		ra_status_finger_start_y = y;
+		return in_status && status_visible;
+	}
+
+	if (!ra_status_finger_pressed ||
+		ra_status_finger_id != e->tfinger.fingerId) {
+		return in_status && status_visible;
+	}
+	if (e->type == SDL_FINGERMOTION) {
+		const int dx = x - ra_status_finger_start_x;
+		const int dy = y - ra_status_finger_start_y;
+		if (!in_status || dx > 4 || dx < -4 || dy > 4 || dy < -4) {
+			ra_status_finger_dragged = true;
+		}
+		return true;
+	}
+
+	const bool activate = !ra_status_finger_dragged && in_status &&
+		can_cycle;
+	ra_status_finger_pressed = false;
+	ra_status_finger_dragged = false;
+	ra_status_finger_id = -1;
+	if (activate && ra_overlay->NextStatusPage(now)) {
+		video->DrawCtrl();
+	}
+	return true;
+}
+
+//
 // HandleRaOverlayMouse()
 // handle RA overlay mouse input
 //
 bool App::HandleRaOverlayMouse(SDL_Event *e)
 {
-	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
+	if (ra_overlay == NULL) {
 		return false;
+	}
+	if (!ra_overlay->IsBlocking()) {
+		return HandleRaStatusMouse(e);
 	}
 	if (e->type == SDL_MOUSEMOTION) {
 		if (e->motion.which == SDL_TOUCH_MOUSEID) {
@@ -2269,8 +2479,11 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 //
 bool App::HandleRaOverlayFinger(SDL_Event *e)
 {
-	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
+	if (ra_overlay == NULL) {
 		return false;
+	}
+	if (!ra_overlay->IsBlocking()) {
+		return HandleRaStatusFinger(e);
 	}
 	if (e->type != SDL_FINGERDOWN && e->type != SDL_FINGERUP &&
 		e->type != SDL_FINGERMOTION) {
@@ -2500,6 +2713,9 @@ bool PointInRect(int x, int y, const SDL_Rect& rect);
 void App::DrawRaOverlay()
 {
 	if (!ra_mode_enabled || ra_overlay == NULL) {
+		if (video != NULL) {
+			video->SetRaStatusActive(false);
+		}
 		return;
 	}
 	ProcessRaImages();
@@ -3192,26 +3408,82 @@ void App::DrawRaOverlay()
 	}
 
 	const Uint32 notice_now = SDL_GetTicks();
-	ra_overlay->SetNoticesPaused(ra_overlay->IsBlocking(), notice_now);
+	const bool blocking = ra_overlay->IsBlocking();
+	ra_overlay->SetNoticesPaused(blocking, notice_now);
 	const std::vector<Xm8Ra::RaVisibleNotice> notices =
 		ra_overlay->VisibleNotices(notice_now);
-	if (notices.empty()) {
+	const bool notice_visible = !notices.empty();
+	ra_overlay->SetStatusPagesPaused(blocking || notice_visible, notice_now);
+	if (blocking) {
+		video->SetRaStatusActive(false);
 		return;
 	}
 
-	Uint32 *buf = video->GetFrameBuf(0);
-	for (size_t index = 0; index < notices.size(); ++index) {
-		char text[72];
-		std::snprintf(text, sizeof(text), "%s", notices[index].text.c_str());
-		SDL_Rect rect = {208,
-			SCREEN_HEIGHT - 32 - static_cast<int>(index) * 28, 424, 24};
-		font->DrawFillRect(buf, &rect, RGB_COLOR(0, 0, 0) | 0xc0000000);
-		font->DrawRect(buf, &rect, RGB_COLOR(255, 255, 255) | 0xc0000000,
-			RGB_COLOR(0, 0, 0) | 0xc0000000);
-		rect.x += 8;
-		rect.w -= 16;
-		font->DrawSjisLeftOr(buf, &rect, text, RGB_COLOR(255, 255, 255));
+	Xm8Ra::RaStatusPageSnapshot page;
+	if (!notice_visible) {
+		page = ra_overlay->VisibleStatusPage(notice_now);
 	}
+	const bool page_visible = page.type != Xm8Ra::RaStatusPageType::None;
+	if (!notice_visible && !page_visible) {
+		video->SetRaStatusActive(false);
+		return;
+	}
+
+	video->SetRaStatusActive(true);
+	Uint32 *buf = video->GetStatusFrame();
+	const int status_height = video->GetStatusFrameHeight();
+	const int content_top = video->GetStatusContentTop();
+	const Uint32 alpha = setting->HasStatusLine() ? 0xff000000 :
+		static_cast<Uint32>(setting->GetStatusAlpha()) << 24;
+	SDL_Rect background = {0, 0, SCREEN_WIDTH, status_height};
+	font->DrawFillRect(buf, &background, RGB_COLOR(0, 0, 0) | alpha);
+
+	std::string text;
+	std::string badge_url;
+	if (notice_visible) {
+		text = notices.front().text;
+		badge_url = notices.front().badge_url;
+	}
+	else {
+		std::ostringstream stream;
+		stream << "RA " << (page.index + 1) << "/" << page.total << " ";
+		switch (page.type) {
+		case Xm8Ra::RaStatusPageType::Challenge:
+			stream << "Challenge: " << page.title;
+			break;
+		case Xm8Ra::RaStatusPageType::Progress:
+			stream << "Progress: " << page.title;
+			if (!page.value.empty()) {
+				stream << " " << page.value;
+			}
+			break;
+		case Xm8Ra::RaStatusPageType::LeaderboardTracker:
+			stream << "Leaderboard: " << page.value;
+			break;
+		default:
+			break;
+		}
+		text = stream.str();
+		badge_url = page.badge_url;
+	}
+
+	int text_x = 4;
+	const bool reserve_badge = !badge_url.empty() ||
+		(!notice_visible &&
+			(page.type == Xm8Ra::RaStatusPageType::Challenge ||
+			 page.type == Xm8Ra::RaStatusPageType::Progress));
+	if (reserve_badge) {
+		SDL_Rect badge = {2, content_top, 16, 16};
+		DrawRaBadgeImage(buf, &badge, badge_url,
+			Xm8Ra::RaImageKind::AchievementBadge, false);
+		font->DrawRect(buf, &badge, RGB_COLOR(191, 191, 191) | alpha,
+			RGB_COLOR(0, 0, 0) | alpha);
+		text_x = 22;
+	}
+	const std::string display_text = ToSjisMenuText(converter, text);
+	SDL_Rect text_rect = {text_x, content_top, SCREEN_WIDTH - text_x - 4, 16};
+	font->DrawSjisLeftOr(buf, &text_rect, display_text.c_str(),
+		RGB_COLOR(255, 255, 255) | alpha);
 	video->DrawCtrl();
 }
 #endif

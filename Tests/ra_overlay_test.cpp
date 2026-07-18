@@ -27,24 +27,18 @@ int main()
 	overlay.AddNotice("queued-low", 300, 100,
 		Xm8Ra::RaNoticePriority::Low);
 	auto notices = overlay.VisibleNotices(300);
-	assert(notices.size() == 3);
+	assert(notices.size() == 1);
 	assert(notices[0].text == "normal-1");
-	assert(notices[1].text == "normal-2");
-	assert(notices[2].text == "low");
 	assert(overlay.NoticeQueueSize() == 4);
 
 	overlay.AddNotice("critical", 320, 20,
 		Xm8Ra::RaNoticePriority::Critical);
 	notices = overlay.VisibleNotices(320);
-	assert(notices.size() == 3);
+	assert(notices.size() == 1);
 	assert(notices[0].text == "critical");
-	assert(notices[1].text == "normal-1");
-	assert(notices[2].text == "normal-2");
 	notices = overlay.VisibleNotices(340);
-	assert(notices.size() == 3);
+	assert(notices.size() == 1);
 	assert(notices[0].text == "normal-1");
-	assert(notices[1].text == "normal-2");
-	assert(notices[2].text == "low");
 
 	overlay.SetNoticesPaused(true, 350);
 	assert(overlay.VisibleNotices(1000).empty());
@@ -52,11 +46,11 @@ int main()
 		Xm8Ra::RaNoticePriority::Important);
 	overlay.SetNoticesPaused(false, 2000);
 	notices = overlay.VisibleNotices(2000);
-	assert(notices.size() == 3);
+	assert(notices.size() == 1);
 	assert(notices[0].text == "paused-important");
 	assert(overlay.HasVisibleNotice(2049));
 	notices = overlay.VisibleNotices(2050);
-	assert(notices.size() <= 3);
+	assert(notices.size() <= 1);
 
 	overlay.Clear();
 	overlay.AddNotice("wrap", 0xfffffff0U, 32,
@@ -69,6 +63,104 @@ int main()
 			Xm8Ra::RaNoticePriority::Low);
 	}
 	assert(overlay.NoticeQueueSize() == 64);
+
+	overlay.ClearGameplayStatus();
+	assert(overlay.StatusPageCount() == 0);
+	overlay.ShowChallenge(10, "Challenge One", "challenge-1.png", 1000);
+	auto page = overlay.VisibleStatusPage(1000);
+	assert(page.type == Xm8Ra::RaStatusPageType::Challenge);
+	assert(page.id == 10);
+	assert(page.index == 0 && page.total == 1);
+	assert(page.title == "Challenge One");
+	assert(page.badge_url == "challenge-1.png");
+
+	overlay.ShowChallenge(20, "Challenge Two", "challenge-2.png", 1100);
+	page = overlay.VisibleStatusPage(1100);
+	assert(page.id == 20);
+	assert(page.index == 1 && page.total == 2);
+	page = overlay.VisibleStatusPage(4100);
+	assert(page.id == 10);
+	assert(overlay.NextStatusPage(4200));
+	assert(overlay.VisibleStatusPage(4200).id == 20);
+
+	overlay.ShowProgress(30, "Measured", "3/10", "progress.png", 4300);
+	page = overlay.VisibleStatusPage(4300);
+	assert(page.type == Xm8Ra::RaStatusPageType::Progress);
+	assert(page.id == 30);
+	assert(page.index == 2 && page.total == 3);
+	assert(page.value == "3/10");
+	overlay.UpdateProgress(31, "Other Measured", "40%", "other.png", 4400);
+	page = overlay.VisibleStatusPage(4400);
+	assert(page.type == Xm8Ra::RaStatusPageType::Progress);
+	assert(page.id == 31);
+	assert(page.title == "Other Measured");
+	assert(page.value == "40%");
+	overlay.HideProgress(4500);
+	page = overlay.VisibleStatusPage(4500);
+	assert(page.type == Xm8Ra::RaStatusPageType::Challenge);
+	assert(page.id == 10);
+
+	overlay.ShowLeaderboardTracker(70, "00:10.00", 4600);
+	page = overlay.VisibleStatusPage(4600);
+	assert(page.type == Xm8Ra::RaStatusPageType::LeaderboardTracker);
+	assert(page.id == 70);
+	assert(page.value == "00:10.00");
+	overlay.ShowLeaderboardTracker(80, "1000", 4700);
+	assert(overlay.VisibleStatusPage(4700).id == 80);
+	overlay.UpdateLeaderboardTracker(80, "1010", 4800);
+	page = overlay.VisibleStatusPage(4800);
+	assert(page.id == 80 && page.value == "1010");
+	assert(overlay.NextStatusPage(4900));
+	assert(overlay.VisibleStatusPage(4900).id == 10);
+	overlay.HideChallenge(10, 5000);
+	page = overlay.VisibleStatusPage(5000);
+	assert(page.id == 20);
+
+	overlay.SetStatusPagesPaused(true, 5100);
+	page = overlay.VisibleStatusPage(9000);
+	assert(page.id == 20);
+	assert(!overlay.NextStatusPage(9000));
+	overlay.SetStatusPagesPaused(false, 10000);
+	assert(overlay.VisibleStatusPage(12899).id == 20);
+	assert(overlay.VisibleStatusPage(12900).id == 70);
+
+	// Updating a page changes its contents without restarting rotation.
+	overlay.ClearStatusPages();
+	overlay.ShowChallenge(90, "Timed", std::string(), 20000);
+	overlay.ShowLeaderboardTracker(91, "1", 20000);
+	overlay.UpdateLeaderboardTracker(91, "2", 22999);
+	page = overlay.VisibleStatusPage(22999);
+	assert(page.id == 91 && page.value == "2");
+	assert(overlay.VisibleStatusPage(23000).id == 90);
+
+	// A hidden Progress page is removed even while rotation is paused by UI.
+	overlay.ShowProgress(92, "Temporary", "9/10", std::string(), 24000);
+	overlay.SetStatusPagesPaused(true, 24100);
+	overlay.HideProgress(25000);
+	assert(overlay.StatusPageCount() == 2);
+	overlay.SetStatusPagesPaused(false, 26000);
+	page = overlay.VisibleStatusPage(26000);
+	assert(page.type != Xm8Ra::RaStatusPageType::Progress);
+
+	// Rotation uses 32-bit SDL ticks safely across wraparound.
+	overlay.ClearStatusPages();
+	overlay.ShowChallenge(93, "Wrap", std::string(), 0xfffffff0U);
+	overlay.ShowLeaderboardTracker(94, "wrap", 0xfffffff0U);
+	assert(overlay.VisibleStatusPage(0xfffffff0U).id == 94);
+	assert(overlay.VisibleStatusPage(0x00000ba7U).id == 94);
+	assert(overlay.VisibleStatusPage(0x00000ba8U).id == 93);
+
+	overlay.ClearStatusPages();
+	assert(overlay.StatusPageCount() == 0);
+	assert(overlay.VisibleStatusPage(13001).type ==
+		Xm8Ra::RaStatusPageType::None);
+	overlay.AddNotice("badge notice", 14000, 100,
+		Xm8Ra::RaNoticePriority::Critical, "badge.png");
+	notices = overlay.VisibleNotices(14000);
+	assert(notices.size() == 1);
+	assert(notices[0].badge_url == "badge.png");
+	overlay.ClearGameplayStatus();
+	assert(overlay.NoticeQueueSize() == 0);
 
 	Xm8Ra::RaOverlaySnapshot snapshot;
 	snapshot.mode_enabled = true;
@@ -86,7 +178,7 @@ int main()
 	assert(overlay.Snapshot().game_title == "Sample");
 	assert(overlay.Snapshot().rich_presence == "Playing");
 	overlay.AddNotice("discard on stop", 100, 5000);
-	assert(overlay.NoticeQueueSize() == 64);
+	assert(overlay.NoticeQueueSize() == 1);
 	overlay.ClearNotices();
 	assert(overlay.NoticeQueueSize() == 0);
 	assert(overlay.Snapshot().mode_enabled);

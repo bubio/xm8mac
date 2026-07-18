@@ -75,6 +75,24 @@ enum class RaNoticePriority {
 struct RaVisibleNotice {
 	std::string text;
 	RaNoticePriority priority = RaNoticePriority::Low;
+	std::string badge_url;
+};
+
+enum class RaStatusPageType {
+	None,
+	Challenge,
+	Progress,
+	LeaderboardTracker,
+};
+
+struct RaStatusPageSnapshot {
+	RaStatusPageType type = RaStatusPageType::None;
+	uint32_t id = 0;
+	size_t index = 0;
+	size_t total = 0;
+	std::string title;
+	std::string value;
+	std::string badge_url;
 };
 
 struct RaOverlaySnapshot {
@@ -202,12 +220,35 @@ public:
 	void ClearNotices();
 	void AddNotice(const std::string& text, uint32_t now_ms,
 		uint32_t duration_ms = 5000,
-		RaNoticePriority priority = RaNoticePriority::Normal);
+		RaNoticePriority priority = RaNoticePriority::Normal,
+		const std::string& badge_url = std::string());
 	void SetNoticesPaused(bool paused, uint32_t now_ms);
 	bool HasVisibleNotice(uint32_t now_ms);
 	std::string VisibleNotice(uint32_t now_ms);
 	std::vector<RaVisibleNotice> VisibleNotices(uint32_t now_ms);
 	size_t NoticeQueueSize() const;
+
+	void ClearStatusPages();
+	void ClearGameplayStatus();
+	void ShowChallenge(uint32_t id, const std::string& title,
+		const std::string& badge_url, uint32_t now_ms);
+	void HideChallenge(uint32_t id, uint32_t now_ms);
+	void ShowProgress(uint32_t id, const std::string& title,
+		const std::string& value, const std::string& badge_url,
+		uint32_t now_ms);
+	void UpdateProgress(uint32_t id, const std::string& title,
+		const std::string& value, const std::string& badge_url,
+		uint32_t now_ms);
+	void HideProgress(uint32_t now_ms);
+	void ShowLeaderboardTracker(uint32_t id, const std::string& value,
+		uint32_t now_ms);
+	void UpdateLeaderboardTracker(uint32_t id, const std::string& value,
+		uint32_t now_ms);
+	void HideLeaderboardTracker(uint32_t id, uint32_t now_ms);
+	void SetStatusPagesPaused(bool paused, uint32_t now_ms);
+	RaStatusPageSnapshot VisibleStatusPage(uint32_t now_ms);
+	bool NextStatusPage(uint32_t now_ms);
+	size_t StatusPageCount() const;
 
 	void SetSnapshot(const RaOverlaySnapshot& snapshot);
 	const RaOverlaySnapshot& Snapshot() const;
@@ -259,6 +300,7 @@ private:
 
 	struct QueuedNotice {
 		std::string text;
+		std::string badge_url;
 		RaNoticePriority priority = RaNoticePriority::Low;
 		uint32_t remaining_ms = 0;
 		uint32_t expires_at_ms = 0;
@@ -266,9 +308,35 @@ private:
 		bool active = false;
 	};
 	void RebalanceNotices(uint32_t now_ms);
+	struct StatusPage {
+		RaStatusPageType type = RaStatusPageType::None;
+		uint32_t id = 0;
+		uint64_t sequence = 0;
+		std::string title;
+		std::string value;
+		std::string badge_url;
+	};
+	std::vector<StatusPage *> OrderedStatusPages();
+	std::vector<const StatusPage *> OrderedStatusPages() const;
+	void SelectStatusPage(RaStatusPageType type, uint32_t id,
+		uint32_t now_ms);
+	void NormalizeStatusSelection(uint32_t now_ms);
+	void AdvanceStatusPage(uint32_t now_ms);
+	StatusPage *FindStatusPage(RaStatusPageType type, uint32_t id);
+	const StatusPage *FindStatusPage(RaStatusPageType type, uint32_t id) const;
 	std::vector<QueuedNotice> notices_;
 	uint64_t next_notice_sequence_ = 1;
 	bool notices_paused_ = false;
+	std::vector<StatusPage> challenge_pages_;
+	StatusPage progress_page_;
+	bool progress_page_active_ = false;
+	std::vector<StatusPage> tracker_pages_;
+	uint64_t next_status_sequence_ = 1;
+	RaStatusPageType selected_status_type_ = RaStatusPageType::None;
+	uint32_t selected_status_id_ = 0;
+	uint32_t status_rotation_remaining_ms_ = 3000;
+	uint32_t status_rotation_expires_at_ms_ = 0;
+	bool status_pages_paused_ = false;
 	RaOverlaySnapshot snapshot_;
 	RaOverlayLibraryListSnapshot library_;
 	RaOverlayAchievementListSnapshot achievements_;

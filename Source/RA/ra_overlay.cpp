@@ -17,8 +17,9 @@ namespace {
 const size_t kMaxUsernameBytes = 256;
 const size_t kMaxPasswordBytes = 1024;
 const size_t kMenuListVisibleRows = 7;
-const size_t kMaxVisibleNotices = 3;
+const size_t kMaxVisibleNotices = 1;
 const size_t kMaxQueuedNotices = 64;
+const uint32_t kStatusRotationMs = 3000;
 const int kIdentificationIdentified = 1;
 
 const int kMenuListRowX = 80;
@@ -58,7 +59,7 @@ bool HitRect(int x, int y, int rx, int ry, int rw, int rh)
 
 void RaOverlay::Clear()
 {
-	ClearNotices();
+	ClearGameplayStatus();
 	snapshot_ = RaOverlaySnapshot();
 	CloseScreen();
 }
@@ -71,7 +72,8 @@ void RaOverlay::ClearNotices()
 }
 
 void RaOverlay::AddNotice(const std::string& text, uint32_t now_ms,
-	uint32_t duration_ms, RaNoticePriority priority)
+	uint32_t duration_ms, RaNoticePriority priority,
+	const std::string& badge_url)
 {
 	if (text.empty() || duration_ms == 0) {
 		return;
@@ -81,6 +83,7 @@ void RaOverlay::AddNotice(const std::string& text, uint32_t now_ms,
 	}
 	QueuedNotice notice;
 	notice.text = text;
+	notice.badge_url = badge_url;
 	notice.priority = priority;
 	notice.remaining_ms = duration_ms;
 	notice.sequence = next_notice_sequence_++;
@@ -143,7 +146,7 @@ std::vector<RaVisibleNotice> RaOverlay::VisibleNotices(uint32_t now_ms)
 	RebalanceNotices(now_ms);
 	for (const QueuedNotice& notice : notices_) {
 		if (notice.active) {
-			visible.push_back({notice.text, notice.priority});
+			visible.push_back({notice.text, notice.priority, notice.badge_url});
 		}
 	}
 	std::stable_sort(visible.begin(), visible.end(),
@@ -151,6 +154,359 @@ std::vector<RaVisibleNotice> RaOverlay::VisibleNotices(uint32_t now_ms)
 			return left.priority > right.priority;
 		});
 	return visible;
+}
+
+void RaOverlay::ClearStatusPages()
+{
+	challenge_pages_.clear();
+	progress_page_ = StatusPage();
+	progress_page_active_ = false;
+	tracker_pages_.clear();
+	next_status_sequence_ = 1;
+	selected_status_type_ = RaStatusPageType::None;
+	selected_status_id_ = 0;
+	status_rotation_remaining_ms_ = kStatusRotationMs;
+	status_rotation_expires_at_ms_ = 0;
+	status_pages_paused_ = false;
+}
+
+void RaOverlay::ClearGameplayStatus()
+{
+	ClearNotices();
+	ClearStatusPages();
+}
+
+RaOverlay::StatusPage *RaOverlay::FindStatusPage(RaStatusPageType type,
+	uint32_t id)
+{
+	if (type == RaStatusPageType::Progress) {
+		return progress_page_active_ ? &progress_page_ : nullptr;
+	}
+	if (type != RaStatusPageType::Challenge &&
+		type != RaStatusPageType::LeaderboardTracker) {
+		return nullptr;
+	}
+	std::vector<StatusPage>& pages =
+		type == RaStatusPageType::Challenge ? challenge_pages_ : tracker_pages_;
+	const auto found = std::find_if(pages.begin(), pages.end(),
+		[type, id](const StatusPage& page) {
+			return page.type == type && page.id == id;
+		});
+	return found != pages.end() ? &*found : nullptr;
+}
+
+const RaOverlay::StatusPage *RaOverlay::FindStatusPage(
+	RaStatusPageType type, uint32_t id) const
+{
+	return const_cast<RaOverlay *>(this)->FindStatusPage(type, id);
+}
+
+std::vector<RaOverlay::StatusPage *> RaOverlay::OrderedStatusPages()
+{
+	std::vector<StatusPage *> pages;
+	pages.reserve(challenge_pages_.size() + tracker_pages_.size() +
+		(progress_page_active_ ? 1 : 0));
+	std::vector<StatusPage *> challenges;
+	for (StatusPage& page : challenge_pages_) {
+		challenges.push_back(&page);
+	}
+	std::sort(challenges.begin(), challenges.end(),
+		[](const StatusPage *left, const StatusPage *right) {
+			return left->sequence < right->sequence;
+		});
+	pages.insert(pages.end(), challenges.begin(), challenges.end());
+	if (progress_page_active_) {
+		pages.push_back(&progress_page_);
+	}
+	std::vector<StatusPage *> trackers;
+	for (StatusPage& page : tracker_pages_) {
+		trackers.push_back(&page);
+	}
+	std::sort(trackers.begin(), trackers.end(),
+		[](const StatusPage *left, const StatusPage *right) {
+			return left->sequence < right->sequence;
+		});
+	pages.insert(pages.end(), trackers.begin(), trackers.end());
+	return pages;
+}
+
+std::vector<const RaOverlay::StatusPage *> RaOverlay::OrderedStatusPages() const
+{
+	const std::vector<StatusPage *> mutable_pages =
+		const_cast<RaOverlay *>(this)->OrderedStatusPages();
+	return std::vector<const StatusPage *>(mutable_pages.begin(),
+		mutable_pages.end());
+}
+
+void RaOverlay::SelectStatusPage(RaStatusPageType type, uint32_t id,
+	uint32_t now_ms)
+{
+	selected_status_type_ = type;
+	selected_status_id_ = id;
+	status_rotation_remaining_ms_ = kStatusRotationMs;
+	status_rotation_expires_at_ms_ = status_pages_paused_ ? 0 :
+		now_ms + kStatusRotationMs;
+}
+
+void RaOverlay::NormalizeStatusSelection(uint32_t now_ms)
+{
+	const std::vector<StatusPage *> pages = OrderedStatusPages();
+	if (pages.empty()) {
+		selected_status_type_ = RaStatusPageType::None;
+		selected_status_id_ = 0;
+		status_rotation_remaining_ms_ = kStatusRotationMs;
+		status_rotation_expires_at_ms_ = 0;
+		return;
+	}
+	if (FindStatusPage(selected_status_type_, selected_status_id_) == nullptr) {
+		SelectStatusPage(pages.front()->type, pages.front()->id, now_ms);
+	}
+}
+
+void RaOverlay::AdvanceStatusPage(uint32_t now_ms)
+{
+	const std::vector<StatusPage *> pages = OrderedStatusPages();
+	if (pages.empty()) {
+		NormalizeStatusSelection(now_ms);
+		return;
+	}
+	size_t current = 0;
+	for (size_t index = 0; index < pages.size(); ++index) {
+		if (pages[index]->type == selected_status_type_ &&
+			pages[index]->id == selected_status_id_) {
+			current = index;
+			break;
+		}
+	}
+	StatusPage *next = pages[(current + 1) % pages.size()];
+	SelectStatusPage(next->type, next->id, now_ms);
+}
+
+void RaOverlay::ShowChallenge(uint32_t id, const std::string& title,
+	const std::string& badge_url, uint32_t now_ms)
+{
+	StatusPage *page = FindStatusPage(RaStatusPageType::Challenge, id);
+	if (page == nullptr) {
+		StatusPage added;
+		added.type = RaStatusPageType::Challenge;
+		added.id = id;
+		added.sequence = next_status_sequence_++;
+		challenge_pages_.push_back(added);
+		page = &challenge_pages_.back();
+	}
+	page->title = title;
+	page->badge_url = badge_url;
+	SelectStatusPage(page->type, page->id, now_ms);
+}
+
+void RaOverlay::HideChallenge(uint32_t id, uint32_t now_ms)
+{
+	const std::vector<StatusPage *> before = OrderedStatusPages();
+	size_t selected_index = 0;
+	for (size_t index = 0; index < before.size(); ++index) {
+		if (before[index]->type == selected_status_type_ &&
+			before[index]->id == selected_status_id_) {
+			selected_index = index;
+			break;
+		}
+	}
+	const bool selected = selected_status_type_ == RaStatusPageType::Challenge &&
+		selected_status_id_ == id;
+	challenge_pages_.erase(std::remove_if(challenge_pages_.begin(),
+		challenge_pages_.end(), [id](const StatusPage& page) {
+			return page.id == id;
+		}), challenge_pages_.end());
+	if (selected) {
+		const std::vector<StatusPage *> after = OrderedStatusPages();
+		if (after.empty()) {
+			selected_status_type_ = RaStatusPageType::None;
+			NormalizeStatusSelection(now_ms);
+		}
+		else {
+			StatusPage *next = after[selected_index % after.size()];
+			SelectStatusPage(next->type, next->id, now_ms);
+		}
+	}
+}
+
+void RaOverlay::ShowProgress(uint32_t id, const std::string& title,
+	const std::string& value, const std::string& badge_url, uint32_t now_ms)
+{
+	progress_page_active_ = true;
+	progress_page_.type = RaStatusPageType::Progress;
+	progress_page_.id = id;
+	progress_page_.sequence = next_status_sequence_++;
+	progress_page_.title = title;
+	progress_page_.value = value;
+	progress_page_.badge_url = badge_url;
+	SelectStatusPage(RaStatusPageType::Progress, id, now_ms);
+}
+
+void RaOverlay::UpdateProgress(uint32_t id, const std::string& title,
+	const std::string& value, const std::string& badge_url, uint32_t now_ms)
+{
+	if (!progress_page_active_) {
+		ShowProgress(id, title, value, badge_url, now_ms);
+		return;
+	}
+	const bool selected = selected_status_type_ == RaStatusPageType::Progress;
+	progress_page_.id = id;
+	progress_page_.title = title;
+	progress_page_.value = value;
+	progress_page_.badge_url = badge_url;
+	if (selected) {
+		selected_status_id_ = id;
+	}
+}
+
+void RaOverlay::HideProgress(uint32_t now_ms)
+{
+	const std::vector<StatusPage *> before = OrderedStatusPages();
+	size_t selected_index = 0;
+	for (size_t index = 0; index < before.size(); ++index) {
+		if (before[index]->type == selected_status_type_ &&
+			before[index]->id == selected_status_id_) {
+			selected_index = index;
+			break;
+		}
+	}
+	const bool selected = selected_status_type_ == RaStatusPageType::Progress;
+	progress_page_ = StatusPage();
+	progress_page_active_ = false;
+	if (selected) {
+		const std::vector<StatusPage *> after = OrderedStatusPages();
+		if (after.empty()) {
+			selected_status_type_ = RaStatusPageType::None;
+			NormalizeStatusSelection(now_ms);
+		}
+		else {
+			StatusPage *next = after[selected_index % after.size()];
+			SelectStatusPage(next->type, next->id, now_ms);
+		}
+	}
+}
+
+void RaOverlay::ShowLeaderboardTracker(uint32_t id,
+	const std::string& value, uint32_t now_ms)
+{
+	StatusPage *page = FindStatusPage(RaStatusPageType::LeaderboardTracker, id);
+	if (page == nullptr) {
+		StatusPage added;
+		added.type = RaStatusPageType::LeaderboardTracker;
+		added.id = id;
+		added.sequence = next_status_sequence_++;
+		tracker_pages_.push_back(added);
+		page = &tracker_pages_.back();
+	}
+	page->value = value;
+	SelectStatusPage(page->type, page->id, now_ms);
+}
+
+void RaOverlay::UpdateLeaderboardTracker(uint32_t id,
+	const std::string& value, uint32_t now_ms)
+{
+	StatusPage *page = FindStatusPage(RaStatusPageType::LeaderboardTracker, id);
+	if (page == nullptr) {
+		ShowLeaderboardTracker(id, value, now_ms);
+		return;
+	}
+	page->value = value;
+}
+
+void RaOverlay::HideLeaderboardTracker(uint32_t id, uint32_t now_ms)
+{
+	const std::vector<StatusPage *> before = OrderedStatusPages();
+	size_t selected_index = 0;
+	for (size_t index = 0; index < before.size(); ++index) {
+		if (before[index]->type == selected_status_type_ &&
+			before[index]->id == selected_status_id_) {
+			selected_index = index;
+			break;
+		}
+	}
+	const bool selected =
+		selected_status_type_ == RaStatusPageType::LeaderboardTracker &&
+		selected_status_id_ == id;
+	tracker_pages_.erase(std::remove_if(tracker_pages_.begin(),
+		tracker_pages_.end(), [id](const StatusPage& page) {
+			return page.id == id;
+		}), tracker_pages_.end());
+	if (selected) {
+		const std::vector<StatusPage *> after = OrderedStatusPages();
+		if (after.empty()) {
+			selected_status_type_ = RaStatusPageType::None;
+			NormalizeStatusSelection(now_ms);
+		}
+		else {
+			StatusPage *next = after[selected_index % after.size()];
+			SelectStatusPage(next->type, next->id, now_ms);
+		}
+	}
+}
+
+void RaOverlay::SetStatusPagesPaused(bool paused, uint32_t now_ms)
+{
+	if (paused == status_pages_paused_) {
+		return;
+	}
+	if (paused) {
+		const int32_t remaining = static_cast<int32_t>(
+			status_rotation_expires_at_ms_ - now_ms);
+		status_rotation_remaining_ms_ = remaining > 0 ?
+			static_cast<uint32_t>(remaining) : kStatusRotationMs;
+		status_rotation_expires_at_ms_ = 0;
+		status_pages_paused_ = true;
+	}
+	else {
+		status_pages_paused_ = false;
+		status_rotation_expires_at_ms_ = now_ms +
+			status_rotation_remaining_ms_;
+	}
+}
+
+RaStatusPageSnapshot RaOverlay::VisibleStatusPage(uint32_t now_ms)
+{
+	NormalizeStatusSelection(now_ms);
+	std::vector<StatusPage *> pages = OrderedStatusPages();
+	if (pages.empty()) {
+		return RaStatusPageSnapshot();
+	}
+	if (!status_pages_paused_ && pages.size() > 1 &&
+		static_cast<int32_t>(now_ms - status_rotation_expires_at_ms_) >= 0) {
+		AdvanceStatusPage(now_ms);
+		pages = OrderedStatusPages();
+	}
+	for (size_t index = 0; index < pages.size(); ++index) {
+		const StatusPage *page = pages[index];
+		if (page->type == selected_status_type_ &&
+			page->id == selected_status_id_) {
+			RaStatusPageSnapshot snapshot;
+			snapshot.type = page->type;
+			snapshot.id = page->id;
+			snapshot.index = index;
+			snapshot.total = pages.size();
+			snapshot.title = page->title;
+			snapshot.value = page->value;
+			snapshot.badge_url = page->badge_url;
+			return snapshot;
+		}
+	}
+	return RaStatusPageSnapshot();
+}
+
+bool RaOverlay::NextStatusPage(uint32_t now_ms)
+{
+	if (status_pages_paused_ || OrderedStatusPages().size() < 2) {
+		return false;
+	}
+	AdvanceStatusPage(now_ms);
+	return true;
+}
+
+size_t RaOverlay::StatusPageCount() const
+{
+	return challenge_pages_.size() + tracker_pages_.size() +
+		(progress_page_active_ ? 1U : 0U);
 }
 
 size_t RaOverlay::NoticeQueueSize() const

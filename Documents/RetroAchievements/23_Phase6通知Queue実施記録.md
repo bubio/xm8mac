@@ -18,6 +18,11 @@
 
 toastは画面右下から上方向へ最大3件を配置し、既存ステータス行の上に収める。
 
+この配置と同時表示数は当時の実装記録であり、後続の確定仕様では
+[26_Phase6動的ステータス行表示計画.md](26_Phase6動的ステータス行表示計画.md)により、
+動的ステータス行へ同時1件を表示する方式へ置き換える。priority、残り時間、中断再開、
+queue上限の実装資産は維持する。
+
 ## 2. テスト
 
 `ra_overlay_test`で次を検証する。
@@ -43,7 +48,7 @@ priority queueと寿命管理は完了したが、通知UI全体には次が残�
 
 - 実績解除toastのバッジ、ポイント、Hardcore状態表示。
 - ゲーム終了後に保持する送信エラー履歴。
-- Challenge Indicator、Leaderboard tracker実装後の領域競合制御。
+- Challenge Indicator、Progress Indicator、Leaderboard trackerを含む動的ステータス行への移行。
 - 640x400とmacOS各倍率での最終screenshot受入。
 
 ## 4. 次回作業handoff
