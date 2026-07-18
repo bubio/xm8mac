@@ -63,6 +63,18 @@ enum class RaOverlayConflictKind {
 	Manual = 3,
 };
 
+enum class RaNoticePriority {
+	Low = 0,
+	Normal = 1,
+	Important = 2,
+	Critical = 3,
+};
+
+struct RaVisibleNotice {
+	std::string text;
+	RaNoticePriority priority = RaNoticePriority::Low;
+};
+
 struct RaOverlaySnapshot {
 	bool mode_enabled = false;
 	bool hardcore_enabled = false;
@@ -185,10 +197,15 @@ struct RaOverlayLeaderboardListSnapshot {
 class RaOverlay {
 public:
 	void Clear();
+	void ClearNotices();
 	void AddNotice(const std::string& text, uint32_t now_ms,
-		uint32_t duration_ms = 5000);
-	bool HasVisibleNotice(uint32_t now_ms) const;
-	std::string VisibleNotice(uint32_t now_ms) const;
+		uint32_t duration_ms = 5000,
+		RaNoticePriority priority = RaNoticePriority::Normal);
+	void SetNoticesPaused(bool paused, uint32_t now_ms);
+	bool HasVisibleNotice(uint32_t now_ms);
+	std::string VisibleNotice(uint32_t now_ms);
+	std::vector<RaVisibleNotice> VisibleNotices(uint32_t now_ms);
+	size_t NoticeQueueSize() const;
 
 	void SetSnapshot(const RaOverlaySnapshot& snapshot);
 	const RaOverlaySnapshot& Snapshot() const;
@@ -238,8 +255,18 @@ private:
 	RaOverlayAction ActivateLoginFocus();
 	bool CanSubmitLogin() const;
 
-	std::string notice_text_;
-	uint32_t notice_until_ms_ = 0;
+	struct QueuedNotice {
+		std::string text;
+		RaNoticePriority priority = RaNoticePriority::Low;
+		uint32_t remaining_ms = 0;
+		uint32_t expires_at_ms = 0;
+		uint64_t sequence = 0;
+		bool active = false;
+	};
+	void RebalanceNotices(uint32_t now_ms);
+	std::vector<QueuedNotice> notices_;
+	uint64_t next_notice_sequence_ = 1;
+	bool notices_paused_ = false;
 	RaOverlaySnapshot snapshot_;
 	RaOverlayLibraryListSnapshot library_;
 	RaOverlayAchievementListSnapshot achievements_;

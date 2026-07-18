@@ -264,7 +264,8 @@ private:
 										// refresh leaderboards overlay if visible
 	void EnsureRaLeaderboardEntriesForSelection();
 										// fetch selected leaderboard entries if needed
-	void AddRaNotice(const std::string& text);
+	void AddRaNotice(const std::string& text,
+		Xm8Ra::RaNoticePriority priority = Xm8Ra::RaNoticePriority::Important);
 										// add RA overlay notice
 	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);
 										// translate RA events to notices
@@ -380,6 +381,8 @@ private:
 										// RA badge image memory cache
 	uint64_t ra_next_image_request_id;
 										// RA image request id allocator
+	uint32_t ra_notification_duration_ms;
+										// configured RA toast lifetime
 	bool ra_mode_enabled;
 										// RA mode setting
 	bool ra_saved_login_started;

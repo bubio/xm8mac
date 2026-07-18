@@ -40,7 +40,8 @@ macOS RAセッションとフレーム評価について、工程表の実装項
 
 次はmacOSオーバーレイと画像の仕上げへ進む。
 
-1. toast queueの表示競合、優先順位、寿命を完成させる。
+1. toast queueの表示競合、優先順位、寿命は
+   [23_Phase6通知Queue実施記録.md](23_Phase6通知Queue実施記録.md)で実装した。
 2. badge画像cacheの永続化、容量上限、破損・失敗時placeholderを完成させる。
 3. keyboard、mouse、controller、touchの全導線を確認する。
 4. Library、Game Detail、Achievements、Leaderboardsの視覚受入を行う。

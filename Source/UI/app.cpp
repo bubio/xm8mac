@@ -201,6 +201,26 @@ std::string RaEventNotice(const Xm8Ra::RaEvent& event)
 	return std::string();
 }
 
+Xm8Ra::RaNoticePriority RaEventNoticePriority(const Xm8Ra::RaEvent& event)
+{
+	switch (event.type) {
+	case Xm8Ra::RaEventType::AchievementTriggered:
+	case Xm8Ra::RaEventType::GameCompleted:
+	case Xm8Ra::RaEventType::SubsetCompleted:
+		return Xm8Ra::RaNoticePriority::Critical;
+	case Xm8Ra::RaEventType::LeaderboardFailed:
+	case Xm8Ra::RaEventType::LeaderboardSubmitted:
+	case Xm8Ra::RaEventType::LeaderboardScoreboard:
+	case Xm8Ra::RaEventType::ServerError:
+	case Xm8Ra::RaEventType::Disconnected:
+	case Xm8Ra::RaEventType::Reconnected:
+		return Xm8Ra::RaNoticePriority::Important;
+	case Xm8Ra::RaEventType::LeaderboardStarted:
+	default:
+		return Xm8Ra::RaNoticePriority::Normal;
+	}
+}
+
 std::string RaGameLoadFailureNotice(const Xm8Ra::RaGameSessionSnapshot& game)
 {
 	if (!game.message.empty()) {
@@ -326,6 +346,7 @@ App::App()
 	ra_service = NULL;
 	ra_overlay = NULL;
 	ra_next_image_request_id = 1000000;
+	ra_notification_duration_ms = 5000;
 	ra_mode_enabled = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
@@ -461,6 +482,8 @@ bool App::Init(const CliOptions& options)
 			Xm8Ra::RaSettings ra_settings;
 			if (ra_library->LoadSettings(&ra_settings, &ra_error)) {
 				ra_mode_enabled = ra_settings.enabled;
+				ra_notification_duration_ms =
+					static_cast<uint32_t>(ra_settings.notification_seconds) * 1000;
 			}
 			ra_media_store = new Xm8Ra::RaMediaStore(ra_library);
 		}
@@ -1072,6 +1095,9 @@ void App::StopRaSession()
 {
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::StopGame);
+	if (ra_overlay != NULL) {
+		ra_overlay->ClearNotices();
+	}
 }
 
 void App::ProcessRaLibrarySync()
@@ -1400,8 +1426,7 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 		return;
 	}
 
-	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
-		Xm8Ra::RaSessionSignal::StopGame);
+	StopRaSession();
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::BeginLaunch);
 	if (ra_service != NULL) {
@@ -1827,12 +1852,14 @@ void App::DrawRaBadgeImage(Uint32 *buf, SDL_Rect *rect,
 // AddRaNotice()
 // add RA overlay notice
 //
-void App::AddRaNotice(const std::string& text)
+void App::AddRaNotice(const std::string& text,
+	Xm8Ra::RaNoticePriority priority)
 {
 	if (ra_overlay == NULL) {
 		return;
 	}
-	ra_overlay->AddNotice(text, SDL_GetTicks());
+	ra_overlay->AddNotice(text, SDL_GetTicks(),
+		ra_notification_duration_ms, priority);
 }
 
 //
@@ -1864,7 +1891,7 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 		}
 		const std::string notice = RaEventNotice(event);
 		if (!notice.empty()) {
-			AddRaNotice(notice);
+			AddRaNotice(notice, RaEventNoticePriority(event));
 		}
 	}
 	if (leaderboards_changed) {
@@ -3040,21 +3067,27 @@ void App::DrawRaOverlay()
 		ra_menu_presence_scroll_active = false;
 	}
 
-	const std::string notice = ra_overlay->VisibleNotice(SDL_GetTicks());
-	if (notice.empty()) {
+	const Uint32 notice_now = SDL_GetTicks();
+	ra_overlay->SetNoticesPaused(ra_overlay->IsBlocking(), notice_now);
+	const std::vector<Xm8Ra::RaVisibleNotice> notices =
+		ra_overlay->VisibleNotices(notice_now);
+	if (notices.empty()) {
 		return;
 	}
 
-	char text[72];
-	std::snprintf(text, sizeof(text), "%s", notice.c_str());
-	SDL_Rect rect = {8, 8, 624, 24};
 	Uint32 *buf = video->GetFrameBuf(0);
-	font->DrawFillRect(buf, &rect, RGB_COLOR(0, 0, 0) | 0xc0000000);
-	font->DrawRect(buf, &rect, RGB_COLOR(255, 255, 255) | 0xc0000000,
-		RGB_COLOR(0, 0, 0) | 0xc0000000);
-	rect.x += 8;
-	rect.w -= 16;
-	font->DrawSjisLeftOr(buf, &rect, text, RGB_COLOR(255, 255, 255));
+	for (size_t index = 0; index < notices.size(); ++index) {
+		char text[72];
+		std::snprintf(text, sizeof(text), "%s", notices[index].text.c_str());
+		SDL_Rect rect = {208,
+			SCREEN_HEIGHT - 32 - static_cast<int>(index) * 28, 424, 24};
+		font->DrawFillRect(buf, &rect, RGB_COLOR(0, 0, 0) | 0xc0000000);
+		font->DrawRect(buf, &rect, RGB_COLOR(255, 255, 255) | 0xc0000000,
+			RGB_COLOR(0, 0, 0) | 0xc0000000);
+		rect.x += 8;
+		rect.w -= 16;
+		font->DrawSjisLeftOr(buf, &rect, text, RGB_COLOR(255, 255, 255));
+	}
 	video->DrawCtrl();
 }
 #endif

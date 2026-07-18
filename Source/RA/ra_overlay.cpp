@@ -17,6 +17,8 @@ namespace {
 const size_t kMaxUsernameBytes = 256;
 const size_t kMaxPasswordBytes = 1024;
 const size_t kMenuListVisibleRows = 7;
+const size_t kMaxVisibleNotices = 3;
+const size_t kMaxQueuedNotices = 64;
 const int kIdentificationIdentified = 1;
 
 const int kMenuListRowX = 80;
@@ -56,31 +58,141 @@ bool HitRect(int x, int y, int rx, int ry, int rw, int rh)
 
 void RaOverlay::Clear()
 {
-	notice_text_.clear();
-	notice_until_ms_ = 0;
+	ClearNotices();
 	snapshot_ = RaOverlaySnapshot();
 	CloseScreen();
 }
 
-void RaOverlay::AddNotice(const std::string& text, uint32_t now_ms,
-	uint32_t duration_ms)
+void RaOverlay::ClearNotices()
 {
-	if (text.empty()) {
+	notices_.clear();
+	next_notice_sequence_ = 1;
+	notices_paused_ = false;
+}
+
+void RaOverlay::AddNotice(const std::string& text, uint32_t now_ms,
+	uint32_t duration_ms, RaNoticePriority priority)
+{
+	if (text.empty() || duration_ms == 0) {
 		return;
 	}
-	notice_text_ = text;
-	notice_until_ms_ = now_ms + duration_ms;
+	if (!notices_paused_) {
+		RebalanceNotices(now_ms);
+	}
+	QueuedNotice notice;
+	notice.text = text;
+	notice.priority = priority;
+	notice.remaining_ms = duration_ms;
+	notice.sequence = next_notice_sequence_++;
+	notices_.push_back(notice);
+	if (!notices_paused_) {
+		RebalanceNotices(now_ms);
+	}
+	if (notices_.size() > kMaxQueuedNotices) {
+		auto drop = std::min_element(notices_.begin(), notices_.end(),
+			[](const QueuedNotice& left, const QueuedNotice& right) {
+				if (left.priority != right.priority) {
+					return left.priority < right.priority;
+				}
+				return left.sequence > right.sequence;
+			});
+		if (drop != notices_.end()) {
+			notices_.erase(drop);
+		}
+	}
 }
 
-bool RaOverlay::HasVisibleNotice(uint32_t now_ms) const
+void RaOverlay::SetNoticesPaused(bool paused, uint32_t now_ms)
 {
-	return !notice_text_.empty() &&
-		static_cast<int32_t>(now_ms - notice_until_ms_) < 0;
+	if (paused == notices_paused_) {
+		return;
+	}
+	if (paused) {
+		RebalanceNotices(now_ms);
+		for (QueuedNotice& notice : notices_) {
+			if (notice.active) {
+				notice.remaining_ms = notice.expires_at_ms - now_ms;
+				notice.active = false;
+			}
+		}
+		notices_paused_ = true;
+	}
+	else {
+		notices_paused_ = false;
+		RebalanceNotices(now_ms);
+	}
 }
 
-std::string RaOverlay::VisibleNotice(uint32_t now_ms) const
+bool RaOverlay::HasVisibleNotice(uint32_t now_ms)
 {
-	return HasVisibleNotice(now_ms) ? notice_text_ : std::string();
+	return !VisibleNotices(now_ms).empty();
+}
+
+std::string RaOverlay::VisibleNotice(uint32_t now_ms)
+{
+	const std::vector<RaVisibleNotice> visible = VisibleNotices(now_ms);
+	return visible.empty() ? std::string() : visible.front().text;
+}
+
+std::vector<RaVisibleNotice> RaOverlay::VisibleNotices(uint32_t now_ms)
+{
+	std::vector<RaVisibleNotice> visible;
+	if (notices_paused_) {
+		return visible;
+	}
+	RebalanceNotices(now_ms);
+	for (const QueuedNotice& notice : notices_) {
+		if (notice.active) {
+			visible.push_back({notice.text, notice.priority});
+		}
+	}
+	std::stable_sort(visible.begin(), visible.end(),
+		[](const RaVisibleNotice& left, const RaVisibleNotice& right) {
+			return left.priority > right.priority;
+		});
+	return visible;
+}
+
+size_t RaOverlay::NoticeQueueSize() const
+{
+	return notices_.size();
+}
+
+void RaOverlay::RebalanceNotices(uint32_t now_ms)
+{
+	if (notices_paused_) {
+		return;
+	}
+	for (QueuedNotice& notice : notices_) {
+		if (notice.active) {
+			const int32_t remaining = static_cast<int32_t>(
+				notice.expires_at_ms - now_ms);
+			notice.remaining_ms = remaining > 0 ?
+				static_cast<uint32_t>(remaining) : 0;
+			notice.active = false;
+		}
+	}
+	notices_.erase(std::remove_if(notices_.begin(), notices_.end(),
+		[](const QueuedNotice& notice) { return notice.remaining_ms == 0; }),
+		notices_.end());
+
+	std::vector<QueuedNotice *> ranked;
+	ranked.reserve(notices_.size());
+	for (QueuedNotice& notice : notices_) {
+		ranked.push_back(&notice);
+	}
+	std::sort(ranked.begin(), ranked.end(),
+		[](const QueuedNotice *left, const QueuedNotice *right) {
+			if (left->priority != right->priority) {
+				return left->priority > right->priority;
+			}
+			return left->sequence < right->sequence;
+		});
+	const size_t active_count = std::min(kMaxVisibleNotices, ranked.size());
+	for (size_t index = 0; index < active_count; ++index) {
+		ranked[index]->active = true;
+		ranked[index]->expires_at_ms = now_ms + ranked[index]->remaining_ms;
+	}
 }
 
 void RaOverlay::SetSnapshot(const RaOverlaySnapshot& snapshot)

@@ -19,6 +19,57 @@ int main()
 	overlay.AddNotice("", 200, 50);
 	assert(!overlay.HasVisibleNotice(200));
 
+	overlay.AddNotice("normal-1", 300, 100,
+		Xm8Ra::RaNoticePriority::Normal);
+	overlay.AddNotice("low", 300, 100, Xm8Ra::RaNoticePriority::Low);
+	overlay.AddNotice("normal-2", 300, 100,
+		Xm8Ra::RaNoticePriority::Normal);
+	overlay.AddNotice("queued-low", 300, 100,
+		Xm8Ra::RaNoticePriority::Low);
+	auto notices = overlay.VisibleNotices(300);
+	assert(notices.size() == 3);
+	assert(notices[0].text == "normal-1");
+	assert(notices[1].text == "normal-2");
+	assert(notices[2].text == "low");
+	assert(overlay.NoticeQueueSize() == 4);
+
+	overlay.AddNotice("critical", 320, 20,
+		Xm8Ra::RaNoticePriority::Critical);
+	notices = overlay.VisibleNotices(320);
+	assert(notices.size() == 3);
+	assert(notices[0].text == "critical");
+	assert(notices[1].text == "normal-1");
+	assert(notices[2].text == "normal-2");
+	notices = overlay.VisibleNotices(340);
+	assert(notices.size() == 3);
+	assert(notices[0].text == "normal-1");
+	assert(notices[1].text == "normal-2");
+	assert(notices[2].text == "low");
+
+	overlay.SetNoticesPaused(true, 350);
+	assert(overlay.VisibleNotices(1000).empty());
+	overlay.AddNotice("paused-important", 1000, 50,
+		Xm8Ra::RaNoticePriority::Important);
+	overlay.SetNoticesPaused(false, 2000);
+	notices = overlay.VisibleNotices(2000);
+	assert(notices.size() == 3);
+	assert(notices[0].text == "paused-important");
+	assert(overlay.HasVisibleNotice(2049));
+	notices = overlay.VisibleNotices(2050);
+	assert(notices.size() <= 3);
+
+	overlay.Clear();
+	overlay.AddNotice("wrap", 0xfffffff0U, 32,
+		Xm8Ra::RaNoticePriority::Normal);
+	assert(overlay.VisibleNotice(0xfffffff8U) == "wrap");
+	assert(overlay.VisibleNotice(0x00000010U).empty());
+	overlay.Clear();
+	for (int index = 0; index < 70; ++index) {
+		overlay.AddNotice("bounded", 100, 5000,
+			Xm8Ra::RaNoticePriority::Low);
+	}
+	assert(overlay.NoticeQueueSize() == 64);
+
 	Xm8Ra::RaOverlaySnapshot snapshot;
 	snapshot.mode_enabled = true;
 	snapshot.hardcore_enabled = true;
@@ -34,6 +85,12 @@ int main()
 	assert(overlay.Snapshot().user_name == "tester");
 	assert(overlay.Snapshot().game_title == "Sample");
 	assert(overlay.Snapshot().rich_presence == "Playing");
+	overlay.AddNotice("discard on stop", 100, 5000);
+	assert(overlay.NoticeQueueSize() == 64);
+	overlay.ClearNotices();
+	assert(overlay.NoticeQueueSize() == 0);
+	assert(overlay.Snapshot().mode_enabled);
+	assert(overlay.Snapshot().game_title == "Sample");
 
 	Xm8Ra::RaOverlayAchievementListSnapshot achievements;
 	achievements.game_loaded = true;
