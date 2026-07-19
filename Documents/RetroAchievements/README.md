@@ -76,6 +76,7 @@ ePC-8801MAの旧版
 | [26_Phase6動的ステータス行表示計画.md](26_Phase6動的ステータス行表示計画.md) | 通知、Challenge、Progress、Leaderboard trackerの排他的なステータス行表示と検証計画 |
 | [27_Phase6動的ステータス行表示実施記録.md](27_Phase6動的ステータス行表示実施記録.md) | 全幅ステータス行、単一通知、3秒page切替、入力透過、自動検証、ASCEND手動受入 |
 | [28_RA設定簡素化方針.md](28_RA設定簡素化方針.md) | 独立Settings画面を設けず、RA modeとSoftcore／Hardcoreだけを公開する方針 |
+| [29_Phase6安全文字変換実施記録.md](29_Phase6安全文字変換実施記録.md) | UTF-8厳密検証、Shift-JIS安全化、文字境界・表示幅計算、既存KANJI ROM描画への接続 |
 
 ## 3. 確定事項
 

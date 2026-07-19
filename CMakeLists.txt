@@ -552,6 +552,15 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_overlay_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_overlay_test COMMAND ra_overlay_test)
+
+    add_executable(ra_text_converter_test
+      Tests/ra_text_converter_test.cpp
+      Source/RA/ra_text_converter.cpp
+    )
+    target_include_directories(ra_text_converter_test PRIVATE Source/RA)
+    target_compile_definitions(ra_text_converter_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_text_converter_test COMMAND ra_text_converter_test)
   endif()
 endif()
 

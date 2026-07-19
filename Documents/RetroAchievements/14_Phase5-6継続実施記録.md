@@ -27,6 +27,9 @@ tracker常駐表示、screenshot比較は引き続き未完了である。
 > 2026-07-19追記: 独立したSettings画面は初期版の対象外とした。RA modeとPhase 8の
 > Softcore／Hardcoreだけを既存RAメニューへ置き、その他は安全な固定値で自動管理する。
 
+> 2026-07-19追記: 共通text rendererは新設せず、既存KANJI ROM描画の前段に安全な
+> `RaTextConverter`を置く方針へ簡素化し、実装・自動検証を完了した。
+
 > 2026-07-18追記: RA独自のASCIIオンスクリーンキーボードは実装対象外とした。
 > AndroidはOS software keyboardを使い、支障が確認された場合だけAndroid APIの
 > Login専用native画面を実装する。

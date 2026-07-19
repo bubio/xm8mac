@@ -82,6 +82,7 @@ add_library(xm8_ra_core OBJECT
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_paths.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_rc_client_http.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_service.cpp
+  ${PROJECT_SOURCE_DIR}/Source/RA/ra_text_converter.cpp
 )
 
 add_library(xm8_ra_platform OBJECT

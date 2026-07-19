@@ -49,6 +49,7 @@
 #include "ra_media_change_policy.h"
 #include "ra_platform.h"
 #include "ra_paths.h"
+#include "ra_text_converter.h"
 #endif
 #ifdef __ANDROID__
 #include "xm8jni.h"
@@ -2670,7 +2671,6 @@ bool App::SubmitRaOverlayLogin()
 namespace {
 
 std::string ToSjisMenuText(Converter *converter, const std::string& text);
-bool IsSjisLeadByte(unsigned char ch);
 size_t SjisCharBytes(const char *source, size_t offset);
 int SjisCharWidth(const char *source, size_t offset);
 int SjisTextWidth(const char *source);
@@ -5719,74 +5719,37 @@ std::string ToSjisMenuText(Converter *converter, const std::string& text)
 	if (text.empty() || converter == NULL) {
 		return text;
 	}
-	std::vector<char> sjis(text.size() * 3 + 1);
-	converter->UtfToSjis(text.c_str(), sjis.data());
+	const Xm8Ra::RaSanitizedText sanitized =
+		Xm8Ra::RaTextConverter::SanitizeUtf8(text);
+	std::vector<char> sjis(sanitized.utf8.size() * 3 + 1);
+	converter->UtfToSjis(sanitized.utf8.c_str(), sjis.data());
 	return std::string(sjis.data());
-}
-
-bool IsSjisLeadByte(unsigned char ch)
-{
-	return ((ch >= 0x80 && ch < 0xa0) || ch >= 0xe0);
 }
 
 size_t SjisCharBytes(const char *source, size_t offset)
 {
-	if (source == nullptr || source[offset] == '\0') {
-		return 0;
-	}
-	const unsigned char ch = static_cast<unsigned char>(source[offset]);
-	if (IsSjisLeadByte(ch) && source[offset + 1] != '\0') {
-		return 2;
-	}
-	return 1;
+	return Xm8Ra::RaTextConverter::SjisCharBytes(source, offset);
 }
 
 int SjisCharWidth(const char *source, size_t offset)
 {
-	if (source == nullptr || source[offset] == '\0') {
-		return 0;
-	}
-	const unsigned char ch = static_cast<unsigned char>(source[offset]);
-	return IsSjisLeadByte(ch) && source[offset + 1] != '\0' ? 16 : 8;
+	return Xm8Ra::RaTextConverter::SjisCharWidth(source, offset);
 }
 
 int SjisTextWidth(const char *source)
 {
-	if (source == nullptr) {
-		return 0;
-	}
-	int width = 0;
-	for (size_t offset = 0; source[offset] != '\0';) {
-		width += SjisCharWidth(source, offset);
-		offset += SjisCharBytes(source, offset);
-	}
-	return width;
+	return Xm8Ra::RaTextConverter::SjisTextWidth(source);
 }
 
 size_t SjisCharCount(const char *source)
 {
-	if (source == nullptr) {
-		return 0;
-	}
-	size_t count = 0;
-	for (size_t offset = 0; source[offset] != '\0';) {
-		offset += SjisCharBytes(source, offset);
-		++count;
-	}
-	return count;
+	return Xm8Ra::RaTextConverter::SjisCharCount(source);
 }
 
 size_t SjisByteOffsetForChar(const char *source, size_t char_index)
 {
-	if (source == nullptr) {
-		return 0;
-	}
-	size_t offset = 0;
-	for (size_t index = 0; index < char_index && source[offset] != '\0';
-		++index) {
-		offset += SjisCharBytes(source, offset);
-	}
-	return offset;
+	return Xm8Ra::RaTextConverter::SjisByteOffsetForChar(source,
+		char_index);
 }
 
 void CopyAutoScrollMenuText(char *target, size_t target_size,
@@ -6511,8 +6474,12 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&
 			game.state == Xm8Ra::RaGameSessionState::Loaded) {
-			std::snprintf(buffer, capacity, "RA: %s",
-				game.title.empty() ? "game loaded" : game.title.c_str());
+			const std::string status = game.title.empty() ?
+				"RA: game loaded" : "RA: " + game.title;
+			const std::string sjis = ToSjisMenuText(converter, status);
+			const std::string bounded =
+				Xm8Ra::RaTextConverter::SjisPrefix(sjis, capacity - 1);
+			std::snprintf(buffer, capacity, "%s", bounded.c_str());
 			return;
 		}
 		else if (!ra_pending_game_hash.empty()) {
@@ -6560,8 +6527,12 @@ void App::GetRaMenuPresence(char *buffer, size_t capacity) const
 			Xm8Ra::RaGameSessionState::Loaded) {
 		presence = ra_service->RichPresence();
 	}
-	std::snprintf(buffer, capacity, "Now: %s",
-		presence.empty() ? "-" : presence.c_str());
+	const std::string text = presence.empty() ? "Now: -" :
+		"Now: " + presence;
+	const std::string sjis = ToSjisMenuText(converter, text);
+	const std::string bounded =
+		Xm8Ra::RaTextConverter::SjisPrefix(sjis, capacity - 1);
+	std::snprintf(buffer, capacity, "%s", bounded.c_str());
 }
 
 //
