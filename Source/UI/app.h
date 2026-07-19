@@ -450,6 +450,8 @@ private:
 										// RA auto-scroll selected text start tick
 	bool ra_menu_presence_scroll_active;
 										// RA menu Rich Presence detail has focus
+	bool ra_menu_error_scroll_active;
+										// RA menu send error detail is scrolling
 	Uint32 ra_menu_presence_scroll_started;
 										// RA menu Rich Presence scroll start tick
 	std::string ra_pending_game_hash;

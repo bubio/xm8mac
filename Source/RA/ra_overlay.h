@@ -230,6 +230,9 @@ public:
 
 	void ClearStatusPages();
 	void ClearGameplayStatus();
+	void SetLastSubmissionError(const std::string& text);
+	void ClearLastSubmissionError();
+	const std::string& LastSubmissionError() const;
 	void ShowChallenge(uint32_t id, const std::string& title,
 		const std::string& badge_url, uint32_t now_ms);
 	void HideChallenge(uint32_t id, uint32_t now_ms);
@@ -337,6 +340,7 @@ private:
 	uint32_t status_rotation_remaining_ms_ = 3000;
 	uint32_t status_rotation_expires_at_ms_ = 0;
 	bool status_pages_paused_ = false;
+	std::string last_submission_error_;
 	RaOverlaySnapshot snapshot_;
 	RaOverlayLibraryListSnapshot library_;
 	RaOverlayAchievementListSnapshot achievements_;

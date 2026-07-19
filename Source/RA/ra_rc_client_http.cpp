@@ -70,9 +70,18 @@ void RaRcClientHttpBridge::DrainCompleted()
 			continue;
 		}
 
+		// Several rcheevos JSON helpers honor body_length while locating
+		// fields, then pass a field pointer to libc string functions. Keep a
+		// NUL sentinel immediately after the transport bytes for that API
+		// contract without including it in body_length.
+		std::vector<char> terminated_body;
+		if (!response.body.empty()) {
+			terminated_body.assign(response.body.begin(), response.body.end());
+			terminated_body.push_back('\0');
+		}
 		rc_api_server_response_t server_response = {};
-		server_response.body = response.body.empty() ?
-			nullptr : reinterpret_cast<const char *>(response.body.data());
+		server_response.body = terminated_body.empty() ?
+			nullptr : terminated_body.data();
 		server_response.body_length = response.body.size();
 		server_response.http_status_code = HttpStatusForTransportResult(
 			response.transport_result, response.http_status);

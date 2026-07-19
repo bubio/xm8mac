@@ -60,6 +60,7 @@ bool HitRect(int x, int y, int rx, int ry, int rw, int rh)
 void RaOverlay::Clear()
 {
 	ClearGameplayStatus();
+	ClearLastSubmissionError();
 	snapshot_ = RaOverlaySnapshot();
 	CloseScreen();
 }
@@ -174,6 +175,21 @@ void RaOverlay::ClearGameplayStatus()
 {
 	ClearNotices();
 	ClearStatusPages();
+}
+
+void RaOverlay::SetLastSubmissionError(const std::string& text)
+{
+	last_submission_error_ = text;
+}
+
+void RaOverlay::ClearLastSubmissionError()
+{
+	last_submission_error_.clear();
+}
+
+const std::string& RaOverlay::LastSubmissionError() const
+{
+	return last_submission_error_;
 }
 
 RaOverlay::StatusPage *RaOverlay::FindStatusPage(RaStatusPageType type,

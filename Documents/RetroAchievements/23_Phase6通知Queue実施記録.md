@@ -52,6 +52,9 @@ priority queueと寿命管理は完了したが、通知UI全体には次が残�
 - Challenge Indicator、Progress Indicator、Leaderboard trackerを含む動的ステータス行への移行。
 - 640x400とmacOS各倍率での最終screenshot受入。
 
+この一覧は通知Queue実装直後の履歴である。現在の解消状況とPhase 6完了判定は
+[30_Phase6完了監査.md](30_Phase6完了監査.md)を正とする。
+
 ## 4. 次回作業handoff
 
 badge画像cacheは[24_Phase6画像cache実施記録.md](24_Phase6画像cache実施記録.md)で

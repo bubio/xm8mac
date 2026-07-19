@@ -66,6 +66,13 @@ int main()
 
 	overlay.ClearGameplayStatus();
 	assert(overlay.StatusPageCount() == 0);
+	overlay.SetLastSubmissionError("Achievement #42: rejected");
+	overlay.AddNotice("discard on game stop", 900, 5000);
+	overlay.ClearGameplayStatus();
+	assert(overlay.NoticeQueueSize() == 0);
+	assert(overlay.LastSubmissionError() == "Achievement #42: rejected");
+	overlay.ClearLastSubmissionError();
+	assert(overlay.LastSubmissionError().empty());
 	overlay.ShowChallenge(10, "Challenge One", "challenge-1.png", 1000);
 	auto page = overlay.VisibleStatusPage(1000);
 	assert(page.type == Xm8Ra::RaStatusPageType::Challenge);
@@ -590,6 +597,7 @@ int main()
 
 	overlay.Clear();
 	assert(!overlay.HasVisibleNotice(201));
+	assert(overlay.LastSubmissionError().empty());
 	assert(!overlay.Snapshot().mode_enabled);
 	assert(overlay.Snapshot().status_text.empty());
 	return 0;

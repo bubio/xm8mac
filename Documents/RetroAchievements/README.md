@@ -70,13 +70,14 @@ ePC-8801MAの旧版
 | [20_Phase5媒体競合解消実施記録.md](20_Phase5媒体競合解消実施記録.md) | 競合分類、明示MERGE／SPLIT、MANUAL拒否、transaction rollback検証 |
 | [21_Phase5接続監視修正実施記録.md](21_Phase5接続監視修正実施記録.md) | macOS到達性監視、即時切断・復旧、重複通知抑止、手動再確認手順 |
 | [22_Phase5完了判定.md](22_Phase5完了判定.md) | Phase 5受入条件、実HTTPS・ASCEND・切断復旧確認、Phase 6 handoff |
-| [23_Phase6通知Queue実施記録.md](23_Phase6通知Queue実施記録.md) | 優先度付きtoast、同時3件、待機・中断再開、設定寿命、queue上限 |
+| [23_Phase6通知Queue実施記録.md](23_Phase6通知Queue実施記録.md) | 優先度付き通知、同時1件、待機・中断再開、設定寿命、queue上限 |
 | [24_Phase6画像cache実施記録.md](24_Phase6画像cache実施記録.md) | badge永続cache、デコード検証、LRU容量制御、破損自己修復、placeholder |
 | [25_Phase6入力導線実施記録.md](25_Phase6入力導線実施記録.md) | keyboard、mouse、controller、touch、page移動、pointer安全化、Android Login入力方針 |
 | [26_Phase6動的ステータス行表示計画.md](26_Phase6動的ステータス行表示計画.md) | 通知、Challenge、Progress、Leaderboard trackerの排他的なステータス行表示と検証計画 |
 | [27_Phase6動的ステータス行表示実施記録.md](27_Phase6動的ステータス行表示実施記録.md) | 全幅ステータス行、単一通知、3秒page切替、入力透過、自動検証、ASCEND手動受入 |
 | [28_RA設定簡素化方針.md](28_RA設定簡素化方針.md) | 独立Settings画面を設けず、RA modeとSoftcore／Hardcoreだけを公開する方針 |
 | [29_Phase6安全文字変換実施記録.md](29_Phase6安全文字変換実施記録.md) | UTF-8厳密検証、Shift-JIS安全化、文字境界・表示幅計算、既存KANJI ROM描画への接続 |
+| [30_Phase6完了監査.md](30_Phase6完了監査.md) | Phase 6仕様突合、送信エラー1件保持、最終自動検証、視覚受入とPhase 7 handoff |
 
 ## 3. 確定事項
 

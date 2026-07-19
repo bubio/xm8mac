@@ -222,6 +222,31 @@ std::string RaEventNotice(const Xm8Ra::RaEvent& event)
 	return std::string();
 }
 
+std::string RaSubmissionErrorText(const Xm8Ra::RaServerErrorEvent& error)
+{
+	std::ostringstream stream;
+	stream << "RA send failed";
+	if (error.api == "award_achievement") {
+		stream << ": achievement";
+	}
+	else if (error.api == "submit_lboard_entry") {
+		stream << ": leaderboard";
+	}
+	else if (!error.api.empty()) {
+		stream << ": " << error.api;
+	}
+	if (error.related_id != 0) {
+		stream << " #" << error.related_id;
+	}
+	if (!error.message.empty()) {
+		stream << ": " << error.message;
+	}
+	else if (error.result != 0) {
+		stream << ": error " << error.result;
+	}
+	return stream.str();
+}
+
 Xm8Ra::RaNoticePriority RaEventNoticePriority(const Xm8Ra::RaEvent& event)
 {
 	switch (event.type) {
@@ -398,6 +423,7 @@ App::App()
 	ra_overlay_auto_scroll_revision = 0;
 	ra_overlay_auto_scroll_started = 0;
 	ra_menu_presence_scroll_active = false;
+	ra_menu_error_scroll_active = false;
 	ra_menu_presence_scroll_started = 0;
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -1455,6 +1481,9 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 	}
 
 	StopRaSession();
+	if (ra_overlay != NULL) {
+		ra_overlay->ClearLastSubmissionError();
+	}
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::BeginLaunch);
 	if (ra_service != NULL) {
@@ -1965,6 +1994,11 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 			ra_leaderboard_scoreboards[event.scoreboard.leaderboard_id] =
 				event.scoreboard;
 			leaderboards_changed = true;
+		}
+		if (event.type == Xm8Ra::RaEventType::ServerError) {
+			ra_overlay->SetLastSubmissionError(
+				RaSubmissionErrorText(event.server_error));
+			session_state_changed = true;
 		}
 		switch (event.type) {
 		case Xm8Ra::RaEventType::AchievementChallengeIndicatorShow:
@@ -3353,19 +3387,29 @@ void App::DrawRaOverlay()
 	}
 	const bool presence_focused = app_menu && menu != NULL &&
 		menu->IsRaRichPresenceFocused();
-	if (presence_focused) {
-		if (!ra_menu_presence_scroll_active) {
+	const bool error_focused = app_menu && menu != NULL && ra_overlay != NULL &&
+		menu->IsRaStatusFocused() &&
+		!ra_overlay->LastSubmissionError().empty();
+	if (presence_focused || error_focused) {
+		if (!ra_menu_presence_scroll_active ||
+			ra_menu_error_scroll_active != error_focused) {
 			ra_menu_presence_scroll_active = true;
+			ra_menu_error_scroll_active = error_focused;
 			ra_menu_presence_scroll_started = SDL_GetTicks();
 		}
 
-		std::string presence = ra_service != NULL ?
-			ra_service->RichPresence() : std::string();
-		if (presence.empty()) {
-			presence = "No Rich Presence";
+		std::string detail;
+		if (error_focused) {
+			detail = ra_overlay->LastSubmissionError();
 		}
-		const std::string presence_sjis =
-			ToSjisMenuText(converter, presence);
+		else {
+			detail = ra_service != NULL ?
+				ra_service->RichPresence() : std::string();
+			if (detail.empty()) {
+				detail = "No Rich Presence";
+			}
+		}
+		const std::string detail_sjis = ToSjisMenuText(converter, detail);
 		char display_presence[256];
 		SDL_Rect presence_rect = {
 			(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
@@ -3375,7 +3419,7 @@ void App::DrawRaOverlay()
 			24
 		};
 		CopyAutoScrollMenuText(display_presence, sizeof(display_presence),
-			presence_sjis.c_str(), presence_rect.w - 16,
+			detail_sjis.c_str(), presence_rect.w - 16,
 			SDL_GetTicks() - ra_menu_presence_scroll_started);
 		Uint32 *buf = video->GetMenuFrame();
 		const Uint32 alpha = (Uint32)setting->GetMenuAlpha() << 24;
@@ -3388,6 +3432,7 @@ void App::DrawRaOverlay()
 	}
 	else {
 		ra_menu_presence_scroll_active = false;
+		ra_menu_error_scroll_active = false;
 	}
 
 	const Uint32 notice_now = SDL_GetTicks();
@@ -6457,6 +6502,15 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 	}
 	else if (ra_library != NULL) {
 		text = "RA: disabled";
+	}
+	if (ra_session_state == Xm8Ra::RaSessionState::Ready &&
+		ra_overlay != NULL && !ra_overlay->LastSubmissionError().empty()) {
+		const std::string sjis = ToSjisMenuText(converter,
+			ra_overlay->LastSubmissionError());
+		const std::string bounded =
+			Xm8Ra::RaTextConverter::SjisPrefix(sjis, capacity - 1);
+		std::snprintf(buffer, capacity, "%s", bounded.c_str());
+		return;
 	}
 	if (ra_service != NULL) {
 		const Xm8Ra::RaLoginSnapshot login = ra_service->LoginSnapshot();

@@ -1312,6 +1312,19 @@ void Video::SetRaStatusActive(bool active)
 	if (ra_status_active == active) {
 		return;
 	}
+	if (ra_status_active && !active && frame_buf != NULL) {
+		// Normal status widgets intentionally leave one-pixel separators
+		// between the drive panels. Clear the complete status frame before
+		// forcing them to redraw so pixels from a full-width RA row cannot
+		// survive in those separators.
+		uint32 *status_frame =
+			&frame_buf[SCREEN_WIDTH * SCREEN_HEIGHT];
+		const int pixel_count = SCREEN_WIDTH * GetStatusFrameHeight();
+		const uint32 background = COLOR_BLACK | status_alpha;
+		for (int index = 0; index < pixel_count; ++index) {
+			status_frame[index] = background;
+		}
+	}
 	ra_status_active = active;
 	ResetStatus();
 	DrawCtrl();

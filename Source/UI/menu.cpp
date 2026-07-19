@@ -747,6 +747,16 @@ bool Menu::IsRaRichPresenceFocused()
 	return list != NULL && list->GetID() == MENU_RA &&
 		list->GetFocusID() == MENU_RA_PRESENCE;
 }
+
+//
+// IsRaStatusFocused()
+// check whether the RA status row has focus
+//
+bool Menu::IsRaStatusFocused()
+{
+	return list != NULL && list->GetID() == MENU_RA &&
+		list->GetFocusID() == MENU_RA_STATUS;
+}
 #endif
 
 //

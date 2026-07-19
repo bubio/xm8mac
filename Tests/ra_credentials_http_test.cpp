@@ -50,6 +50,7 @@ struct CallbackCapture {
 	int calls = 0;
 	int http_status = 0;
 	std::string body;
+	bool body_null_terminated = false;
 };
 
 void RC_CCONV CaptureServerResponse(
@@ -60,6 +61,8 @@ void RC_CCONV CaptureServerResponse(
 	capture->http_status = server_response->http_status_code;
 	capture->body.assign(server_response->body != nullptr ? server_response->body : "",
 		server_response->body_length);
+	capture->body_null_terminated = server_response->body != nullptr &&
+		server_response->body[server_response->body_length] == '\0';
 }
 
 uint32_t RC_CCONV ReadNoMemory(uint32_t, uint8_t*, uint32_t, rc_client_t*)
@@ -185,6 +188,8 @@ int main()
 	Check(callback_capture.calls == 1, "bridge invokes callback once");
 	Check(callback_capture.http_status == 200, "bridge forwards HTTP status");
 	Check(callback_capture.body == response_body, "bridge forwards response body");
+	Check(callback_capture.body_null_terminated,
+		"bridge adds NUL sentinel after response body");
 	Check(bridge.PendingCount() == 0, "bridge clears completed pending request");
 
 	CallbackCapture stale_capture;

@@ -884,6 +884,41 @@ int main()
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
+		char api[] = "award_achievement";
+		char message[] = "request rejected";
+		rc_client_server_error_t server_error = {};
+		server_error.api = api;
+		server_error.error_message = message;
+		server_error.result = RC_API_FAILURE;
+		server_error.related_id = 42;
+		rc_client_event_t event = {};
+		event.type = RC_CLIENT_EVENT_SERVER_ERROR;
+		event.server_error = &server_error;
+		service.QueueEventForTesting(&event);
+		api[0] = 'X';
+		message[0] = 'X';
+
+		const std::vector<Xm8Ra::RaEvent> events = service.TakeEvents();
+		Check(events.size() == 1, "server error event is queued");
+		Check(events[0].type == Xm8Ra::RaEventType::ServerError,
+			"server error event type is mapped");
+		Check(events[0].server_error.api == "award_achievement",
+			"server error API is deep copied");
+		Check(events[0].server_error.message == "request rejected",
+			"server error message is deep copied");
+		Check(events[0].server_error.related_id == 42,
+			"server error related id is copied");
+	}
+
+	{
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
+		options.http_client = std::move(fake_http);
+		Xm8Ra::RaService service(std::move(options));
+
 		std::string error;
 		Check(service.BeginLoginWithPassword("player", "pending-secret",
 			&error), "begin pending login");
