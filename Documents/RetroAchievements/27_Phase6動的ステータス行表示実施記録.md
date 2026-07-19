@@ -116,3 +116,16 @@ placeholder枠を先に描き、その後にbadge画像を重ねる順序へ修�
 
 修正後、実績解除通知に縮小されたbadge画像が表示されることをユーザーが再確認し、問題なしと
 判定した。
+
+## 7. 単純な状態通知の削減
+
+2026-07-19、ゲーム中の操作を妨げる単純な状態通知を削減した。
+
+- 削除: `identifying`、`loading game`、ログイン開始、Library同期中／成功、ゲーム起動成功、
+  RA mode切替成功
+- 維持: ログイン結果、ゲーム識別完了、各種エラー、切断・復旧、実績解除・完了、
+  Leaderboard結果
+- 状態pageとして維持: Challenge、Progress、Leaderboard tracker
+
+識別成功通知は従来の`RA: <title>`から`RA: identified <title>`へ変更し、何が完了したのかを
+明示した。媒体rollback、競合解消、logoutなど、明示操作の結果を伝える通知は維持している。

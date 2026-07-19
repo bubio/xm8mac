@@ -1015,7 +1015,6 @@ bool App::BeginRaMediaChange(const DiskSpec& target,
 		return false;
 	}
 
-	AddRaNotice("RA: changing media");
 	return true;
 }
 
@@ -1075,7 +1074,6 @@ void App::ProcessRaMediaChange()
 		ra_loaded_game_hash = ra_media_change_new_hash;
 		ra_service->ClearMediaChangeResult();
 		ClearRaMediaChangeState();
-		AddRaNotice("RA: media changed");
 		return;
 	}
 
@@ -1093,7 +1091,6 @@ void App::ProcessRaMediaChange()
 			"RA rollback failed: " + rollback_error);
 		return;
 	}
-	AddRaNotice("RA: rolling back media change");
 	ProcessRaMediaChange();
 }
 
@@ -1173,7 +1170,6 @@ void App::ProcessRaLibrarySync()
 		}
 		std::string error;
 		if (ra_library->ApplyLibrarySync(payload, &error)) {
-			AddRaNotice("RA: library synchronized");
 			if (ra_overlay != NULL &&
 				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library) {
 				ra_overlay->OpenLibrary(MakeRaLibraryOverlaySnapshot());
@@ -1219,7 +1215,6 @@ void App::ProcessRaLibrarySync()
 		AddRaNotice("RA: library sync did not start");
 		return;
 	}
-	AddRaNotice("RA: synchronizing library");
 }
 
 //
@@ -1427,9 +1422,6 @@ bool App::BeginRaSavedTokenLogin(bool notify_missing_token)
 	ra_saved_login_started = true;
 	ra_manual_login_started = false;
 	ra_library_sync_started_for_login = false;
-	if (notify_missing_token) {
-		AddRaNotice("RA: token login started");
-	}
 	return true;
 }
 
@@ -1485,7 +1477,6 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 	ra_loaded_game_hash.clear();
 	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
-	AddRaNotice("RA: identifying " + md5.substr(0, 8));
 	RefreshRaAchievementsOverlay();
 	RefreshRaLeaderboardsOverlay();
 }
@@ -1671,7 +1662,6 @@ void App::ProcessRaService(bool emulation_idle)
 			if (ra_service->BeginLoadGameByHash(ra_pending_game_hash,
 				&error)) {
 				ra_loaded_game_hash = ra_pending_game_hash;
-				AddRaNotice("RA: loading game");
 				menu->UpdateRaStatus();
 			}
 			else {
@@ -1692,8 +1682,8 @@ void App::ProcessRaService(bool emulation_idle)
 			}
 			ra_pending_game_hash.clear();
 			ra_pending_library_game_id = 0;
-			AddRaNotice(game.title.empty() ? "RA: game loaded" :
-				"RA: " + game.title);
+			AddRaNotice(game.title.empty() ? "RA: identified" :
+				"RA: identified " + game.title);
 			RefreshRaAchievementsOverlay();
 			menu->UpdateRaStatus();
 		}
@@ -2124,7 +2114,6 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 			CtrlAudio();
 			video->SetMenuMode(false);
 			video->DrawCtrl();
-			AddRaNotice("RA: game launched");
 		}
 	}
 	else if (action == Xm8Ra::RaOverlayAction::ResolveLibraryConflict) {
@@ -2680,7 +2669,6 @@ bool App::SubmitRaOverlayLogin()
 	ra_library_sync_started_for_login = false;
 	SDL_StopTextInput();
 	ClearRaOverlayPointerState();
-	AddRaNotice("RA: login started");
 	return true;
 }
 
@@ -5629,7 +5617,6 @@ bool App::ToggleRaMode()
 		BeginRaSavedTokenLogin(false);
 		BeginRaSessionForMountedDrive1();
 	}
-	AddRaNotice(enable ? "RA: mode enabled" : "RA: mode disabled");
 	return true;
 }
 
@@ -6471,7 +6458,6 @@ bool App::OpenRaLoginOverlay()
 		LeaveMenu(false);
 	}
 	CtrlAudio();
-	AddRaNotice("RA: login");
 	return true;
 }
 
