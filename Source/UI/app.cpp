@@ -3474,10 +3474,10 @@ void App::DrawRaOverlay()
 			 page.type == Xm8Ra::RaStatusPageType::Progress));
 	if (reserve_badge) {
 		SDL_Rect badge = {2, content_top, 16, 16};
-		DrawRaBadgeImage(buf, &badge, badge_url,
-			Xm8Ra::RaImageKind::AchievementBadge, false);
 		font->DrawRect(buf, &badge, RGB_COLOR(191, 191, 191) | alpha,
 			RGB_COLOR(0, 0, 0) | alpha);
+		DrawRaBadgeImage(buf, &badge, badge_url,
+			Xm8Ra::RaImageKind::AchievementBadge, false);
 		text_x = 22;
 	}
 	const std::string display_text = ToSjisMenuText(converter, text);
