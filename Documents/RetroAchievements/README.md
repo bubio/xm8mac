@@ -75,6 +75,7 @@ ePC-8801MAの旧版
 | [25_Phase6入力導線実施記録.md](25_Phase6入力導線実施記録.md) | keyboard、mouse、controller、touch、page移動、pointer安全化、Android Login入力方針 |
 | [26_Phase6動的ステータス行表示計画.md](26_Phase6動的ステータス行表示計画.md) | 通知、Challenge、Progress、Leaderboard trackerの排他的なステータス行表示と検証計画 |
 | [27_Phase6動的ステータス行表示実施記録.md](27_Phase6動的ステータス行表示実施記録.md) | 全幅ステータス行、単一通知、3秒page切替、入力透過、自動検証、ASCEND手動受入 |
+| [28_RA設定簡素化方針.md](28_RA設定簡素化方針.md) | 独立Settings画面を設けず、RA modeとSoftcore／Hardcoreだけを公開する方針 |
 
 ## 3. 確定事項
 

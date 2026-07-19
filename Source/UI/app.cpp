@@ -516,11 +516,6 @@ bool App::Init(const CliOptions& options)
 			Xm8Ra::RaSettings ra_settings;
 			if (ra_library->LoadSettings(&ra_settings, &ra_error)) {
 				ra_mode_enabled = ra_settings.enabled;
-				ra_notification_duration_ms =
-					static_cast<uint32_t>(ra_settings.notification_seconds) * 1000;
-				ra_image_cache_limit_bytes =
-					static_cast<int64_t>(ra_settings.image_cache_limit_mib) *
-					1024 * 1024;
 			}
 			ra_media_store = new Xm8Ra::RaMediaStore(ra_library);
 		}

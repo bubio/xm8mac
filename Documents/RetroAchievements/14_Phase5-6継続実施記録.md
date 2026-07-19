@@ -20,9 +20,12 @@ Phase 5「macOS RAセッションとフレーム評価」の継続作業を記�
 - ゲームと実績badgeのHTTP取得、RGBA decode、描画。
 - Login以外の一覧画面に対するkeyboard、mouse、controller、touch入力。
 
-一方、これらはPhase 6の完全な完了を意味しない。Settings、永続画像cacheと
+一方、これらはPhase 6の完全な完了を意味しない。当時計画していたSettings、永続画像cacheと
 eviction、共通text renderer、toast queue、Challenge/
 tracker常駐表示、screenshot比較は引き続き未完了である。
+
+> 2026-07-19追記: 独立したSettings画面は初期版の対象外とした。RA modeとPhase 8の
+> Softcore／Hardcoreだけを既存RAメニューへ置き、その他は安全な固定値で自動管理する。
 
 > 2026-07-18追記: RA独自のASCIIオンスクリーンキーボードは実装対象外とした。
 > AndroidはOS software keyboardを使い、支障が確認された場合だけAndroid APIの

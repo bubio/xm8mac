@@ -23,7 +23,7 @@ RAの一時通知、Challenge Indicator、Progress Indicator、Leaderboard track
 ### 2.2 一時通知
 
 - 表示は常に1件だけとする。
-- 保存済み`Notification duration`の3/5/8秒を使用する。
+- 通知時間は5秒固定とする。
 - 既存のCritical、Important、Normal、Low、同優先度FIFO、高優先度による中断、残り時間からの
   再開、64件上限を維持する。
 - 実績解除、Game/Subset completed、Leaderboard結果、切断・復旧、server error等の既存通知を
@@ -64,7 +64,7 @@ RAの一時通知、Challenge Indicator、Progress Indicator、Leaderboard track
   `measured_progress`、`measured_percent`をまとめて置き換える。
 - HIDEは即時にpageを削除する。通知やフルオーバーレイに隠れている間にHIDEされたProgressを
   待機queueへ移したり、後から再表示したりしない。
-- Progressの2秒寿命は`rc_client`が管理する。XM8のNotification duration 3/5/8秒を適用しない。
+- Progressの2秒寿命は`rc_client`が管理する。XM8の固定通知時間5秒を適用しない。
 - 実績解除通知はProgressより優先する。解除通知中にProgressがHIDEされた場合、通知終了後は
   Challengeまたはtrackerへ戻る。
 

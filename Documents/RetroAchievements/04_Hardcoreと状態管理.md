@@ -240,11 +240,10 @@ Androidプロセスが終了した場合、そのHardcoreセッションは終�
 - CPU clock
 - 拡張RAM構成
 - RA mode
-- Unofficial achievements
-- Encore mode
 
-音量、画面サイズ、scanline、入力割当、通知時間、画像キャッシュ上限は
-ゲーム実行中に変更できる。
+Unofficial、Encore、Spectatorは初期版で提供せずOFF固定とする。通知時間は5秒、画像cache
+上限は128MiB固定とし、ユーザー設定にはしない。音量、画面サイズ、scanline、入力割当は
+従来どおりゲーム実行中に変更できる。
 
 ## 11. 失敗時の扱い
 

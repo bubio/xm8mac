@@ -11,8 +11,8 @@
 
 ### 2.1 通知と状態page
 
-- 通知の同時表示を1件に変更した。優先度、FIFO、中断・残り時間からの再開、64件上限、
-  3/5/8秒の設定寿命は維持している。
+- 通知の同時表示を1件に変更した。優先度、FIFO、中断・残り時間からの再開、64件上限を
+  維持し、表示時間は後続の簡素化方針により5秒固定とした。
 - Challenge、Progress、Leaderboard trackerを独立した状態pageとして保持する。
 - page順をChallengeのSHOW順、単一Progress、trackerのSHOW順に固定した。
 - SHOWは対象pageを即時選択し、UPDATEは内容だけを変更し、HIDEは即時削除する。

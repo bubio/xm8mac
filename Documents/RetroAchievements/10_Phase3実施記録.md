@@ -50,6 +50,9 @@ RA設定のロード/保存APIを追加した。設定値は`setting.bin`には�
 
 不正なmode、通知秒数、画像キャッシュ上限はDBへ書き込む前に拒否する。
 
+> 2026-07-19追記: これらの列と検証は既存DB互換のため維持するが、初期版UIには公開しない。
+> 実行時はUnofficial／Encore／SpectatorをOFF、通知を5秒、画像cacheを128MiBに固定する。
+
 DB open時に`PRAGMA integrity_check`を実行する。`SQLITE_CORRUPT`または`SQLITE_NOTADB`相当の
 破損を検出した場合は、`library.sqlite3`、`library.sqlite3-wal`、`library.sqlite3-shm`を
 `.corrupt.<unix_time>`付きのファイル名へ隔離してから新規DBを作成する。
