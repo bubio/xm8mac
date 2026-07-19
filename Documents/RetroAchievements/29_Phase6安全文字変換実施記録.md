@@ -46,4 +46,9 @@ clip、wrap、選択行の横scrollが使用していたローカルShift-JIS境
 - 既存KANJI ROM描画の維持: 完了
 - 新しいfont／renderer依存: 追加なし
 
-次はPhase 6全体の完了監査を行う。
+2026-07-19、利用者が実RA環境で通知とRA画面の表示を確認し、問題なしと判定した。
+RA取得文字列には`rc_client`側の言語選択がなく、実績title／descriptionは英語を基本とするが、
+ゲームtitle、username、Rich Presence等に含まれ得る非ASCII文字の安全境界として本helperを維持する。
+
+次はPhase 6全体の完了監査を行う。古い実施記録に残る項目を現行仕様と実装へ突合し、
+完了済み、Phase 8へ延期するHardcore表示、Phase 6で解消すべき項目を分離して完了判定を記録する。
