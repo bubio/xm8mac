@@ -410,7 +410,7 @@ App::App()
 	ra_image_cache_limit_bytes = 128LL * 1024 * 1024;
 	ra_notification_duration_ms = 5000;
 	ra_mode_enabled = false;
-	ra_play_mode = Xm8Ra::RaPlayMode::Casual;
+	ra_play_mode = Xm8Ra::RaPlayMode::Hardcore;
 	ra_fast_disk_override_active = false;
 	ra_saved_fast_disk = false;
 	ra_reset_requested = false;

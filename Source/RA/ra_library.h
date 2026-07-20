@@ -28,7 +28,7 @@ constexpr int kRaMediaHealthWorkingCorrupt = 4;
 
 struct RaSettings {
 	bool enabled = false;
-	int last_mode = kRaModeSoftcore;
+	int last_mode = kRaModeHardcore;
 	bool unofficial_enabled = false;
 	bool encore_enabled = false;
 	bool spectator_enabled = false;

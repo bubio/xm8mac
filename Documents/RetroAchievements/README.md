@@ -82,6 +82,7 @@ ePC-8801MAの旧版
 | [32_Phase7コードレビューとリファクタリング.md](32_Phase7コードレビューとリファクタリング.md) | Hardcore着手前のstate境界、I/O失敗処理、公開API、異常系試験の監査 |
 | [33_RAステートメニュー分離実施記録.md](33_RAステートメニュー分離実施記録.md) | Normal／RAのLoad・Save導線分離、利用不可通知、メニューID衝突修正 |
 | [34_Phase8Hardcore実施記録.md](34_Phase8Hardcore実施記録.md) | macOS Hardcore中央policy、操作制限、非停止UI、RESET、検証と手動受入 |
+| [35_Hardcore初期値とメインメニューRA表示.md](35_Hardcore初期値とメインメニューRA表示.md) | 新規環境のHardcore初期選択、既存設定維持、メインメニューのRA状態表示 |
 
 ## 3. 確定事項
 
@@ -91,7 +92,7 @@ ePC-8801MAの旧版
   現行仕様を変えない。
 - RA機能は既定OFFとする。有効時だけ`Softcore`または`Hardcore`で動作する。
 - RA有効/無効と最後に選択した`Softcore`/`Hardcore`は別々に保存する。初回の
-  RAモードは`Softcore`とし、RAをOFFにしても最後の選択を失わない。
+  RAモードは`Hardcore`とし、RAをOFFにしても最後の選択を失わない。
 - RA設定は既存`setting.bin`へ追加せず、`ra/library.sqlite3`へ保存する。
 - RAモードの変更は現在のゲームセッションを終了してから適用する。
 

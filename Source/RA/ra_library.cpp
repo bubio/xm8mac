@@ -387,7 +387,7 @@ bool RaLibrary::InitializeSchema(std::string *error)
 		"CREATE TABLE IF NOT EXISTS ra_settings ("
 		" singleton INTEGER PRIMARY KEY CHECK(singleton = 1),"
 		" enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)),"
-		" last_mode INTEGER NOT NULL DEFAULT 1 CHECK(last_mode IN (1, 2)),"
+		" last_mode INTEGER NOT NULL DEFAULT 2 CHECK(last_mode IN (1, 2)),"
 		" unofficial_enabled INTEGER NOT NULL DEFAULT 0 CHECK(unofficial_enabled IN (0, 1)),"
 		" encore_enabled INTEGER NOT NULL DEFAULT 0 CHECK(encore_enabled IN (0, 1)),"
 		" spectator_enabled INTEGER NOT NULL DEFAULT 0 CHECK(spectator_enabled IN (0, 1)),"
@@ -575,7 +575,8 @@ bool RaLibrary::EnsureSettingsRow(std::string *error)
 {
 	sqlite3_stmt *stmt = nullptr;
 	if (!Prepare(db_,
-		"INSERT OR IGNORE INTO ra_settings(singleton, updated_at) VALUES(1, ?)",
+		"INSERT OR IGNORE INTO ra_settings(singleton, last_mode, updated_at) "
+		"VALUES(1, 2, ?)",
 		&stmt, error)) {
 		return false;
 	}

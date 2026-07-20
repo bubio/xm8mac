@@ -226,14 +226,22 @@ void Menu::ProcessMenu()
 void Menu::EnterMain(int id)
 {
 	char title[80];
+	const char *ra_status = "RA OFF";
 	Uint32 ver;
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (app->IsRaModeEnabled()) {
+		ra_status = app->IsRaHardcoreSelected() ? "RA HARD" : "RA SOFT";
+	}
+#endif
 
 	// get version
 	ver = app->GetAppVersion();
-	sprintf(title, "<< XM8 Ver.%1d.%1d%1d User Interface >>",
+	snprintf(title, sizeof(title), "<< XM8 Ver %1d.%1d%1d :  [%s] >>",
 		((ver >> 8) & 0x0f),
 		((ver >> 4) & 0x0f),
-		ver & 0x0f);
+		ver & 0x0f,
+		ra_status);
 
 	list->SetTitle(title, MENU_MAIN);
 	list->AddButton("Drive 1", MENU_MAIN_DRIVE1);

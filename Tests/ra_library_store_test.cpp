@@ -291,10 +291,10 @@ int main()
 	Xm8Ra::RaSettings settings;
 	Check(library.LoadSettings(&settings, &error), "load default RA settings");
 	Check(!settings.enabled, "RA settings default disabled");
-	Check(settings.last_mode == Xm8Ra::kRaModeSoftcore,
-		"RA settings default softcore");
+	Check(settings.last_mode == Xm8Ra::kRaModeHardcore,
+		"RA settings default hardcore");
 	settings.enabled = true;
-	settings.last_mode = Xm8Ra::kRaModeHardcore;
+	settings.last_mode = Xm8Ra::kRaModeSoftcore;
 	settings.unofficial_enabled = true;
 	settings.notification_seconds = 8;
 	settings.image_cache_limit_mib = 256;
@@ -781,8 +781,8 @@ int main()
 	Check(cached_data == cache_png,
 		"reopened image cache preserves encoded bytes");
 	Check(persisted.enabled, "RA enabled setting persisted");
-	Check(persisted.last_mode == Xm8Ra::kRaModeHardcore,
-		"RA hardcore setting persisted");
+	Check(persisted.last_mode == Xm8Ra::kRaModeSoftcore,
+		"saved RA softcore setting overrides the default and persists");
 	Check(persisted.unofficial_enabled,
 		"RA unofficial setting persisted");
 	Check(persisted.notification_seconds == 8,
