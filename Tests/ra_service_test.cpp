@@ -167,6 +167,17 @@ int main()
 
 		std::string error;
 		Check(service.IsReady(), "service is ready");
+		Check(!service.IsHardcoreEnabled(),
+			"service starts with explicit Casual mode");
+		service.SetHardcoreEnabled(true);
+		Check(service.IsHardcoreEnabled(),
+			"service enables Hardcore before loading a game");
+		uint32_t frames_remaining = 999;
+		Check(service.CanPause(&frames_remaining),
+			"fresh Hardcore client allows its initial pause");
+		service.SetHardcoreEnabled(false);
+		Check(!service.IsHardcoreEnabled() && service.CanPause(),
+			"Casual mode always allows pause");
 		Check(service.BeginLoginWithPassword("player", "secret-password",
 			&error), "begin password login");
 		Check(fake_http_raw->SentRequests().size() == 1,
@@ -445,6 +456,7 @@ int main()
 			Xm8Ra::RaLibrarySyncState::None,
 			"game start aborts pending library sync and ignores late response");
 
+		service.SetHardcoreEnabled(true);
 		Check(service.BeginLoadGameByHash(hash, &error),
 			"begin load game by hash");
 		Check(service.GameSessionSnapshot().state ==
@@ -466,6 +478,9 @@ int main()
 		Check(fake_http_raw->SentRequests().back().post_data.find(
 			"g=1234") != std::string::npos,
 			"start session uses identified game id");
+		Check(fake_http_raw->SentRequests().back().post_data.find(
+			"h=1") != std::string::npos,
+			"start session sends the selected Hardcore mode");
 
 		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
 			StartSessionJson()));
@@ -742,6 +757,14 @@ int main()
 			"memory change on the second frame triggers the achievement");
 		Check(memory.reads >= 2,
 			"each completed frame reads current emulated memory");
+		service.SetHardcoreEnabled(true);
+		const std::vector<Xm8Ra::RaEvent> reset_events = service.TakeEvents();
+		int reset_count = 0;
+		for (const Xm8Ra::RaEvent& event : reset_events) {
+			if (event.type == Xm8Ra::RaEventType::ResetRequested) reset_count++;
+		}
+		Check(reset_count == 1,
+			"enabling Hardcore with a loaded game requests exactly one reset");
 	}
 
 	{

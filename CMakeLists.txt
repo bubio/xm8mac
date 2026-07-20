@@ -431,6 +431,12 @@ if(BUILD_TESTING)
     target_include_directories(ra_session_state_test PRIVATE Source/RA)
     add_test(NAME ra_session_state_test COMMAND ra_session_state_test)
 
+    add_executable(ra_session_policy_test
+      Tests/ra_session_policy_test.cpp
+    )
+    target_include_directories(ra_session_policy_test PRIVATE Source/RA)
+    add_test(NAME ra_session_policy_test COMMAND ra_session_policy_test)
+
     add_executable(ra_state_store_test
       Tests/ra_state_store_test.cpp
       Source/RA/ra_state_store.cpp

@@ -679,6 +679,24 @@ void RaService::ResetProgress()
 	}
 }
 
+void RaService::SetHardcoreEnabled(bool enabled)
+{
+	if (client_ != nullptr) {
+		rc_client_set_hardcore_enabled(client_, enabled ? 1 : 0);
+	}
+}
+
+bool RaService::IsHardcoreEnabled() const
+{
+	return client_ != nullptr && rc_client_get_hardcore_enabled(client_) != 0;
+}
+
+bool RaService::CanPause(uint32_t *frames_remaining) const
+{
+	return client_ == nullptr ||
+		rc_client_can_pause(client_, frames_remaining) != 0;
+}
+
 std::vector<RaEvent> RaService::TakeEvents()
 {
 	std::vector<RaEvent> events;

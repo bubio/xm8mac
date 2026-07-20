@@ -303,6 +303,9 @@ public:
 	bool DeserializeProgress(const std::vector<uint8_t>& progress,
 		std::string *error);
 	void ResetProgress();
+	void SetHardcoreEnabled(bool enabled);
+	bool IsHardcoreEnabled() const;
+	bool CanPause(uint32_t *frames_remaining = nullptr) const;
 	std::vector<RaEvent> TakeEvents();
 	void UnloadGame();
 	void Logout();

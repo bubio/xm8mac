@@ -81,6 +81,7 @@ ePC-8801MAの旧版
 | [31_Phase7RA_Casualステート実施記録.md](31_Phase7RA_Casualステート実施記録.md) | RA Casual／Offline専用state、進捗同期、事前検証、rollback、手動受入 |
 | [32_Phase7コードレビューとリファクタリング.md](32_Phase7コードレビューとリファクタリング.md) | Hardcore着手前のstate境界、I/O失敗処理、公開API、異常系試験の監査 |
 | [33_RAステートメニュー分離実施記録.md](33_RAステートメニュー分離実施記録.md) | Normal／RAのLoad・Save導線分離、利用不可通知、メニューID衝突修正 |
+| [34_Phase8Hardcore実施記録.md](34_Phase8Hardcore実施記録.md) | macOS Hardcore中央policy、操作制限、非停止UI、RESET、検証と手動受入 |
 
 ## 3. 確定事項
 

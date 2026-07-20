@@ -29,6 +29,7 @@
 #include "ra_media_store.h"
 #include "ra_overlay.h"
 #include "ra_service.h"
+#include "ra_session_policy.h"
 #include "ra_session_state.h"
 #include "ra_state_store.h"
 #endif
@@ -136,6 +137,14 @@ public:
 										// validate RA state menu access and notify on failure
 	bool ToggleRaMode();
 										// toggle RA mode setting
+	bool ToggleRaPlayMode();
+										// toggle Casual/Hardcore setting
+	bool IsRaHardcoreSelected() const;
+										// get persisted RA play mode
+	bool IsRaHardcoreActive() const;
+										// get effective Hardcore session state
+	bool ToggleFastDisk();
+										// toggle pseudo fast disk through RA policy
 	bool OpenRaLoginOverlay();
 										// open RA password login overlay
 	void OpenRaLibraryOverlay();
@@ -228,6 +237,19 @@ private:
 										// create RA service if needed
 	bool SaveRaModeSetting(bool enabled, std::string *error);
 										// persist RA mode setting
+	bool SaveRaPlayModeSetting(Xm8Ra::RaPlayMode mode, std::string *error);
+										// persist Casual/Hardcore setting
+	Xm8Ra::RaSessionPolicyContext GetRaPolicyContext() const;
+										// snapshot central RA operation policy
+	bool CheckRaOperation(Xm8Ra::RaRestrictedOperation operation,
+		const char *notice);
+										// reject an operation consistently
+	void ApplyRaOnlineRestrictions();
+										// enforce speed and disk policy at launch
+	void RestoreRaSessionOverrides();
+										// restore temporary settings at session end
+	void HandleRaResetRequest();
+										// apply an rc_client reset request once
 	bool BeginRaSavedTokenLogin(bool notify_missing_token);
 										// begin saved token login if possible
 	void StartRaAfterBoot();
@@ -306,6 +328,8 @@ private:
 										// load validated RA-aware state
 	bool SaveRaState(int slot);
 										// save RA-aware state
+	bool IsRaHardcoreMenuRunning() const;
+										// Hardcore menu overlays a running VM
 #endif
 	bool LoadStateBody(FILEIO *fileio, int previous_audio_frequency,
 		bool preserve_ra_session = false);
@@ -413,6 +437,14 @@ private:
 										// configured RA toast lifetime
 	bool ra_mode_enabled;
 										// RA mode setting
+	Xm8Ra::RaPlayMode ra_play_mode;
+										// selected Casual/Hardcore setting
+	bool ra_fast_disk_override_active;
+										// online session owns fast disk override
+	bool ra_saved_fast_disk;
+										// fast disk value before online session
+	bool ra_reset_requested;
+										// pending rc_client reset event
 	bool ra_saved_login_started;
 										// saved token login started
 	bool ra_manual_login_started;

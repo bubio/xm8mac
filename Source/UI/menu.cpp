@@ -720,24 +720,34 @@ void Menu::EnterRa(int id)
 	list->SetTitle("<< RetroAchievements >>", MENU_RA);
 
 	list->AddCheckButton("RA mode", MENU_RA_MODE);
+	list->AddCheckButton("Hardcore", MENU_RA_HARDCORE);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
 	list->AddButton("Now: -", MENU_RA_PRESENCE);
 	list->AddButton("Login", MENU_RA_LOGIN);
 	list->AddButton("Library", MENU_RA_LIBRARY);
 	list->AddButton("Achievements", MENU_RA_ACHIEVEMENTS);
 	list->AddButton("Leaderboards", MENU_RA_LEADERBOARDS);
-	if (app->IsRaModeEnabled()) {
+	if (app->IsRaModeEnabled() && !app->IsRaHardcoreActive()) {
 		list->AddButton("Load State", MENU_RA_LOAD);
 		list->AddButton("Save State", MENU_RA_SAVE);
 	}
 
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+	list->SetCheck(MENU_RA_HARDCORE, app->IsRaHardcoreSelected());
 	UpdateRaStatus();
 
 	if (id == MENU_BACK) {
 		id = MENU_RA_MODE;
 	}
 	list->SetFocus(id);
+}
+
+void Menu::EnterRaHardcoreConfirmation()
+{
+	list->SetTitle("<< End Hardcore Session? >>", MENU_RA);
+	list->AddButton("Yes (Switch to Casual)", MENU_RA_HARDCORE_YES);
+	list->AddButton("No", MENU_RA_HARDCORE_NO);
+	list->SetFocus(MENU_RA_HARDCORE_NO);
 }
 
 //
@@ -757,6 +767,7 @@ void Menu::UpdateRaStatus()
 	app->GetRaMenuPresence(ra_presence, sizeof(ra_presence));
 	list->SetText(MENU_RA_PRESENCE, ra_presence);
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+	list->SetCheck(MENU_RA_HARDCORE, app->IsRaHardcoreSelected());
 	list->SetText(MENU_RA_LOGIN,
 		app->IsRaLoggedIn() ? "Logout" : "Login");
 }
@@ -2268,14 +2279,12 @@ void Menu::CmdSystem(int id)
 
 	// pseudo fast disk mode
 	case MENU_SYSTEM_FASTDISK:
-		if (list->GetCheck(MENU_SYSTEM_FASTDISK) == true) {
-			list->SetCheck(MENU_SYSTEM_FASTDISK, false);
-			setting->SetFastDisk(false);
-		}
-		else {
-			list->SetCheck(MENU_SYSTEM_FASTDISK, true);
-			setting->SetFastDisk(true);
-		}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		app->ToggleFastDisk();
+#else
+		setting->SetFastDisk(!setting->IsFastDisk());
+#endif
+		list->SetCheck(MENU_SYSTEM_FASTDISK, setting->IsFastDisk());
 		break;
 
 	// watch battery
@@ -2337,6 +2346,25 @@ void Menu::CmdRa(int id)
 	case MENU_RA_MODE:
 		app->ToggleRaMode();
 		EnterRa(MENU_RA_MODE);
+		break;
+
+	case MENU_RA_HARDCORE:
+		if (app->IsRaHardcoreActive()) {
+			EnterRaHardcoreConfirmation();
+		}
+		else {
+			app->ToggleRaPlayMode();
+			EnterRa(MENU_RA_HARDCORE);
+		}
+		break;
+
+	case MENU_RA_HARDCORE_YES:
+		app->ToggleRaPlayMode();
+		EnterRa(MENU_RA_HARDCORE);
+		break;
+
+	case MENU_RA_HARDCORE_NO:
+		EnterRa(MENU_RA_HARDCORE);
 		break;
 
 	case MENU_RA_STATUS:

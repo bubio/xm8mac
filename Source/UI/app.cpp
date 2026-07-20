@@ -49,6 +49,7 @@
 #include "ra_media_change_policy.h"
 #include "ra_platform.h"
 #include "ra_paths.h"
+#include "ra_session_policy.h"
 #include "ra_state_store.h"
 #include "ra_text_converter.h"
 #endif
@@ -409,6 +410,10 @@ App::App()
 	ra_image_cache_limit_bytes = 128LL * 1024 * 1024;
 	ra_notification_duration_ms = 5000;
 	ra_mode_enabled = false;
+	ra_play_mode = Xm8Ra::RaPlayMode::Casual;
+	ra_fast_disk_override_active = false;
+	ra_saved_fast_disk = false;
+	ra_reset_requested = false;
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
 	ra_library_sync_started_for_login = false;
@@ -557,6 +562,8 @@ bool App::Init(const CliOptions& options)
 			Xm8Ra::RaSettings ra_settings;
 			if (ra_library->LoadSettings(&ra_settings, &ra_error)) {
 				ra_mode_enabled = ra_settings.enabled;
+				ra_play_mode = ra_settings.last_mode == Xm8Ra::kRaModeHardcore ?
+					Xm8Ra::RaPlayMode::Hardcore : Xm8Ra::RaPlayMode::Casual;
 			}
 			ra_media_store = new Xm8Ra::RaMediaStore(ra_library);
 		}
@@ -914,6 +921,12 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 		return false;
 	}
 	if (!ra_hash_to_identify.empty()) {
+		// A different RA title starts from a cold VM, never from the previous
+		// game's live memory.
+		LockVM();
+		vm->reset();
+		upd1990a->resync();
+		UnlockVM();
 		BeginRaSessionForMedia(ra_hash_to_identify, ra_game_to_identify);
 	}
 #endif
@@ -1149,6 +1162,8 @@ void App::EnterRaOfflineSession(const std::string& message)
 	}
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::SessionInvalidated);
+	RestoreRaSessionOverrides();
+	if (audio != NULL) CtrlAudio();
 	ra_pending_game_hash.clear();
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -1168,6 +1183,8 @@ void App::StopRaSession()
 {
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::StopGame);
+	RestoreRaSessionOverrides();
+	if (audio != NULL) CtrlAudio();
 	if (ra_overlay != NULL) {
 		ra_overlay->ClearGameplayStatus();
 	}
@@ -1428,6 +1445,56 @@ bool App::SaveRaModeSetting(bool enabled, std::string *error)
 	return ra_library->SaveSettings(settings, error);
 }
 
+bool App::SaveRaPlayModeSetting(Xm8Ra::RaPlayMode mode, std::string *error)
+{
+	if (ra_library == NULL) {
+		if (error != NULL) *error = "RA library is not available";
+		return false;
+	}
+	Xm8Ra::RaSettings settings;
+	if (!ra_library->LoadSettings(&settings, error)) return false;
+	settings.last_mode = mode == Xm8Ra::RaPlayMode::Hardcore ?
+		Xm8Ra::kRaModeHardcore : Xm8Ra::kRaModeSoftcore;
+	return ra_library->SaveSettings(settings, error);
+}
+
+Xm8Ra::RaSessionPolicyContext App::GetRaPolicyContext() const
+{
+	Xm8Ra::RaSessionPolicyContext context;
+	context.ra_enabled = ra_mode_enabled;
+	context.selected_mode = ra_play_mode;
+	context.session_state = ra_session_state;
+	return context;
+}
+
+bool App::CheckRaOperation(Xm8Ra::RaRestrictedOperation operation,
+	const char *notice)
+{
+	if (Xm8Ra::IsRaOperationAllowed(GetRaPolicyContext(), operation)) {
+		return true;
+	}
+	AddRaNotice(notice);
+	return false;
+}
+
+void App::ApplyRaOnlineRestrictions()
+{
+	if (!Xm8Ra::IsRaOnlineSession(GetRaPolicyContext())) return;
+	if (!ra_fast_disk_override_active) {
+		ra_saved_fast_disk = setting->IsFastDisk();
+		ra_fast_disk_override_active = true;
+	}
+	setting->SetFastDisk(false);
+	if (IsRaHardcoreActive() && app_fullspeed) NormalSpeed();
+}
+
+void App::RestoreRaSessionOverrides()
+{
+	if (!ra_fast_disk_override_active || setting == NULL) return;
+	setting->SetFastDisk(ra_saved_fast_disk);
+	ra_fast_disk_override_active = false;
+}
+
 //
 // BeginRaSavedTokenLogin()
 // begin saved token login if possible
@@ -1500,6 +1567,8 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 	}
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::BeginLaunch);
+	ApplyRaOnlineRestrictions();
+	if (audio != NULL) CtrlAudio();
 	if (ra_service != NULL) {
 		const Xm8Ra::RaLibrarySyncState sync_state =
 			ra_service->LibrarySyncSnapshot().state;
@@ -1509,6 +1578,8 @@ void App::BeginRaSessionForMedia(const std::string& md5, int64_t game_id)
 			ra_library_sync_started_for_login = false;
 		}
 		ra_service->UnloadGame();
+		ra_service->SetHardcoreEnabled(
+			ra_play_mode == Xm8Ra::RaPlayMode::Hardcore);
 	}
 	ra_pending_game_hash = md5;
 	ra_pending_library_game_id = game_id;
@@ -1708,6 +1779,9 @@ void App::ProcessRaService(bool emulation_idle)
 			}
 		}
 		else if (game.state == Xm8Ra::RaGameSessionState::Loaded) {
+			// The VM has already been cold-reset for this launch. Establish the
+			// matching rcheevos frame-zero state exactly once.
+			ra_service->ResetProgress();
 			ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 				Xm8Ra::RaSessionSignal::LaunchSucceeded);
 			ra_loaded_library_game_id = ra_pending_library_game_id;
@@ -1743,6 +1817,7 @@ void App::ProcessRaService(bool emulation_idle)
 	}
 	ProcessRaLibrarySync();
 	AddRaEventsAsNotices(ra_service->TakeEvents());
+	HandleRaResetRequest();
 }
 
 //
@@ -2060,10 +2135,17 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 			ra_overlay->HideLeaderboardTracker(event.leaderboard.id,
 				event_now);
 			break;
+		case Xm8Ra::RaEventType::ResetRequested:
+			ra_reset_requested = true;
+			break;
 		default:
 			break;
 		}
-		const std::string notice = RaEventNotice(event);
+		std::string notice = RaEventNotice(event);
+		if (event.type == Xm8Ra::RaEventType::AchievementTriggered &&
+			IsRaHardcoreActive() && !notice.empty()) {
+			notice += " [Hardcore]";
+		}
 		if (!notice.empty()) {
 			AddRaNotice(notice, RaEventNoticePriority(event),
 				event.type == Xm8Ra::RaEventType::AchievementTriggered ?
@@ -2076,6 +2158,13 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 	if (session_state_changed) {
 		menu->UpdateRaStatus();
 	}
+}
+
+void App::HandleRaResetRequest()
+{
+	if (!ra_reset_requested) return;
+	ra_reset_requested = false;
+	Reset();
 }
 
 //
@@ -3899,11 +3988,23 @@ TapeManager* App::GetTapeManager()
 bool App::IsRaOverlayBlocking() const
 {
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	return ra_overlay != NULL && ra_overlay->IsBlocking();
+	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) return false;
+	// Browsing RA information in Hardcore is an input-capturing overlay, not
+	// an emulator pause. Login remains blocking because it owns text input.
+	return !IsRaHardcoreActive() ||
+		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login;
 #else
 	return false;
 #endif
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+bool App::IsRaHardcoreMenuRunning() const
+{
+	return app_menu && IsRaHardcoreActive() && !app_background &&
+		!app_powerdown;
+}
+#endif
 
 //
 // Run()
@@ -3972,9 +4073,15 @@ void App::Run()
 	// main loop
 	while (app_quit == false) {
 		const bool ra_overlay_blocking = IsRaOverlayBlocking();
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		const bool ra_hardcore_menu_running = IsRaHardcoreMenuRunning();
+#else
+		const bool ra_hardcore_menu_running = false;
+#endif
 
 		// stop virtual machine or menu
-		if ((app_menu == true) || (app_background == true) ||
+		if ((app_menu == true && !ra_hardcore_menu_running) ||
+			(app_background == true) ||
 			(app_powerdown == true) || ra_overlay_blocking) {
 			// draw
 			if ((app_mobile != true) || (app_background != true)) {
@@ -4146,6 +4253,9 @@ void App::Run()
 		if (app_quit == true) {
 			continue;
 		}
+		if (app_menu == true) {
+			menu->ProcessMenu();
+		}
 
 		// power management
 		PowerMng();
@@ -4273,6 +4383,12 @@ void App::Draw()
 
 	// rendering
 	vm->draw_screen();
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (IsRaHardcoreMenuRunning()) {
+		menu->Draw();
+	}
+#endif
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	DrawRaOverlay();
@@ -5073,6 +5189,12 @@ bool App::IsFullScreen()
 //
 void App::FullSpeed()
 {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (!CheckRaOperation(Xm8Ra::RaRestrictedOperation::FullSpeed,
+		"RA: Full Speed is unavailable in Hardcore")) {
+		return;
+	}
+#endif
 	app_fullspeed = true;
 	video->SetFullSpeed(true);
 
@@ -5205,11 +5327,16 @@ void App::LeaveMenu(bool check)
 //
 void App::CtrlAudio()
 {
-	if ((app_background == false) && (app_menu == false) &&
+	const bool menu_stops_audio = app_menu
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		&& !IsRaHardcoreMenuRunning()
+#endif
+		;
+	if ((app_background == false) && !menu_stops_audio &&
 		(app_powerdown == false) && !IsRaOverlayBlocking()) {
 		audio->Play();
 	}
-	if ((app_background == true) || (app_menu == true) ||
+	if ((app_background == true) || menu_stops_audio ||
 		(app_powerdown == true) || IsRaOverlayBlocking()) {
 		audio->Stop();
 	}
@@ -5362,6 +5489,11 @@ void App::ChangeSystemInternal(bool load, bool preserve_ra_session)
 		audio->Stop();
 		audio->Play();
 	}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (!preserve_ra_session && ra_mode_enabled) {
+		BeginRaSessionForMountedDrive1();
+	}
+#endif
 }
 
 //
@@ -5458,6 +5590,12 @@ const char* App::GetTapeDir()
 //
 void App::Reset()
 {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	const bool preserve_ra_session = ra_mode_enabled && ra_service != NULL &&
+		Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
+		ra_service->GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::Loaded;
+#endif
 	// virtual machine
 	vm->reset();
 
@@ -5465,19 +5603,23 @@ void App::Reset()
 	upd1990a->resync();
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	if (ra_service != NULL) {
-		ra_service->UnloadGame();
+	if (preserve_ra_session) {
+		// Reset VM first, then reset rcheevos exactly once for the same game.
+		ra_service->ResetProgress();
 	}
-	StopRaSession();
-	ra_pending_game_hash.clear();
-	ra_pending_library_game_id = 0;
-	ra_loaded_library_game_id = 0;
-	ra_loaded_game_hash.clear();
-	ClearRaMediaChangeState();
-	ra_leaderboard_scoreboards.clear();
-	RefreshRaAchievementsOverlay();
-	RefreshRaLeaderboardsOverlay();
-	BeginRaSessionForMountedDrive1();
+	else {
+		if (ra_service != NULL) ra_service->UnloadGame();
+		StopRaSession();
+		ra_pending_game_hash.clear();
+		ra_pending_library_game_id = 0;
+		ra_loaded_library_game_id = 0;
+		ra_loaded_game_hash.clear();
+		ClearRaMediaChangeState();
+		ra_leaderboard_scoreboards.clear();
+		RefreshRaAchievementsOverlay();
+		RefreshRaLeaderboardsOverlay();
+		BeginRaSessionForMountedDrive1();
+	}
 #endif
 
 	// restart audio
@@ -5499,6 +5641,8 @@ bool App::Load(int slot)
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	if (ra_mode_enabled) {
+		if (!CheckRaOperation(Xm8Ra::RaRestrictedOperation::LoadState,
+			"RA: Load State is unavailable in Hardcore")) return false;
 		return LoadRaState(slot);
 	}
 #endif
@@ -5545,6 +5689,8 @@ bool App::Save(int slot)
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	if (ra_mode_enabled) {
+		if (!CheckRaOperation(Xm8Ra::RaRestrictedOperation::SaveState,
+			"RA: Save State is unavailable in Hardcore")) return false;
 		return SaveRaState(slot);
 	}
 #endif
@@ -5864,6 +6010,10 @@ bool App::CheckRaStateAvailability()
 		AddRaNotice("RA: state is unavailable while RA mode is disabled");
 		return false;
 	}
+	if (!CheckRaOperation(Xm8Ra::RaRestrictedOperation::LoadState,
+		"RA: states are unavailable in Hardcore")) {
+		return false;
+	}
 	Xm8Ra::RaStateExpectation expected;
 	std::string path;
 	std::string error;
@@ -5910,6 +6060,52 @@ bool App::ToggleRaMode()
 		BeginRaSavedTokenLogin(false);
 		BeginRaSessionForMountedDrive1();
 	}
+	return true;
+}
+
+bool App::ToggleRaPlayMode()
+{
+	const Xm8Ra::RaPlayMode mode =
+		ra_play_mode == Xm8Ra::RaPlayMode::Hardcore ?
+		Xm8Ra::RaPlayMode::Casual : Xm8Ra::RaPlayMode::Hardcore;
+	std::string error;
+	if (!SaveRaPlayModeSetting(mode, &error)) {
+		AddRaNotice("RA: setting save failed");
+		return false;
+	}
+	ra_play_mode = mode;
+	if (ra_mode_enabled) {
+		if (ra_service != NULL) ra_service->UnloadGame();
+		StopRaSession();
+		if (mode == Xm8Ra::RaPlayMode::Hardcore) NormalSpeed();
+		LockVM();
+		vm->reset();
+		upd1990a->resync();
+		UnlockVM();
+		BeginRaSessionForMountedDrive1();
+	}
+	AddRaNotice(mode == Xm8Ra::RaPlayMode::Hardcore ?
+		"RA: Hardcore selected" : "RA: Casual selected");
+	return true;
+}
+
+bool App::IsRaHardcoreSelected() const
+{
+	return ra_play_mode == Xm8Ra::RaPlayMode::Hardcore;
+}
+
+bool App::IsRaHardcoreActive() const
+{
+	return Xm8Ra::IsRaHardcoreSession(GetRaPolicyContext());
+}
+
+bool App::ToggleFastDisk()
+{
+	if (!CheckRaOperation(Xm8Ra::RaRestrictedOperation::FastDisk,
+		"RA: Pseudo fast disk is unavailable during an online session")) {
+		return false;
+	}
+	setting->SetFastDisk(!setting->IsFastDisk());
 	return true;
 }
 
@@ -6728,6 +6924,8 @@ void App::LogoutRa()
 	}
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::SessionInvalidated);
+	RestoreRaSessionOverrides();
+	if (audio != NULL) CtrlAudio();
 	ra_saved_login_started = false;
 	ra_manual_login_started = false;
 	ra_library_sync_started_for_login = false;

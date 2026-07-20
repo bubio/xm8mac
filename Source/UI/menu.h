@@ -51,6 +51,8 @@ public:
 										// enter system menu
 	void EnterRa(int id);
 										// enter RetroAchievements menu
+	void EnterRaHardcoreConfirmation();
+										// confirm ending an active Hardcore session
 	void UpdateRaStatus();
 										// update RetroAchievements status rows
 	bool IsRaRichPresenceFocused();

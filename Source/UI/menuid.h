@@ -271,6 +271,12 @@
 										// RetroAchievements load state
 #define MENU_RA_SAVE			2009
 										// RetroAchievements save state
+#define MENU_RA_HARDCORE		2010
+										// RetroAchievements Casual/Hardcore
+#define MENU_RA_HARDCORE_YES	2011
+										// confirm leaving Hardcore
+#define MENU_RA_HARDCORE_NO		2012
+										// cancel leaving Hardcore
 #define MENU_RA_MAX				2099
 										// maximum
 
