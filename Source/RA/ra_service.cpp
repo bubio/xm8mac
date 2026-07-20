@@ -1,4 +1,5 @@
 #include "ra_service.h"
+#include "ra_state_store.h"
 
 #include "rc_error.h"
 #include "rc_api_runtime.h"
@@ -625,6 +626,57 @@ bool RaService::Idle()
 bool RaService::IsProcessingRequired() const
 {
 	return client_ != nullptr && rc_client_is_processing_required(client_) != 0;
+}
+
+bool RaService::SerializeProgress(std::vector<uint8_t> *progress,
+	std::string *error) const
+{
+	if (progress != nullptr) progress->clear();
+	if (progress == nullptr || client_ == nullptr ||
+		game_session_.state != RaGameSessionState::Loaded) {
+		if (error != nullptr) *error = "RA game is not loaded";
+		return false;
+	}
+	const size_t size = rc_client_progress_size(client_);
+	if (size == 0 || size > kRaStateMaxProgressSize) {
+		if (error != nullptr) *error = "invalid RA progress size";
+		return false;
+	}
+	progress->resize(size);
+	const int result = rc_client_serialize_progress_sized(client_,
+		progress->data(), progress->size());
+	if (result != RC_OK) {
+		progress->clear();
+		if (error != nullptr) *error = rc_error_str(result);
+		return false;
+	}
+	if (error != nullptr) error->clear();
+	return true;
+}
+
+bool RaService::DeserializeProgress(const std::vector<uint8_t>& progress,
+	std::string *error)
+{
+	if (client_ == nullptr || game_session_.state != RaGameSessionState::Loaded ||
+		progress.empty() || progress.size() > kRaStateMaxProgressSize) {
+		if (error != nullptr) *error = "RA progress is unavailable";
+		return false;
+	}
+	const int result = rc_client_deserialize_progress_sized(client_,
+		progress.data(), progress.size());
+	if (result != RC_OK) {
+		if (error != nullptr) *error = rc_error_str(result);
+		return false;
+	}
+	if (error != nullptr) error->clear();
+	return true;
+}
+
+void RaService::ResetProgress()
+{
+	if (client_ != nullptr && game_session_.state == RaGameSessionState::Loaded) {
+		rc_client_reset(client_);
+	}
 }
 
 std::vector<RaEvent> RaService::TakeEvents()

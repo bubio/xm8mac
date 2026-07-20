@@ -43,9 +43,9 @@ public:
 										// enter drive2 menu
 	void EnterCmt(int id);
 										// enter cmt menu
-	void EnterLoad();
+	void EnterLoad(bool ra_state = false);
 										// enter load menu
-	void EnterSave();
+	void EnterSave(bool ra_state = false);
 										// enter save menu
 	void EnterSystem(int id);
 										// enter system menu
@@ -191,6 +191,8 @@ private:
 										// parent softkey type id
 	int joymap_id;
 										// parent joymap id
+	bool ra_state_menu;
+										// state menu was opened from RetroAchievements
 	static const int vmkey_table[62 * 2];
 										// MENU_VMKEY table
 	static const Uint32 joytest_table[15 * 2];

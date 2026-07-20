@@ -32,6 +32,12 @@
 
 #include <string>
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+static_assert(MENU_RA_MIN > MENU_SCALEFILTER_MAX &&
+	MENU_RA_MAX < MENU_FILE_MIN,
+	"RetroAchievements menu IDs must not overlap another menu range");
+#endif
+
 //
 // Menu()
 // constructor
@@ -66,6 +72,9 @@ Menu::Menu(App *a)
 
 	// joystick to keyboard
 	joymap_id = MENU_JOYMAP_DPAD_UP;
+
+	// state menu parent
+	ra_state_menu = false;
 }
 
 //
@@ -230,8 +239,14 @@ void Menu::EnterMain(int id)
 	list->AddButton("Drive 1", MENU_MAIN_DRIVE1);
 	list->AddButton("Drive 2", MENU_MAIN_DRIVE2);
 	list->AddButton("CMT", MENU_MAIN_CMT);
-	list->AddButton("Load State", MENU_MAIN_LOAD);
-	list->AddButton("Save State", MENU_MAIN_SAVE);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (!app->IsRaModeEnabled()) {
+#endif
+		list->AddButton("Load State", MENU_MAIN_LOAD);
+		list->AddButton("Save State", MENU_MAIN_SAVE);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	}
+#endif
 	list->AddButton("System Options", MENU_MAIN_SYSTEM);
 	list->AddButton("Video Options", MENU_MAIN_VIDEO);
 	list->AddButton("Audio Options", MENU_MAIN_AUDIO);
@@ -428,7 +443,7 @@ void Menu::EnterCmt(int id)
 // EnterLoad()
 // enter load menu
 //
-void Menu::EnterLoad()
+void Menu::EnterLoad(bool ra_state)
 {
 	int id;
 	int last;
@@ -437,14 +452,16 @@ void Menu::EnterLoad()
 	char textbuf[64];
 	char timebuf[64];
 
-	list->SetTitle("<< Load State >>", MENU_LOAD);
+	ra_state_menu = ra_state;
+	list->SetTitle(ra_state ? "<< RA Load State >>" : "<< Load State >>",
+		MENU_LOAD);
 
 	// default focus
 	id = MENU_LOAD_0;
 
 	for (slot=0; slot<10; slot++) {
 		if (slot == 0) {
-			strcpy(textbuf, "Slot 0 (AUTO)");
+			strcpy(textbuf, ra_state ? "Slot 0       " : "Slot 0 (AUTO)");
 		}
 		else {
 			sprintf(textbuf, "Slot %d       ", slot);
@@ -474,7 +491,7 @@ void Menu::EnterLoad()
 // EnterSave()
 // enter save menu
 //
-void Menu::EnterSave()
+void Menu::EnterSave(bool ra_state)
 {
 	int id;
 	int last;
@@ -483,14 +500,16 @@ void Menu::EnterSave()
 	char textbuf[64];
 	char timebuf[64];
 
-	list->SetTitle("<< Save State >>", MENU_SAVE);
+	ra_state_menu = ra_state;
+	list->SetTitle(ra_state ? "<< RA Save State >>" : "<< Save State >>",
+		MENU_SAVE);
 
 	// default focus
 	id = MENU_SAVE_0;
 
 	for (slot=0; slot<10; slot++) {
 		if (slot == 0) {
-			strcpy(textbuf, "Slot 0 (AUTO)");
+			strcpy(textbuf, ra_state ? "Slot 0       " : "Slot 0 (AUTO)");
 		}
 		else {
 			sprintf(textbuf, "Slot %d       ", slot);
@@ -707,6 +726,10 @@ void Menu::EnterRa(int id)
 	list->AddButton("Library", MENU_RA_LIBRARY);
 	list->AddButton("Achievements", MENU_RA_ACHIEVEMENTS);
 	list->AddButton("Leaderboards", MENU_RA_LEADERBOARDS);
+	if (app->IsRaModeEnabled()) {
+		list->AddButton("Load State", MENU_RA_LOAD);
+		list->AddButton("Save State", MENU_RA_SAVE);
+	}
 
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
 	UpdateRaStatus();
@@ -1734,12 +1757,30 @@ void Menu::CmdBack()
 
 	// load menu
 	case MENU_LOAD:
-		EnterMain(MENU_MAIN_LOAD);
+		if (ra_state_menu) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			EnterRa(MENU_RA_LOAD);
+#else
+			EnterMain(MENU_MAIN_LOAD);
+#endif
+		}
+		else {
+			EnterMain(MENU_MAIN_LOAD);
+		}
 		break;
 
 	// save menu
 	case MENU_SAVE:
-		EnterMain(MENU_MAIN_SAVE);
+		if (ra_state_menu) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			EnterRa(MENU_RA_SAVE);
+#else
+			EnterMain(MENU_MAIN_SAVE);
+#endif
+		}
+		else {
+			EnterMain(MENU_MAIN_SAVE);
+		}
 		break;
 
 	// system menu
@@ -2295,8 +2336,7 @@ void Menu::CmdRa(int id)
 	switch (id) {
 	case MENU_RA_MODE:
 		app->ToggleRaMode();
-		list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
-		update_status();
+		EnterRa(MENU_RA_MODE);
 		break;
 
 	case MENU_RA_STATUS:
@@ -2328,6 +2368,18 @@ void Menu::CmdRa(int id)
 
 	case MENU_RA_LEADERBOARDS:
 		app->OpenRaLeaderboardsOverlay();
+		break;
+
+	case MENU_RA_LOAD:
+		if (app->CheckRaStateAvailability()) {
+			EnterLoad(true);
+		}
+		break;
+
+	case MENU_RA_SAVE:
+		if (app->CheckRaStateAvailability()) {
+			EnterSave(true);
+		}
 		break;
 
 	default:

@@ -112,6 +112,6 @@ status alphaを使った黒で消去するよう修正した。これにより�
 - macOS最終倍率受入: 完了
 - Phase 6完了判定: 完了（2026-07-20）
 
-次はPhase 7のmacOS Softcore stateへ進む。
+次はPhase 7のmacOS RA Casual stateへ進む。
 Phase 7ではNormal stateと別pathを使い、RA runtime progress付きchunk、媒体・Game ID整合性、
 破損時のatomic rollbackを実装する。

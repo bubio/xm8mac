@@ -347,6 +347,18 @@ if(BUILD_TESTING)
   add_test(NAME event_host_frame_integration_test
     COMMAND event_host_frame_integration_test)
 
+  add_executable(fileio_error_test
+    Tests/fileio_error_test.cpp
+    Source/UI/fileio.cpp
+  )
+  target_include_directories(fileio_error_test PRIVATE
+    Source/UI
+    Source/ePC-8801MA
+  )
+  target_compile_definitions(fileio_error_test PRIVATE SDL)
+  target_link_libraries(fileio_error_test PRIVATE XM8::SDL)
+  add_test(NAME fileio_error_test COMMAND fileio_error_test)
+
   if(APPLE)
     add_executable(converter_mac_test
       Tests/converter_mac_test.mm
@@ -418,6 +430,13 @@ if(BUILD_TESTING)
     )
     target_include_directories(ra_session_state_test PRIVATE Source/RA)
     add_test(NAME ra_session_state_test COMMAND ra_session_state_test)
+
+    add_executable(ra_state_store_test
+      Tests/ra_state_store_test.cpp
+      Source/RA/ra_state_store.cpp
+    )
+    target_include_directories(ra_state_store_test PRIVATE Source/RA)
+    add_test(NAME ra_state_store_test COMMAND ra_state_store_test)
 
     add_executable(ra_inspect_media
       Tests/ra_inspect_media.cpp

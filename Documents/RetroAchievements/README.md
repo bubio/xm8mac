@@ -78,6 +78,9 @@ ePC-8801MAの旧版
 | [28_RA設定簡素化方針.md](28_RA設定簡素化方針.md) | 独立Settings画面を設けず、RA modeとSoftcore／Hardcoreだけを公開する方針 |
 | [29_Phase6安全文字変換実施記録.md](29_Phase6安全文字変換実施記録.md) | UTF-8厳密検証、Shift-JIS安全化、文字境界・表示幅計算、既存KANJI ROM描画への接続 |
 | [30_Phase6完了監査.md](30_Phase6完了監査.md) | Phase 6仕様突合、送信エラー1件保持、最終自動検証、視覚受入とPhase 7 handoff |
+| [31_Phase7RA_Casualステート実施記録.md](31_Phase7RA_Casualステート実施記録.md) | RA Casual／Offline専用state、進捗同期、事前検証、rollback、手動受入 |
+| [32_Phase7コードレビューとリファクタリング.md](32_Phase7コードレビューとリファクタリング.md) | Hardcore着手前のstate境界、I/O失敗処理、公開API、異常系試験の監査 |
+| [33_RAステートメニュー分離実施記録.md](33_RAステートメニュー分離実施記録.md) | Normal／RAのLoad・Save導線分離、利用不可通知、メニューID衝突修正 |
 
 ## 3. 確定事項
 
@@ -264,7 +267,7 @@ macOS版は挙動確認の基準であり、仕様の代わりではない。後
 | 実フレーム評価、memory map | 01 | Phase 2、5 |
 | ライブラリ同期、進捗、画像 | 02、03 | Phase 3、5、6 |
 | SDLオーバーレイ、全入力方式 | 03 | Phase 6、各OS受入 |
-| Softcore state | 04 | Phase 7 |
+| RA Casual state | 04 | Phase 7 |
 | Hardcore制約 | 04 | Phase 8、各OS受入 |
 | Windows移植 | 05、06 | Phase 9 |
 | Linux移植 | 05、06 | Phase 10 |

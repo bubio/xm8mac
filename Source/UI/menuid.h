@@ -251,23 +251,27 @@
 //
 // RetroAchievements menu
 //
-#define MENU_RA_MIN				1500
+#define MENU_RA_MIN				2000
 										// minimum
-#define MENU_RA_MODE			1501
+#define MENU_RA_MODE			2001
 										// RetroAchievements mode
-#define MENU_RA_STATUS			1502
+#define MENU_RA_STATUS			2002
 										// RetroAchievements status
-#define MENU_RA_LOGIN			1503
+#define MENU_RA_LOGIN			2003
 										// RetroAchievements login/logout
-#define MENU_RA_LIBRARY			1504
+#define MENU_RA_LIBRARY			2004
 										// RetroAchievements library
-#define MENU_RA_ACHIEVEMENTS	1505
+#define MENU_RA_ACHIEVEMENTS	2005
 										// RetroAchievements achievements
-#define MENU_RA_LEADERBOARDS	1506
+#define MENU_RA_LEADERBOARDS	2006
 										// RetroAchievements leaderboards
-#define MENU_RA_PRESENCE		1507
+#define MENU_RA_PRESENCE		2007
 										// RetroAchievements Rich Presence
-#define MENU_RA_MAX				1599
+#define MENU_RA_LOAD			2008
+										// RetroAchievements load state
+#define MENU_RA_SAVE			2009
+										// RetroAchievements save state
+#define MENU_RA_MAX				2099
 										// maximum
 
 //

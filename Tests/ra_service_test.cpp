@@ -714,6 +714,15 @@ int main()
 		Check(frame_game.state == Xm8Ra::RaGameSessionState::Loaded,
 			"frame evaluation game is loaded");
 		service.TakeEvents();
+		std::vector<uint8_t> saved_progress;
+		Check(service.SerializeProgress(&saved_progress, &error) &&
+			!saved_progress.empty(), "serialize loaded RA progress");
+		std::vector<uint8_t> damaged_progress = saved_progress;
+		damaged_progress[0] ^= 0x80;
+		Check(!service.DeserializeProgress(damaged_progress, &error),
+			"reject damaged RA progress");
+		Check(service.DeserializeProgress(saved_progress, &error),
+			"restore valid RA progress after rejection");
 
 		memory.value = 0;
 		Check(service.DoFrame(), "evaluate first completed frame");
@@ -744,6 +753,11 @@ int main()
 		options.http_client = std::move(fake_http);
 		Xm8Ra::RaService service(std::move(options));
 
+		std::vector<uint8_t> progress = {1};
+		std::string progress_error;
+		Check(!service.SerializeProgress(&progress, &progress_error),
+			"progress serialization requires a loaded game");
+		Check(progress.empty(), "failed progress serialization clears output");
 		Check(!service.DoFrame(), "do frame is ignored before a game is loaded");
 		Check(service.Idle(), "idle is allowed before a game is loaded");
 		Check(service.TakeEvents().empty(),

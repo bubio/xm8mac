@@ -49,6 +49,7 @@
 #include "ra_media_change_policy.h"
 #include "ra_platform.h"
 #include "ra_paths.h"
+#include "ra_state_store.h"
 #include "ra_text_converter.h"
 #endif
 #ifdef __ANDROID__
@@ -166,6 +167,19 @@ std::string MakeRaUserAgent()
 		<< " rcheevos/" << Xm8RaBuildInfo::RcheevosVersionString()
 		<< " (macOS)";
 	return stream.str();
+}
+
+std::string ParentDirectoryName(const std::string& path)
+{
+	const size_t end = path.find_last_not_of("/\\");
+	if (end == std::string::npos) return std::string();
+	const size_t parent_separator = path.find_last_of("/\\", end);
+	if (parent_separator == std::string::npos) return std::string();
+	const size_t grandparent_separator = path.find_last_of("/\\",
+		parent_separator == 0 ? 0 : parent_separator - 1);
+	const size_t begin = grandparent_separator == std::string::npos ? 0 :
+		grandparent_separator + 1;
+	return path.substr(begin, parent_separator - begin);
 }
 
 bool DecodeRaBadgePixels(const std::vector<uint8_t>& encoded, int *width,
@@ -3928,7 +3942,11 @@ void App::Run()
 	// android intent
 	if (ProcessIntent() == false) {
 		// load state 0 (auto)
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (!ra_mode_enabled) Load(0);
+#else
 		Load(0);
+#endif
 
 		// enter menu
 		EnterMenu(MENU_MAIN);
@@ -3936,7 +3954,11 @@ void App::Run()
 #else
 	if (startup_disk_boot == false) {
 		// load state 0 (auto)
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (!ra_mode_enabled) Load(0);
+#else
 		Load(0);
+#endif
 
 		// enter menu
 		EnterMenu(MENU_MAIN);
@@ -4225,7 +4247,11 @@ void App::Run()
 	}
 
 	// Do not leak a command-line session into the automatic state.
-	if (startup_disk_boot == false) {
+	if (startup_disk_boot == false
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		&& !ra_mode_enabled
+#endif
+	) {
 		Save(0);
 	}
 }
@@ -5238,6 +5264,11 @@ void App::ChangeAudio()
 //
 void App::ChangeSystem(bool load)
 {
+	ChangeSystemInternal(load, false);
+}
+
+void App::ChangeSystemInternal(bool load, bool preserve_ra_session)
+{
 	int drive;
 	bool open[MAX_DRIVE];
 	int bank[MAX_DRIVE];
@@ -5262,16 +5293,20 @@ void App::ChangeSystem(bool load)
 	rec = tapemgr->IsRec();
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	if (ra_service != NULL) {
-		ra_service->UnloadGame();
+	if (!preserve_ra_session) {
+		if (ra_service != NULL) {
+			ra_service->UnloadGame();
+		}
+		StopRaSession();
+		ra_pending_game_hash.clear();
+		ra_pending_library_game_id = 0;
+		ra_loaded_library_game_id = 0;
+		ra_loaded_game_hash.clear();
+		ClearRaMediaChangeState();
+		ra_leaderboard_scoreboards.clear();
 	}
-	StopRaSession();
-	ra_pending_game_hash.clear();
-	ra_pending_library_game_id = 0;
-	ra_loaded_library_game_id = 0;
-	ra_loaded_game_hash.clear();
-	ClearRaMediaChangeState();
-	ra_leaderboard_scoreboards.clear();
+#else
+	(void)preserve_ra_session;
 #endif
 
 	// delete virtual machine
@@ -5462,6 +5497,12 @@ bool App::Load(int slot)
 	FILEIO fileio;
 	int freq;
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_mode_enabled) {
+		return LoadRaState(slot);
+	}
+#endif
+
 	// get current freq
 	freq = setting->GetAudioFreq();
 
@@ -5475,59 +5516,14 @@ bool App::Load(int slot)
 
 	// open
 	if (fileio.Fopen(state_path, FILEIO_READ_BINARY) == true) {
-		// settting
-		if (setting->LoadSetting(&fileio) == true) {
-			// rebuild vm
-			ChangeSystem(true);
-
-			// disk manager
-			diskmgr[0]->Load(&fileio);
-			diskmgr[1]->Load(&fileio);
-
-			// tape manager
-			tapemgr->Load(&fileio);
-
-			// each device
-			vm->load_state(&fileio);
-
-			// close
-			fileio.Fclose();
-
-			// initialize frame rate
-			memset(draw_tick, 0, sizeof(draw_tick));
-			draw_tick_count = 0;
-			draw_tick_point = 0;
-
-			// audio
-			if (setting->GetAudioFreq() != freq) {
-				ChangeAudio();
-			}
-			else {
-				if (audio->IsPlay() == true) {
-					audio->Stop();
-					audio->Play();
-				}
-			}
-
-			// input
-			input->ChangeList(false, false);
-			input->ChangeCursorToNumPad(setting->IsCursorToNumPad());
-			input->ChangeNumToNumPad(setting->IsNumToNumPad());
-
-			// resync rtc
-			upd1990a->resync();
-
+		const bool loaded = LoadStateBody(&fileio, freq);
+		fileio.Fclose();
+		if (loaded) {
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 			BeginRaSessionForMountedDrive1();
 #endif
-
-			// success
 			UnlockVM();
 			return true;
-		}
-		else {
-			// close
-			fileio.Fclose();
 		}
 	}
 
@@ -5547,6 +5543,12 @@ bool App::Save(int slot)
 	char name[64];
 	FILEIO fileio;
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_mode_enabled) {
+		return SaveRaState(slot);
+	}
+#endif
+
 	// lock vm
 	LockVM();
 
@@ -5557,25 +5559,15 @@ bool App::Save(int slot)
 
 	// open
 	if (fileio.Fopen(state_path, FILEIO_WRITE_BINARY) == true) {
-		// settting
-		setting->SaveSetting(&fileio);
-
-		// disk manager
-		diskmgr[0]->Save(&fileio);
-		diskmgr[1]->Save(&fileio);
-
-		// tape manager
-		tapemgr->Save(&fileio);
-
-		// each device
-		vm->save_state(&fileio);
+		const bool saved = SaveStateBody(&fileio);
 
 		// close
 		fileio.Fclose();
 
 		// success
+		const bool complete = saved && !fileio.HasError();
 		UnlockVM();
-		return true;
+		return complete;
 	}
 
 	// unlock vm
@@ -5593,6 +5585,16 @@ bool App::GetStateTime(int slot, cur_time_t *cur_time)
 {
 	char name[64];
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_mode_enabled) {
+		Xm8Ra::RaStateExpectation expected;
+		std::string path;
+		std::string error;
+		return GetRaStateContext(slot, &expected, &path, &error) &&
+			platform->GetFileDateTime(path.c_str(), cur_time);
+	}
+#endif
+
 	// state path
 	sprintf(name, STATE_FILENAME, slot);
 	strcpy(state_path, setting->GetSettingDir());
@@ -5600,6 +5602,46 @@ bool App::GetStateTime(int slot, cur_time_t *cur_time)
 
 	// platform
 	return platform->GetFileDateTime(state_path, cur_time);
+}
+
+bool App::LoadStateBody(FILEIO *fileio, int previous_audio_frequency,
+	bool preserve_ra_session)
+{
+	if (!setting->LoadSetting(fileio)) {
+		return false;
+	}
+	ChangeSystemInternal(true, preserve_ra_session);
+	diskmgr[0]->Load(fileio);
+	diskmgr[1]->Load(fileio);
+	tapemgr->Load(fileio);
+	if (!vm->load_state(fileio) || fileio->HasError()) {
+		return false;
+	}
+	memset(draw_tick, 0, sizeof(draw_tick));
+	draw_tick_count = 0;
+	draw_tick_point = 0;
+	if (setting->GetAudioFreq() != previous_audio_frequency) {
+		ChangeAudio();
+	}
+	else if (audio->IsPlay()) {
+		audio->Stop();
+		audio->Play();
+	}
+	input->ChangeList(false, false);
+	input->ChangeCursorToNumPad(setting->IsCursorToNumPad());
+	input->ChangeNumToNumPad(setting->IsNumToNumPad());
+	upd1990a->resync();
+	return true;
+}
+
+bool App::SaveStateBody(FILEIO *fileio)
+{
+	setting->SaveSetting(fileio);
+	diskmgr[0]->Save(fileio);
+	diskmgr[1]->Save(fileio);
+	tapemgr->Save(fileio);
+	vm->save_state(fileio);
+	return !fileio->HasError();
 }
 
 //
@@ -5612,6 +5654,197 @@ void App::Quit()
 }
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+
+bool App::GetRaStateContext(int slot,
+	Xm8Ra::RaStateExpectation *expected, std::string *path,
+	std::string *error) const
+{
+	if (expected == nullptr || path == nullptr || ra_library == nullptr ||
+		diskmgr[0] == nullptr || !diskmgr[0]->IsOpen()) {
+		if (error != nullptr) *error = "RA state requires mounted Drive 1 media";
+		return false;
+	}
+	const std::string disk_path = diskmgr[0]->GetPath();
+	std::string media_root = ra_library->MediaRoot();
+	if (!media_root.empty() && media_root.back() != '/' &&
+		media_root.back() != '\\') {
+		media_root += '/';
+	}
+	const std::string anchor_md5 = ParentDirectoryName(disk_path);
+	if (disk_path.compare(0, media_root.size(), media_root) != 0 ||
+		anchor_md5.size() != 32) {
+		if (error != nullptr) *error = "RA anchor media is unavailable";
+		return false;
+	}
+
+	Xm8Ra::RaStateExpectation context;
+	context.anchor_md5 = anchor_md5;
+	context.rcheevos_version = Xm8RaBuildInfo::RcheevosVersion();
+	if (Xm8Ra::IsRaSessionOffline(ra_session_state)) {
+		context.mode = Xm8Ra::RaStateMode::Offline;
+		context.game_id = 0;
+	}
+	else if (Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
+		ra_service != nullptr &&
+		ra_service->GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::Loaded) {
+		context.mode = Xm8Ra::RaStateMode::Casual;
+		context.game_id = ra_service->GameSessionSnapshot().game_id;
+	}
+	else {
+		if (error != nullptr) *error = "RA session is not ready for states";
+		return false;
+	}
+
+	*path = Xm8Ra::RaStatePath(ra_library->Root(), context.mode,
+		context.game_id, context.anchor_md5, slot);
+	if (path->empty()) {
+		if (error != nullptr) *error = "invalid RA state path";
+		return false;
+	}
+	*expected = context;
+	if (error != nullptr) error->clear();
+	return true;
+}
+
+bool App::SaveRaState(int slot)
+{
+	Xm8Ra::RaStateExpectation expected;
+	std::string path;
+	std::string error;
+	LockVM();
+	if (!GetRaStateContext(slot, &expected, &path, &error)) {
+		UnlockVM();
+		AddRaNotice("RA: " + error);
+		return false;
+	}
+
+	Xm8Ra::RaStateRecord record;
+	record.mode = expected.mode;
+	record.game_id = expected.game_id;
+	record.anchor_md5 = expected.anchor_md5;
+	record.rcheevos_version = expected.rcheevos_version;
+	if (record.mode == Xm8Ra::RaStateMode::Casual &&
+		!ra_service->SerializeProgress(&record.progress, &error)) {
+		UnlockVM();
+		AddRaNotice("RA: state progress save failed");
+		return false;
+	}
+
+	std::ostringstream temporary_name;
+	temporary_name << ra_library->TempRoot() << "/state-body-save-" << slot;
+	const std::string temporary = temporary_name.str();
+	FILEIO fileio;
+	if (!fileio.Fopen(const_cast<char *>(temporary.c_str()),
+		FILEIO_WRITE_BINARY)) {
+		UnlockVM();
+		AddRaNotice("RA: state save failed");
+		return false;
+	}
+	const bool body_written = SaveStateBody(&fileio);
+	fileio.Fclose();
+	const bool body_read = body_written && !fileio.HasError() &&
+		Xm8Ra::ReadRaStateFile(temporary, &record.body, &error);
+	std::remove(temporary.c_str());
+	std::vector<uint8_t> bytes;
+	const bool saved = body_read && Xm8Ra::BuildRaState(record, &bytes,
+		&error) && Xm8Ra::WriteRaStateFileAtomically(path, bytes, &error);
+	UnlockVM();
+	if (!saved) {
+		AddRaNotice("RA: state save failed");
+	}
+	return saved;
+}
+
+bool App::LoadRaState(int slot)
+{
+	Xm8Ra::RaStateExpectation expected;
+	std::string path;
+	std::string error;
+	LockVM();
+	if (!GetRaStateContext(slot, &expected, &path, &error)) {
+		UnlockVM();
+		AddRaNotice("RA: " + error);
+		return false;
+	}
+
+	std::vector<uint8_t> bytes;
+	Xm8Ra::RaStateRecord record;
+	if (!Xm8Ra::ReadRaStateFile(path, &bytes, &error) ||
+		!Xm8Ra::ParseRaState(bytes, &record, &error) ||
+		!Xm8Ra::ValidateRaState(record, expected, &error)) {
+		UnlockVM();
+		AddRaNotice("RA: state rejected - " + error);
+		return false;
+	}
+
+	std::ostringstream base_name;
+	base_name << ra_library->TempRoot() << "/state-body-load-" << slot;
+	const std::string target_body = base_name.str();
+	const std::string rollback_body = target_body + ".rollback";
+	if (!Xm8Ra::WriteRaStateFileAtomically(target_body, record.body, &error)) {
+		UnlockVM();
+		AddRaNotice("RA: state preparation failed");
+		return false;
+	}
+
+	FILEIO rollback;
+	if (!rollback.Fopen(const_cast<char *>(rollback_body.c_str()),
+		FILEIO_WRITE_BINARY)) {
+		std::remove(target_body.c_str());
+		UnlockVM();
+		AddRaNotice("RA: state rollback preparation failed");
+		return false;
+	}
+	const bool rollback_written = SaveStateBody(&rollback);
+	rollback.Fclose();
+	if (!rollback_written || rollback.HasError()) {
+		std::remove(target_body.c_str());
+		std::remove(rollback_body.c_str());
+		UnlockVM();
+		AddRaNotice("RA: state rollback preparation failed");
+		return false;
+	}
+
+	const int previous_frequency = setting->GetAudioFreq();
+	FILEIO target;
+	bool loaded = target.Fopen(const_cast<char *>(target_body.c_str()),
+		FILEIO_READ_BINARY) && LoadStateBody(&target, previous_frequency, true);
+	target.Fclose();
+	if (!loaded) {
+		FILEIO restore;
+		bool restored = false;
+		if (restore.Fopen(const_cast<char *>(rollback_body.c_str()),
+			FILEIO_READ_BINARY)) {
+			restored = LoadStateBody(&restore, previous_frequency, true);
+		}
+		restore.Fclose();
+		restored = restored && !restore.HasError();
+		std::remove(target_body.c_str());
+		std::remove(rollback_body.c_str());
+		UnlockVM();
+		if (!restored) {
+			EnterRaOfflineSession("state rollback failed");
+		}
+		else {
+			AddRaNotice("RA: state load failed; previous state restored");
+		}
+		return false;
+	}
+	std::remove(target_body.c_str());
+	std::remove(rollback_body.c_str());
+
+	if (record.mode == Xm8Ra::RaStateMode::Casual &&
+		!ra_service->DeserializeProgress(record.progress, &error)) {
+		ra_service->ResetProgress();
+		AddRaNotice("RA: state loaded; achievement progress reset");
+	}
+	RefreshRaAchievementsOverlay();
+	RefreshRaLeaderboardsOverlay();
+	UnlockVM();
+	return true;
+}
+
 //
 // IsRaModeEnabled()
 // get RA mode setting
@@ -5619,6 +5852,26 @@ void App::Quit()
 bool App::IsRaModeEnabled() const
 {
 	return ra_mode_enabled;
+}
+
+//
+// CheckRaStateAvailability()
+// validate RA state menu access and notify on failure
+//
+bool App::CheckRaStateAvailability()
+{
+	if (!ra_mode_enabled) {
+		AddRaNotice("RA: state is unavailable while RA mode is disabled");
+		return false;
+	}
+	Xm8Ra::RaStateExpectation expected;
+	std::string path;
+	std::string error;
+	if (!GetRaStateContext(0, &expected, &path, &error)) {
+		AddRaNotice("RA: state unavailable - " + error);
+		return false;
+	}
+	return true;
 }
 
 //

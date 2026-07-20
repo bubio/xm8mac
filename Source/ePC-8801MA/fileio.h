@@ -31,6 +31,7 @@ private:
 #else
 	FILE *fp;
 #endif // SDL
+	bool error;
 
 public:
 	FILEIO();
@@ -39,6 +40,7 @@ public:
 	bool Fopen(_TCHAR *filename, int mode);
 	void Fclose();
 	bool IsOpened();
+	bool HasError() const;
 
 	bool FgetBool();
 	void FputBool(bool val);

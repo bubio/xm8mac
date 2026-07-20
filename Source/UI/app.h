@@ -30,6 +30,7 @@
 #include "ra_overlay.h"
 #include "ra_service.h"
 #include "ra_session_state.h"
+#include "ra_state_store.h"
 #endif
 
 const char* GetAppVersionString();
@@ -131,6 +132,8 @@ public:
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	bool IsRaModeEnabled() const;
 										// get RA mode setting
+	bool CheckRaStateAvailability();
+										// validate RA state menu access and notify on failure
 	bool ToggleRaMode();
 										// toggle RA mode setting
 	bool OpenRaLoginOverlay();
@@ -296,7 +299,21 @@ private:
 										// submit RA overlay login form
 	void DrawRaOverlay();
 										// draw RA notice overlay
+	bool GetRaStateContext(int slot, Xm8Ra::RaStateExpectation *expected,
+		std::string *path, std::string *error) const;
+										// resolve current Casual/offline state identity
+	bool LoadRaState(int slot);
+										// load validated RA-aware state
+	bool SaveRaState(int slot);
+										// save RA-aware state
 #endif
+	bool LoadStateBody(FILEIO *fileio, int previous_audio_frequency,
+		bool preserve_ra_session = false);
+										// load already-open legacy XM8 state body
+	bool SaveStateBody(FILEIO *fileio);
+										// save legacy XM8 state body
+	void ChangeSystemInternal(bool load, bool preserve_ra_session);
+										// rebuild VM with explicit RA lifecycle policy
 	bool IsRaOverlayBlocking() const;
 										// check blocking RA overlay
 	bool OpenStartupDisks(const std::vector<DiskSpec>& disks, std::string *error);

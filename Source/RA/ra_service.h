@@ -298,6 +298,11 @@ public:
 	bool DoFrame();
 	bool Idle();
 	bool IsProcessingRequired() const;
+	bool SerializeProgress(std::vector<uint8_t> *progress,
+		std::string *error) const;
+	bool DeserializeProgress(const std::vector<uint8_t>& progress,
+		std::string *error);
+	void ResetProgress();
 	std::vector<RaEvent> TakeEvents();
 	void UnloadGame();
 	void Logout();

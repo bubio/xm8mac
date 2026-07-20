@@ -79,9 +79,15 @@ Hardcore終了時には自動ステートを保存しない。
 - RA chunkがない旧ステートはNormalでは従来どおり読める。
 - RAモードではRA chunkがない旧ステートを拒否し、Normalで読み込むよう案内する。
 - Hardcoreでは新旧を問わずステート読込を開始前に拒否する。
-- RA手動stateはNormal stateと共有せず、Softcoreは
+- RA手動stateはNormal stateと共有せず、RA Casual（rcheevos内部名Softcore）は
   `ra/states/<ra_game_id>/<anchor_md5>/state<slot>.bin`、Offline sessionは
   `ra/states/offline/<anchor_md5>/state<slot>.bin`へ保存する。
+- RA mode OFFではMain menuにNormal用`Load State`／`Save State`を表示する。
+- RA mode ONではMain menuのNormal用項目を隠し、RetroAchievements menu内にRA専用
+  `Load State`／`Save State`を表示する。専用画面titleは`RA Load State`／`RA Save State`とする。
+- RA専用stateが利用できない識別中、ゲーム未開始、管理媒体なしの場合は、専用項目を選んだ時点で
+  理由を通知し、slot画面へ進めない。
+- HardcoreではRetroAchievements menuのRA専用`Load State`／`Save State`も表示しない。
 
 ### 4.2 RA chunk形式
 
@@ -119,7 +125,7 @@ N bytes  rc_client serialized progress
 - 復元には`rc_client_deserialize_progress_sized()`を使う。
 - 非推奨のsizeなしAPIは使用しない。
 
-### 4.3 Softcoreロード手順
+### 4.3 RA Casualロード手順
 
 1. 現在のRA Game IDとステートのGame IDが一致することを確認する。
 2. anchor媒体MD5が現在のゲームに所属することを確認する。
@@ -151,7 +157,7 @@ D88 pathと書込みbufferを含み、RAメタデータなしでは現在の作�
 - 初期実装ではRAモードの自動ロードをOFFとし、手動ステートだけを提供する。
 - Normalの既存自動ステート処理には変更を加えない。
 - `App::Run()`開始時の`Load(0)`と終了時の`Save(0)`は、実効モードがNormalの場合だけ
-  従来どおり実行する。Softcore、Hardcore、Offline sessionでは両方を呼ばない。
+  従来どおり実行する。RA Casual、Hardcore、Offline sessionでは両方を呼ばない。
 - 将来RA自動ステートを有効化する場合もHardcoreでは作成・読込しない。
 
 ## 6. 一時停止
