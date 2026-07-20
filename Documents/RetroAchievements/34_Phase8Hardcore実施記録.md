@@ -6,7 +6,7 @@
 テスト媒体は`/Volumes/CrucialX6/roms/PC88/TEST/ascend.d88`、確認用アプリは
 `build-ra/xm8.app`とする。
 
-本記録の時点では実装と自動検証が完了し、実HTTPSを使う手動受入を残している。
+実装、自動検証、実HTTPSを使う手動受入まで完了した。
 
 ## 2. 実装
 
@@ -111,11 +111,15 @@ UndefinedBehaviorSanitizerをアプリと全testへ適用した。
 Pseudo fast diskの値復元を確認する場合は、RA mode OFFで先にONにし、RA mode ONで強制OFF、
 RA mode OFFへ戻した時にONへ復元されることを追加確認する。
 
+2026-07-20、利用者が上記のHardcore開始、禁止操作、非停止UI、Reset、Casual復帰、
+mode永続化をASCENDで確認し、問題なしとして受入完了した。
+
 ## 5. 完了判定
 
 - Phase 8実装: 完了
 - RA ON／OFF回帰とsanitizer: 完了
-- macOS実HTTPS／ASCEND手動受入: 未確認
-- Phase 8完了判定: 手動受入後に実施
+- macOS実HTTPS／ASCEND手動受入: 完了（2026-07-20、利用者確認）
+- Phase 8完了判定: 完了（2026-07-20）
 
-手動受入後、問題がなければPhase 8を完了とし、次はPhase 9のWindows移植へ進む。
+次はPhase 9のWindows移植へ進む。最初にVisual Studio project構成、Windows HTTP／資格情報保存、
+設定pathと既存Windows build可否を再監査し、macOSで確定した共通仕様を変更せず移植範囲を確定する。
