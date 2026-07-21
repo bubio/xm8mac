@@ -1096,7 +1096,7 @@ void Menu::EnterInput(int id)
 	list->AddSlider("Mouse timeout", MENU_INPUT_MOUSETIME, 400, 20000, 200);
 #endif // !__ANDROID__
 
-	list->AddCheckButton("Coursor Key to Num Pad", MENU_INPUT_CURSOR_NUM);
+	list->AddCheckButton("Cursor Key to Num Pad", MENU_INPUT_CURSOR_NUM);
 	list->AddCheckButton("Num Key to Num Pad", MENU_INPUT_NUM_PAD);
 
 	// softkey

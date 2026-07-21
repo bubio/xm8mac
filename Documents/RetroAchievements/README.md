@@ -83,6 +83,7 @@ ePC-8801MAの旧版
 | [33_RAステートメニュー分離実施記録.md](33_RAステートメニュー分離実施記録.md) | Normal／RAのLoad・Save導線分離、利用不可通知、メニューID衝突修正 |
 | [34_Phase8Hardcore実施記録.md](34_Phase8Hardcore実施記録.md) | macOS Hardcore中央policy、操作制限、非停止UI、RESET、検証と手動受入 |
 | [35_Hardcore初期値とメインメニューRA表示.md](35_Hardcore初期値とメインメニューRA表示.md) | 新規環境のHardcore初期選択、既存設定維持、メインメニューのRA状態表示 |
+| [36_macOS総合回帰修正記録.md](36_macOS総合回帰修正記録.md) | RA起動時の保存済みInput remap適用漏れと回帰確認 |
 
 ## 3. 確定事項
 
