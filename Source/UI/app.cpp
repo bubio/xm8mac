@@ -1726,11 +1726,7 @@ void App::ProcessRaService(bool emulation_idle)
 			ra_manual_login_started = false;
 			if (ra_overlay != NULL &&
 				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
-				ra_overlay->CloseScreen();
-				SDL_StopTextInput();
-				ClearRaOverlayPointerState();
-				video->SetMenuMode(false);
-				CtrlAudio();
+				CloseRaOverlayToMenu();
 			}
 			const std::string name = login.display_name.empty() ?
 				login.username : login.display_name;
