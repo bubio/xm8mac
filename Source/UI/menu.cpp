@@ -1812,7 +1812,7 @@ void Menu::CmdBack()
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	// RetroAchievements menu
 	case MENU_RA:
-		EnterRa(MENU_RA_LOGIN);
+		EnterMain(MENU_MAIN_RA);
 		break;
 #endif
 
