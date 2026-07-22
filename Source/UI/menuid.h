@@ -277,6 +277,8 @@
 										// confirm leaving Hardcore
 #define MENU_RA_HARDCORE_NO		2012
 										// cancel leaving Hardcore
+#define MENU_RA_WEBSITE			2013
+										// RetroAchievements website
 #define MENU_RA_MAX				2099
 										// maximum
 

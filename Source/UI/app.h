@@ -153,6 +153,8 @@ public:
 										// open RA achievements overlay
 	void OpenRaLeaderboardsOverlay();
 										// open RA leaderboards overlay
+	void OpenRaWebsite();
+										// open RetroAchievements in the default browser
 	void CloseRaOverlayToMenu();
 										// close RA overlay and return to RA menu
 	bool IsRaLoggedIn() const;
@@ -295,6 +297,9 @@ private:
 		Xm8Ra::RaNoticePriority priority = Xm8Ra::RaNoticePriority::Important,
 		const std::string& badge_url = std::string());
 										// add RA overlay notice
+	void ReplaceRaNotice(const std::string& text,
+		Xm8Ra::RaNoticePriority priority = Xm8Ra::RaNoticePriority::Important);
+										// replace stale notices with the latest RA status
 	void AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events);
 										// translate RA events to notices
 	bool HandleRaOverlayKeyDown(SDL_Event *e);
@@ -501,6 +506,8 @@ private:
 										// RA menu Rich Presence detail has focus
 	bool ra_menu_error_scroll_active;
 										// RA menu send error detail is scrolling
+	bool ra_menu_detail_active;
+										// RA menu or list detail line is visible
 	Uint32 ra_menu_presence_scroll_started;
 										// RA menu Rich Presence scroll start tick
 	std::string ra_pending_game_hash;

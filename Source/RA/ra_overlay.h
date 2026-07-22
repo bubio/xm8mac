@@ -222,6 +222,10 @@ public:
 		uint32_t duration_ms = 5000,
 		RaNoticePriority priority = RaNoticePriority::Normal,
 		const std::string& badge_url = std::string());
+	void ReplaceNotice(const std::string& text, uint32_t now_ms,
+		uint32_t duration_ms = 5000,
+		RaNoticePriority priority = RaNoticePriority::Normal,
+		const std::string& badge_url = std::string());
 	void SetNoticesPaused(bool paused, uint32_t now_ms);
 	bool HasVisibleNotice(uint32_t now_ms);
 	std::string VisibleNotice(uint32_t now_ms);

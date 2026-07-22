@@ -443,6 +443,7 @@ App::App()
 	ra_overlay_auto_scroll_started = 0;
 	ra_menu_presence_scroll_active = false;
 	ra_menu_error_scroll_active = false;
+	ra_menu_detail_active = false;
 	ra_menu_presence_scroll_started = 0;
 	ra_pending_library_game_id = 0;
 	ra_loaded_library_game_id = 0;
@@ -1707,11 +1708,11 @@ void App::ProcessRaService(bool emulation_idle)
 		if (login_after_drain.state == Xm8Ra::RaLoginState::LoggedIn) {
 			const std::string name = login_after_drain.display_name.empty() ?
 				login_after_drain.username : login_after_drain.display_name;
-			AddRaNotice(name.empty() ? "RA: logged in" :
+			ReplaceRaNotice(name.empty() ? "RA: logged in" :
 				"RA: logged in " + name);
 		}
 		else if (login_after_drain.state == Xm8Ra::RaLoginState::Failed) {
-			AddRaNotice("RA: login failed");
+			ReplaceRaNotice("RA: login failed");
 		}
 		RefreshRaAchievementsOverlay();
 	}
@@ -1733,7 +1734,7 @@ void App::ProcessRaService(bool emulation_idle)
 			}
 			const std::string name = login.display_name.empty() ?
 				login.username : login.display_name;
-			AddRaNotice(name.empty() ? "RA: logged in" :
+			ReplaceRaNotice(name.empty() ? "RA: logged in" :
 				"RA: logged in " + name);
 			RefreshRaAchievementsOverlay();
 			menu->UpdateRaStatus();
@@ -1746,7 +1747,7 @@ void App::ProcessRaService(bool emulation_idle)
 					"Login failed" : login.message);
 				UpdateRaOverlayTextInput();
 			}
-			AddRaNotice("RA: login failed");
+			ReplaceRaNotice("RA: login failed");
 			RefreshRaAchievementsOverlay();
 			menu->UpdateRaStatus();
 		}
@@ -2055,6 +2056,16 @@ void App::AddRaNotice(const std::string& text,
 	}
 	ra_overlay->AddNotice(text, SDL_GetTicks(),
 		ra_notification_duration_ms, priority, badge_url);
+}
+
+void App::ReplaceRaNotice(const std::string& text,
+	Xm8Ra::RaNoticePriority priority)
+{
+	if (ra_overlay == NULL) {
+		return;
+	}
+	ra_overlay->ReplaceNotice(text, SDL_GetTicks(),
+		ra_notification_duration_ms, priority);
 }
 
 //
@@ -2840,6 +2851,21 @@ void App::DrawRaOverlay()
 		return;
 	}
 	ProcessRaImages();
+	auto clear_menu_detail = [this]() {
+		SDL_Rect detail_rect = {
+			(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
+			(SCREEN_HEIGHT / 2) +
+				((MENUITEM_HEIGHT * MENUITEM_LINES) / 2),
+			MENUITEM_WIDTH,
+			MENUITEM_HEIGHT
+		};
+		font->DrawFillRect(video->GetMenuFrame(), &detail_rect,
+			MENUITEM_BACK | 0x00000000);
+		ra_menu_detail_active = false;
+	};
+	if (ra_overlay->Screen() != Xm8Ra::RaOverlayScreen::None) {
+		clear_menu_detail();
+	}
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements ||
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
@@ -2892,10 +2918,6 @@ void App::DrawRaOverlay()
 			MENUITEM_HEIGHT * MENUITEM_LINES
 		};
 		font->DrawFillRect(buf, &rect, MENUITEM_BACK | 0x00000000);
-		SDL_Rect detail_clear = {rect.x, rect.y + rect.h, rect.w,
-			MENUITEM_HEIGHT};
-		font->DrawFillRect(buf, &detail_clear, MENUITEM_BACK | 0x00000000);
-
 		SDL_Rect title_rect = {rect.x, rect.y, rect.w, MENUITEM_HEIGHT};
 		font->DrawFillRect(buf, &title_rect, fore);
 		title_rect.x++;
@@ -3105,6 +3127,7 @@ void App::DrawRaOverlay()
 					detail_rect.w);
 			}
 			font->DrawSjisLeftOr(buf, &detail_rect, display_detail, fore);
+			ra_menu_detail_active = true;
 		}
 		else {
 			const std::string game_title = achievements_screen ?
@@ -3123,6 +3146,7 @@ void App::DrawRaOverlay()
 					sjis_title.c_str(), detail_rect.w);
 				font->DrawSjisLeftOr(buf, &detail_rect, clipped_title,
 					fore);
+				ra_menu_detail_active = true;
 			}
 		}
 		video->DrawCtrl();
@@ -3542,9 +3566,14 @@ void App::DrawRaOverlay()
 		presence_rect.w -= 16;
 		font->DrawSjisLeftOr(buf, &presence_rect, display_presence,
 			MENUITEM_FORE | alpha);
+		ra_menu_detail_active = true;
 		video->DrawCtrl();
 	}
 	else {
+		if (app_menu && ra_menu_detail_active) {
+			clear_menu_detail();
+			video->DrawCtrl();
+		}
 		ra_menu_presence_scroll_active = false;
 		ra_menu_error_scroll_active = false;
 	}
@@ -6867,6 +6896,17 @@ void App::OpenRaLeaderboardsOverlay()
 }
 
 //
+// OpenRaWebsite()
+// open RetroAchievements in the default browser
+//
+void App::OpenRaWebsite()
+{
+	if (SDL_OpenURL("https://retroachievements.org") != 0) {
+		AddRaNotice("RA: could not open website");
+	}
+}
+
+//
 // CloseRaOverlayToMenu()
 // close RA overlay and return to RetroAchievements menu
 //
@@ -6946,7 +6986,7 @@ void App::LogoutRa()
 	ra_loaded_game_hash.clear();
 	ClearRaMediaChangeState();
 	ra_leaderboard_scoreboards.clear();
-	AddRaNotice("RA: logged out");
+	ReplaceRaNotice("RA: logged out");
 }
 
 //

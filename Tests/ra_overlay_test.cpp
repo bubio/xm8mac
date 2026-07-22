@@ -52,6 +52,13 @@ int main()
 	notices = overlay.VisibleNotices(2050);
 	assert(notices.size() <= 1);
 
+	overlay.AddNotice("stale auth status", 2100, 5000,
+		Xm8Ra::RaNoticePriority::Important);
+	overlay.ReplaceNotice("latest auth status", 2100, 5000,
+		Xm8Ra::RaNoticePriority::Important);
+	assert(overlay.NoticeQueueSize() == 1);
+	assert(overlay.VisibleNotice(2100) == "latest auth status");
+
 	overlay.Clear();
 	overlay.AddNotice("wrap", 0xfffffff0U, 32,
 		Xm8Ra::RaNoticePriority::Normal);

@@ -727,11 +727,11 @@ void Menu::EnterRa(int id)
 {
 	list->SetTitle("<< RetroAchievements >>", MENU_RA);
 
-	list->AddCheckButton("RA mode", MENU_RA_MODE);
-	list->AddCheckButton("Hardcore", MENU_RA_HARDCORE);
+	list->AddButton("Login", MENU_RA_LOGIN);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
 	list->AddButton("Now: -", MENU_RA_PRESENCE);
-	list->AddButton("Login", MENU_RA_LOGIN);
+	list->AddCheckButton("RA mode", MENU_RA_MODE);
+	list->AddCheckButton("Hardcore", MENU_RA_HARDCORE);
 	list->AddButton("Library", MENU_RA_LIBRARY);
 	list->AddButton("Achievements", MENU_RA_ACHIEVEMENTS);
 	list->AddButton("Leaderboards", MENU_RA_LEADERBOARDS);
@@ -739,13 +739,14 @@ void Menu::EnterRa(int id)
 		list->AddButton("Load State", MENU_RA_LOAD);
 		list->AddButton("Save State", MENU_RA_SAVE);
 	}
+	list->AddButton("Go to RetroAchievements Site", MENU_RA_WEBSITE);
 
 	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
 	list->SetCheck(MENU_RA_HARDCORE, app->IsRaHardcoreSelected());
 	UpdateRaStatus();
 
 	if (id == MENU_BACK) {
-		id = MENU_RA_MODE;
+		id = MENU_RA_LOGIN;
 	}
 	list->SetFocus(id);
 }
@@ -799,6 +800,7 @@ bool Menu::IsRaStatusFocused()
 	return list != NULL && list->GetID() == MENU_RA &&
 		list->GetFocusID() == MENU_RA_STATUS;
 }
+
 #endif
 
 //
@@ -1984,7 +1986,7 @@ void Menu::CmdMain(int id)
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	// RetroAchievements
 	case MENU_MAIN_RA:
-		EnterRa(MENU_RA_MODE);
+		EnterRa(MENU_RA_LOGIN);
 		break;
 #endif
 
@@ -2416,6 +2418,10 @@ void Menu::CmdRa(int id)
 		if (app->CheckRaStateAvailability()) {
 			EnterSave(true);
 		}
+		break;
+
+	case MENU_RA_WEBSITE:
+		app->OpenRaWebsite();
 		break;
 
 	default:

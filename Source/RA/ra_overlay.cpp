@@ -106,6 +106,14 @@ void RaOverlay::AddNotice(const std::string& text, uint32_t now_ms,
 	}
 }
 
+void RaOverlay::ReplaceNotice(const std::string& text, uint32_t now_ms,
+	uint32_t duration_ms, RaNoticePriority priority,
+	const std::string& badge_url)
+{
+	ClearNotices();
+	AddNotice(text, now_ms, duration_ms, priority, badge_url);
+}
+
 void RaOverlay::SetNoticesPaused(bool paused, uint32_t now_ms)
 {
 	if (paused == notices_paused_) {
