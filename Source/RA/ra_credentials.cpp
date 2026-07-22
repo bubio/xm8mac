@@ -1,10 +1,10 @@
 #include "ra_credentials.h"
 
-#include <cerrno>
+#include "ra_file_util.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <map>
 #include <mutex>
 #include <vector>
@@ -124,16 +124,10 @@ bool DeleteTestToken(const std::string& username, std::string *)
 bool WriteUsernameHint(const std::string& path, const std::string& username,
 	std::string *error)
 {
-	std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-	if (!stream.is_open()) {
-		return SetError(error, "failed to save RA username");
-	}
-	stream.write(username.data(), static_cast<std::streamsize>(username.size()));
-	stream.put('\n');
-	if (!stream.good()) {
-		return SetError(error, "failed to write RA username");
-	}
-	return true;
+	std::vector<uint8_t> data(username.begin(), username.end());
+	data.push_back('\n');
+	return WriteRaFile(path, data.data(), data.size(), error) ||
+		SetError(error, "failed to save RA username");
 }
 
 bool ReadUsernameHint(const std::string& path, std::string *username,
@@ -143,15 +137,13 @@ bool ReadUsernameHint(const std::string& path, std::string *username,
 		return false;
 	}
 	username->clear();
-	std::ifstream stream(path, std::ios::binary);
-	if (!stream.is_open()) {
+	std::vector<uint8_t> data;
+	if (!ReadRaFile(path, &data, kMaxUsernameBytes + 2, nullptr)) {
 		return SetError(error, "RA username is not stored");
 	}
-	std::getline(stream, *username);
-	if (!stream.good() && !stream.eof()) {
-		username->clear();
-		return SetError(error, "failed to read RA username");
-	}
+	username->assign(data.begin(), data.end());
+	const size_t newline = username->find('\n');
+	if (newline != std::string::npos) username->resize(newline);
 	if (!username->empty() && username->back() == '\r') {
 		username->pop_back();
 	}
@@ -561,7 +553,7 @@ bool RaPlatformCredentialsStore::Delete(std::string *error)
 	if (!DeletePlatformToken(username, error)) {
 		return false;
 	}
-	if (std::remove(UsernameHintPath().c_str()) != 0 && errno != ENOENT) {
+	if (!RemoveRaFile(UsernameHintPath(), nullptr)) {
 		return SetError(error, "failed to delete RA username");
 	}
 	return true;

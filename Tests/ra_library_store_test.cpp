@@ -1,28 +1,20 @@
 #include "Fixtures/d88_fixture.h"
+#include "ra_file_util.h"
 #include "ra_library.h"
 #include "ra_media_store.h"
 #include "ra_paths.h"
 #include "sqlite3.h"
 
 #include <chrono>
-#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <dirent.h>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <set>
-#include <sys/stat.h>
 #include <string>
 #include <vector>
-
-#ifdef _WIN32
-#include <direct.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace {
 
@@ -46,67 +38,17 @@ std::string JoinPath(const std::string& dir, const char *name)
 
 bool PathExists(const std::string& path)
 {
-	struct stat st;
-	return stat(path.c_str(), &st) == 0;
+	return Xm8Ra::RaPathExists(path);
 }
 
 bool MakeDirectoryTree(const std::string& path, std::string *error)
 {
-	std::string current;
-	size_t index = 0;
-	if (!path.empty() && path[0] == '/') {
-		current = "/";
-		index = 1;
-	}
-
-	while (index <= path.size()) {
-		const size_t slash = path.find('/', index);
-		const std::string part = path.substr(index,
-			slash == std::string::npos ? std::string::npos : slash - index);
-		if (!part.empty()) {
-			if (!current.empty() && current.back() != '/') {
-				current += '/';
-			}
-			current += part;
-			if (mkdir(current.c_str(), 0755) != 0 && errno != EEXIST) {
-				if (error != nullptr) {
-					*error = std::strerror(errno);
-				}
-				return false;
-			}
-		}
-		if (slash == std::string::npos) {
-			break;
-		}
-		index = slash + 1;
-	}
-	return true;
+	return Xm8Ra::EnsureRaDirectoryTree(path, error);
 }
 
 void RemoveTree(const std::string& path)
 {
-	struct stat st;
-	if (lstat(path.c_str(), &st) != 0) {
-		return;
-	}
-
-	if (S_ISDIR(st.st_mode)) {
-		DIR *dir = opendir(path.c_str());
-		if (dir != nullptr) {
-			while (dirent *entry = readdir(dir)) {
-				const std::string name = entry->d_name;
-				if (name == "." || name == "..") {
-					continue;
-				}
-				RemoveTree(JoinPath(path, name.c_str()));
-			}
-			closedir(dir);
-		}
-		rmdir(path.c_str());
-	}
-	else {
-		unlink(path.c_str());
-	}
+	Xm8Ra::RemoveRaTree(path);
 }
 
 std::vector<char> ReadFile(const std::string& path)
@@ -226,21 +168,20 @@ std::string QueryText(const std::string& database_path, const char *sql)
 
 bool DirectoryHasPrefix(const std::string& path, const char *prefix)
 {
-	DIR *dir = opendir(path.c_str());
-	if (dir == nullptr) {
+	std::vector<Xm8Ra::RaDirectoryEntry> entries;
+	if (!Xm8Ra::ListRaDirectoryNoFollow(path, &entries)) {
 		return false;
 	}
 	const std::string prefix_string = prefix;
-	bool found = false;
-	while (dirent *entry = readdir(dir)) {
-		const std::string name = entry->d_name;
+	for (const Xm8Ra::RaDirectoryEntry& entry : entries) {
+		const size_t slash = entry.path.find_last_of("/\\");
+		const std::string name = slash == std::string::npos ?
+			entry.path : entry.path.substr(slash + 1);
 		if (name.compare(0, prefix_string.size(), prefix_string) == 0) {
-			found = true;
-			break;
+			return true;
 		}
 	}
-	closedir(dir);
-	return found;
+	return false;
 }
 
 } // namespace
@@ -363,7 +304,7 @@ int main()
 	Check(health.working_exists, "healthy media working copy exists");
 	Check(health.working_probe_ok, "healthy media working copy probes");
 
-	Check(unlink(first.working_path.c_str()) == 0,
+	Check(Xm8Ra::RemoveRaFile(first.working_path),
 		"remove working copy for health check");
 	Check(store.CheckMediaHealth(first.record.md5, &health, &error),
 		"check missing working copy");
@@ -453,7 +394,7 @@ int main()
 		Check(!games.empty() && games[0].media_count == 2,
 			"library list counts grouped media");
 
-		Check(unlink(resolved.drives[1].working_path.c_str()) == 0,
+		Check(Xm8Ra::RemoveRaFile(resolved.drives[1].working_path),
 			"remove drive 2 working copy before resolve");
 		Check(store.ResolveLaunchProfile(playlist.game_id, &resolved,
 			&error), "resolve recreates missing working copy");

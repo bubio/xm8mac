@@ -68,8 +68,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 
 # Dependencies must be included after Platforms.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13")
-if(APPLE)
-  # macOS: Build as bundle and use bundled SDL2 source by default
+if(APPLE OR WIN32)
+  # macOS/Windows: Build bundled SDL2 source by default.
   set(XM8_SYSTEM_SDL2 OFF CACHE BOOL "Use system-installed SDL2" FORCE)
   set(XM8_STATIC_SDL2 OFF CACHE BOOL "Link SDL2 statically" FORCE)
   message(STATUS "📦 SDL2: using bundled source")
@@ -89,14 +89,18 @@ if(XM8_ENABLE_RETROACHIEVEMENTS)
 endif()
 
 # Set compile options
-add_compile_options(-Wall)
-add_compile_options(
-  -Wno-macro-redefined
-  -Wno-non-c-typedef-for-linkage
-  -Wno-deprecated-declarations
-  -Wno-overloaded-virtual
-  -Wno-c++11-compat-deprecated-writable-strings
-  -Wno-narrowing)
+if(MSVC)
+  add_compile_options(/W4)
+else()
+  add_compile_options(-Wall)
+  add_compile_options(
+    -Wno-macro-redefined
+    -Wno-non-c-typedef-for-linkage
+    -Wno-deprecated-declarations
+    -Wno-overloaded-virtual
+    -Wno-c++11-compat-deprecated-writable-strings
+    -Wno-narrowing)
+endif()
 
 # Include directories
 include_directories(
@@ -439,10 +443,18 @@ if(BUILD_TESTING)
 
     add_executable(ra_state_store_test
       Tests/ra_state_store_test.cpp
+      Source/RA/ra_file_util.cpp
       Source/RA/ra_state_store.cpp
     )
     target_include_directories(ra_state_store_test PRIVATE Source/RA)
     add_test(NAME ra_state_store_test COMMAND ra_state_store_test)
+
+    add_executable(ra_file_util_test
+      Tests/ra_file_util_test.cpp
+      Source/RA/ra_file_util.cpp
+    )
+    target_include_directories(ra_file_util_test PRIVATE Source/RA)
+    add_test(NAME ra_file_util_test COMMAND ra_file_util_test)
 
     add_executable(ra_inspect_media
       Tests/ra_inspect_media.cpp

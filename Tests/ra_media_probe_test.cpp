@@ -1,4 +1,5 @@
 #include "Fixtures/d88_fixture.h"
+#include "ra_file_util.h"
 #include "ra_media_probe.h"
 
 #include <chrono>
@@ -9,12 +10,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-
-#ifdef _WIN32
-#include <direct.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace {
 
@@ -117,17 +112,7 @@ int main()
 	Check(!Xm8Ra::ProbeD88File(invalid.c_str(), &invalid_info, &error),
 		"reject invalid D88");
 
-	for (const char *name : {
-		"single.d88", "second.d88", "multi.d88", "pair.m3u", "invalid.d88"
-	}) {
-		Check(std::remove(JoinPath(base, name).c_str()) == 0,
-			"remove temporary fixture");
-	}
-#ifdef _WIN32
-	Check(_rmdir(base.c_str()) == 0, "remove temporary directory");
-#else
-	Check(rmdir(base.c_str()) == 0, "remove temporary directory");
-#endif
+	Check(Xm8Ra::RemoveRaTree(base), "remove temporary fixtures");
 
 	if (failures != 0) {
 		std::cerr << failures << " test(s) failed\n";

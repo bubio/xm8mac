@@ -1,15 +1,45 @@
 #include <cerrno>
+#include <climits>
 #include <cstring>
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__)
 #include <cstdlib>
 #include <sys/stat.h>
+#elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <string>
 #endif
 
 #include "pathresolver.h"
 
 #ifdef __APPLE__
 bool ResolveMacAlias(const char *path, char *resolved, size_t capacity);
+#endif
+
+#ifdef _WIN32
+namespace {
+
+bool Utf8PathToWide(const char *path, std::wstring *wide)
+{
+	if (path == nullptr || wide == nullptr || path[0] == '\0') {
+		return false;
+	}
+	const size_t byte_length = std::strlen(path);
+	if (byte_length > static_cast<size_t>(INT_MAX)) {
+		return false;
+	}
+	const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+		path, static_cast<int>(byte_length), nullptr, 0);
+	if (length <= 0) {
+		return false;
+	}
+	wide->assign(static_cast<size_t>(length), L'\0');
+	return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path,
+		static_cast<int>(byte_length), &(*wide)[0], length) == length;
+}
+
+} // namespace
 #endif
 
 bool ResolvePathForIO(const char *path, char *resolved, size_t capacity)
@@ -30,6 +60,13 @@ bool ResolvePathForIO(const char *path, char *resolved, size_t capacity)
 		return false;
 	}
 	std::memcpy(candidate, path, input_length + 1);
+#endif
+
+#ifdef _WIN32
+	std::wstring wide;
+	if (!Utf8PathToWide(candidate, &wide)) {
+		return false;
+	}
 #endif
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__)
@@ -84,6 +121,19 @@ PathKind InspectPath(const char *path, char *resolved, size_t capacity)
 	}
 	return PATH_KIND_OTHER;
 #else
+	#ifdef _WIN32
+	std::wstring wide;
+	if (!Utf8PathToWide(target, &wide)) {
+		return PATH_KIND_UNAVAILABLE;
+	}
+	const DWORD attributes = GetFileAttributesW(wide.c_str());
+	if (attributes == INVALID_FILE_ATTRIBUTES) {
+		return PATH_KIND_UNAVAILABLE;
+	}
+	return (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ?
+		PATH_KIND_DIRECTORY : PATH_KIND_FILE;
+	#else
 	return PATH_KIND_OTHER;
+	#endif
 #endif
 }

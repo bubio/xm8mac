@@ -1,23 +1,16 @@
 #include "ra_credentials.h"
+#include "ra_file_util.h"
 #include "ra_http_fake.h"
 #include "ra_service.h"
 
 #include "rc_error.h"
 
 #include <chrono>
-#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
-#include <sys/stat.h>
-
-#ifdef _WIN32
-#include <direct.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace {
 
@@ -35,7 +28,7 @@ void Check(bool condition, const char *message)
 
 bool MakeDirectory(const std::string& path)
 {
-	return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+	return Xm8Ra::EnsureRaDirectoryTree(path);
 }
 
 std::string TemporaryRoot(const char *name)
@@ -966,9 +959,7 @@ int main()
 	}
 
 	credential_store.Delete(nullptr);
-#ifndef _WIN32
-	rmdir(base.c_str());
-#endif
+	Xm8Ra::RemoveRaTree(base);
 
 	if (failures != 0) {
 		std::cerr << failures << " RA service test failure(s)\n";

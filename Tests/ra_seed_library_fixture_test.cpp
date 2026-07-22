@@ -1,20 +1,12 @@
 #include "Fixtures/ra_library_fixture_seed.h"
+#include "ra_file_util.h"
 #include "ra_library.h"
 #include "ra_media_store.h"
 
 #include <chrono>
-#include <cerrno>
 #include <cstdlib>
-#include <dirent.h>
 #include <iostream>
 #include <string>
-#include <sys/stat.h>
-
-#ifdef _WIN32
-#include <direct.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace {
 
@@ -38,41 +30,17 @@ std::string JoinPath(const std::string& dir, const char *name)
 
 bool PathExists(const std::string& path)
 {
-	struct stat st;
-	return stat(path.c_str(), &st) == 0;
+	return Xm8Ra::RaPathExists(path);
 }
 
 bool MakeDirectory(const std::string& path)
 {
-#ifdef _WIN32
-	return _mkdir(path.c_str()) == 0 || errno == EEXIST;
-#else
-	return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
-#endif
+	return Xm8Ra::EnsureRaDirectoryTree(path);
 }
 
 void RemoveTree(const std::string& path)
 {
-	struct stat st;
-	if (lstat(path.c_str(), &st) != 0) {
-		return;
-	}
-	if (S_ISDIR(st.st_mode)) {
-		DIR *dir = opendir(path.c_str());
-		if (dir != nullptr) {
-			while (dirent *entry = readdir(dir)) {
-				const std::string name = entry->d_name;
-				if (name != "." && name != "..") {
-					RemoveTree(JoinPath(path, name.c_str()));
-				}
-			}
-			closedir(dir);
-		}
-		rmdir(path.c_str());
-	}
-	else {
-		unlink(path.c_str());
-	}
+	Xm8Ra::RemoveRaTree(path);
 }
 
 } // namespace

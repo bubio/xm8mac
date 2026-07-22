@@ -84,6 +84,8 @@ ePC-8801MAの旧版
 | [34_Phase8Hardcore実施記録.md](34_Phase8Hardcore実施記録.md) | macOS Hardcore中央policy、操作制限、非停止UI、RESET、検証と手動受入 |
 | [35_Hardcore初期値とメインメニューRA表示.md](35_Hardcore初期値とメインメニューRA表示.md) | 新規環境のHardcore初期選択、既存設定維持、メインメニューのRA状態表示 |
 | [36_macOS総合回帰修正記録.md](36_macOS総合回帰修正記録.md) | RA起動時の保存済みInput remap適用漏れと回帰確認 |
+| [37_Phase9Windows移植計画.md](37_Phase9Windows移植計画.md) | Windows事前監査、UTF-8 path、WinHTTP、Visual Studio構成、試験matrix、受入計画 |
+| [38_Phase9Windows実施記録.md](38_Phase9Windows実施記録.md) | Windows移植実装、Visual Studio／CI構成、macOS回帰、Windows実機受入の残作業 |
 
 ## 3. 確定事項
 

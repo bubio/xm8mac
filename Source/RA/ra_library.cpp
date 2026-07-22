@@ -1,20 +1,17 @@
 #include "ra_library.h"
 
 #include "ra_build_info.h"
+#include "ra_file_util.h"
 #include "sqlite3.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cctype>
-#include <cerrno>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
-#include <iterator>
 #include <map>
 #include <set>
 #include <sstream>
-#include <sys/stat.h>
 #include <vector>
 
 namespace Xm8Ra {
@@ -30,62 +27,13 @@ std::string JoinPath(const std::string& base, const char *child)
 	return base + "/" + child;
 }
 
-bool MakeDirectoryTree(const std::string& path, std::string *error)
-{
-	if (path.empty()) {
-		return false;
-	}
-
-	std::string current;
-	size_t index = 0;
-	if (path[0] == '/') {
-		current = "/";
-		index = 1;
-	}
-
-	while (index <= path.size()) {
-		const size_t slash = path.find('/', index);
-		const std::string part = path.substr(index,
-			slash == std::string::npos ? std::string::npos : slash - index);
-		if (!part.empty()) {
-			if (!current.empty() && current.back() != '/') {
-				current += '/';
-			}
-			current += part;
-			if (mkdir(current.c_str(), 0755) != 0 && errno != EEXIST) {
-				if (error != nullptr) {
-					*error = std::strerror(errno);
-				}
-				return false;
-			}
-		}
-		if (slash == std::string::npos) {
-			break;
-		}
-		index = slash + 1;
-	}
-	return true;
-}
-
-bool PathExists(const std::string& path)
-{
-	struct stat st;
-	return stat(path.c_str(), &st) == 0;
-}
-
 bool RenameIfExists(const std::string& source, const std::string& destination,
 	std::string *error)
 {
-	if (!PathExists(source)) {
+	if (!RaPathExists(source)) {
 		return true;
 	}
-	if (std::rename(source.c_str(), destination.c_str()) == 0) {
-		return true;
-	}
-	if (error != nullptr) {
-		*error = std::strerror(errno);
-	}
-	return false;
+	return MoveRaFile(source, destination, false, error);
 }
 
 bool Prepare(sqlite3 *db, const char *sql, sqlite3_stmt **stmt,
@@ -194,38 +142,6 @@ bool IsOwnedImageRelativePath(int64_t id, const std::string& value)
 	return value == prefix + ".png" || value == prefix + ".jpg";
 }
 
-bool ReadBinaryFile(const std::string& path, std::vector<uint8_t> *data)
-{
-	std::ifstream stream(path, std::ios::binary);
-	if (!stream) {
-		return false;
-	}
-	data->assign(std::istreambuf_iterator<char>(stream),
-		std::istreambuf_iterator<char>());
-	return stream.good() || stream.eof();
-}
-
-bool WriteBinaryFile(const std::string& path, const std::vector<uint8_t>& data,
-	std::string *error)
-{
-	std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-	if (!stream || (!data.empty() &&
-		!stream.write(reinterpret_cast<const char*>(data.data()), data.size()))) {
-		if (error != nullptr) {
-			*error = "cannot write image cache file";
-		}
-		return false;
-	}
-	stream.close();
-	if (!stream) {
-		if (error != nullptr) {
-			*error = "cannot finish image cache file";
-		}
-		return false;
-	}
-	return true;
-}
-
 } // namespace
 
 RaLibrary::RaLibrary() : db_(nullptr)
@@ -242,11 +158,11 @@ bool RaLibrary::Open(const std::string& ra_root, std::string *error)
 	Close();
 	root_ = ra_root;
 
-	if (!MakeDirectoryTree(root_, error) ||
-		!MakeDirectoryTree(MediaRoot(), error) ||
-		!MakeDirectoryTree(TempRoot(), error) ||
-		!MakeDirectoryTree(JoinPath(root_, "images"), error) ||
-		!MakeDirectoryTree(JoinPath(root_, "states"), error)) {
+	if (!EnsureRaDirectoryTree(root_, error) ||
+		!EnsureRaDirectoryTree(MediaRoot(), error) ||
+		!EnsureRaDirectoryTree(TempRoot(), error) ||
+		!EnsureRaDirectoryTree(JoinPath(root_, "images"), error) ||
+		!EnsureRaDirectoryTree(JoinPath(root_, "states"), error)) {
 		return false;
 	}
 
@@ -2366,7 +2282,8 @@ RaImageCacheLoadResult RaLibrary::LoadCachedImage(const std::string& url,
 			relative_path.size() >= 4 &&
 			relative_path.compare(relative_path.size() - 4, 4, ".jpg") == 0)) &&
 		byte_size > 0 && byte_size <= 1024 * 1024 &&
-		ReadBinaryFile(JoinPath(root_, relative_path.c_str()), &loaded) &&
+			ReadRaFile(JoinPath(root_, relative_path.c_str()), &loaded,
+				1024U * 1024U, nullptr) &&
 		static_cast<int64_t>(loaded.size()) == byte_size &&
 		Xm8RaBuildInfo::DecodeImageRgba(loaded.data(), loaded.size(),
 			&width, &height, &rgba) && width <= 2048 && height <= 2048 &&
@@ -2463,9 +2380,9 @@ bool RaLibrary::StoreCachedImage(const std::string& url,
 		(normalized_type == "image/png" ? ".png" : ".jpg");
 	const std::string final_path = JoinPath(root_, relative_path.c_str());
 	const std::string temporary_path = final_path + ".tmp";
-	if (!WriteBinaryFile(temporary_path, data, error) ||
-		std::rename(temporary_path.c_str(), final_path.c_str()) != 0) {
-		std::remove(temporary_path.c_str());
+	if (!WriteRaFile(temporary_path, data.data(), data.size(), error) ||
+		!MoveRaFile(temporary_path, final_path, true, error)) {
+		RemoveRaFile(temporary_path, nullptr);
 		if (error != nullptr && error->empty()) {
 			*error = "cannot install image cache file";
 		}
@@ -2480,7 +2397,7 @@ bool RaLibrary::StoreCachedImage(const std::string& url,
 		" content_type = excluded.content_type,"
 		" byte_size = excluded.byte_size,"
 		" last_used_at = excluded.last_used_at", &stmt, error)) {
-		std::remove(final_path.c_str());
+		RemoveRaFile(final_path, nullptr);
 		return false;
 	}
 	sqlite3_bind_int64(stmt, 1, id);
@@ -2491,12 +2408,12 @@ bool RaLibrary::StoreCachedImage(const std::string& url,
 	sqlite3_bind_int64(stmt, 6, static_cast<int64_t>(data.size()));
 	sqlite3_bind_int64(stmt, 7, now);
 	if (!StepDone(db_, stmt, error)) {
-		std::remove(final_path.c_str());
+		RemoveRaFile(final_path, nullptr);
 		return false;
 	}
 	if (!old_relative_path.empty() && old_relative_path != relative_path &&
 		IsOwnedImageRelativePath(id, old_relative_path)) {
-		std::remove(JoinPath(root_, old_relative_path.c_str()).c_str());
+		RemoveRaFile(JoinPath(root_, old_relative_path.c_str()), nullptr);
 	}
 	return PruneImageCache(cache_limit_bytes, protected_urls, error);
 }
@@ -2506,10 +2423,7 @@ bool RaLibrary::RemoveCachedImageById(int64_t id,
 {
 	if (IsOwnedImageRelativePath(id, relative_path)) {
 		const std::string path = JoinPath(root_, relative_path.c_str());
-		if (std::remove(path.c_str()) != 0 && errno != ENOENT) {
-			if (error != nullptr) {
-				*error = "cannot remove image cache file";
-			}
+		if (!RemoveRaFile(path, error)) {
 			return false;
 		}
 	}

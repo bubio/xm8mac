@@ -1,7 +1,11 @@
 #include "ra_credentials.h"
+#include "ra_file_util.h"
 #include "ra_http_fake.h"
 #ifdef __APPLE__
 #include "ra_http_mac.h"
+#elif defined(_WIN32)
+#include "ra_connectivity.h"
+#include "ra_http_win.h"
 #endif
 #include "ra_rc_client_http.h"
 
@@ -9,20 +13,12 @@
 #include "rc_client.h"
 
 #include <chrono>
-#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <sys/stat.h>
 #include <string>
 #include <vector>
-
-#ifdef _WIN32
-#include <direct.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace {
 
@@ -38,7 +34,7 @@ void Check(bool condition, const char *message)
 
 bool MakeDirectory(const std::string& path)
 {
-	return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+	return Xm8Ra::EnsureRaDirectoryTree(path);
 }
 
 std::string LongString(size_t size, char value)
@@ -270,11 +266,30 @@ int main()
 		Check(mac_completed.empty(), "macOS HTTP empty drain");
 		mac_http->CancelAll();
 	}
+#elif defined(_WIN32)
+	{
+		auto win_http = Xm8Ra::CreateWinRaHttpClient(
+			"XM8/test rcheevos/test (Windows)");
+		Check(win_http != nullptr, "create Windows HTTP client");
+		if (win_http != nullptr) {
+			Xm8Ra::RaHttpRequest invalid;
+			invalid.request_id = 9001;
+			invalid.url = "http://example.invalid/not-https";
+			win_http->Send(invalid);
+			std::vector<Xm8Ra::RaHttpResponse> win_completed;
+			win_http->DrainCompleted(&win_completed);
+			Check(win_completed.size() == 1 &&
+				win_completed[0].transport_result ==
+					Xm8Ra::RaHttpTransportResult::ClientError,
+				"Windows HTTP rejects non-HTTPS URL");
+			win_http->CancelAll();
+		}
+		auto connectivity = Xm8Ra::CreatePlatformRaConnectivityMonitor();
+		Check(connectivity != nullptr, "create Windows connectivity monitor");
+	}
 #endif
 
 	store.Delete(nullptr);
-#ifndef _WIN32
-	rmdir(base.c_str());
-#endif
+	Xm8Ra::RemoveRaTree(base);
 	return failures == 0 ? 0 : 1;
 }

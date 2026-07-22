@@ -78,7 +78,8 @@ target_link_libraries(xm8_ra_dependencies INTERFACE
 )
 
 add_library(xm8_ra_core OBJECT
-  ${PROJECT_SOURCE_DIR}/Source/RA/ra_overlay.cpp
+	${PROJECT_SOURCE_DIR}/Source/RA/ra_file_util.cpp
+	${PROJECT_SOURCE_DIR}/Source/RA/ra_overlay.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_paths.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_rc_client_http.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_service.cpp
@@ -90,7 +91,16 @@ add_library(xm8_ra_platform OBJECT
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_credentials.cpp
   ${PROJECT_SOURCE_DIR}/Source/RA/ra_platform.cpp
 )
-if(APPLE)
+if(WIN32)
+  target_sources(xm8_ra_platform PRIVATE
+    ${PROJECT_SOURCE_DIR}/Source/RA/ra_connectivity_win.cpp
+    ${PROJECT_SOURCE_DIR}/Source/RA/ra_http_win.cpp
+  )
+  target_compile_definitions(xm8_ra_platform PRIVATE
+    WINVER=0x0A00
+    _WIN32_WINNT=0x0A00
+  )
+elseif(APPLE)
   target_sources(xm8_ra_platform PRIVATE
     ${PROJECT_SOURCE_DIR}/Source/RA/ra_connectivity_mac.cpp
     ${PROJECT_SOURCE_DIR}/Source/RA/ra_http_mac.mm
@@ -119,7 +129,13 @@ target_include_directories(xm8_ra_media_xm8
     ${PROJECT_SOURCE_DIR}/Source/UI
     ${CMAKE_CURRENT_SOURCE_DIR}/rcheevos/src
 )
-if(APPLE)
+if(WIN32)
+  target_link_libraries(xm8_ra_dependencies INTERFACE
+    advapi32
+    winhttp
+    wininet
+  )
+elseif(APPLE)
   target_link_libraries(xm8_ra_dependencies INTERFACE
     "-framework Foundation"
     "-framework Security"

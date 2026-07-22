@@ -1,15 +1,10 @@
 #include "ra_state_store.h"
 
-#include <cerrno>
-#include <cstdio>
+#include "ra_file_util.h"
+
 #include <cstring>
-#include <fstream>
 #include <limits>
 #include <sstream>
-#include <sys/stat.h>
-#ifdef _WIN32
-#include <direct.h>
-#endif
 
 namespace Xm8Ra {
 namespace {
@@ -110,51 +105,6 @@ std::string JoinPath(const std::string& left, const std::string& right)
 		return left + right;
 	}
 	return left + "/" + right;
-}
-
-bool MakeDirectoryTree(const std::string& path, std::string *error)
-{
-	std::string current;
-	for (size_t index = 0; index <= path.size(); ++index) {
-		const bool separator = index == path.size() || path[index] == '/' ||
-			path[index] == '\\';
-		if (!separator) {
-			current.push_back(path[index]);
-			continue;
-		}
-		if (current.empty() || current == "/" ||
-			(current.size() == 2 && current[1] == ':')) {
-			if (index < path.size()) current.push_back('/');
-			continue;
-		}
-#ifdef _WIN32
-		const int result = _mkdir(current.c_str());
-#else
-		const int result = mkdir(current.c_str(), 0755);
-#endif
-		if (result != 0 && errno != EEXIST) {
-			SetError(error, "cannot create state directory: " +
-				std::string(std::strerror(errno)));
-			return false;
-		}
-		if (result != 0) {
-#ifdef _WIN32
-			struct _stat info = {};
-			const bool is_directory = _stat(current.c_str(), &info) == 0 &&
-				(info.st_mode & _S_IFDIR) != 0;
-#else
-			struct stat info = {};
-			const bool is_directory = stat(current.c_str(), &info) == 0 &&
-				S_ISDIR(info.st_mode);
-#endif
-			if (!is_directory) {
-				SetError(error, "state directory path is not a directory");
-				return false;
-			}
-		}
-		if (index < path.size()) current.push_back('/');
-	}
-	return true;
 }
 
 std::string ParentPath(const std::string& path)
@@ -393,24 +343,7 @@ bool ReadRaStateFile(const std::string& path, std::vector<uint8_t> *bytes,
 		SetError(error, "RA state output is required");
 		return false;
 	}
-	std::ifstream stream(path, std::ios::binary | std::ios::ate);
-	if (!stream) {
-		SetError(error, "cannot open RA state");
-		return false;
-	}
-	const std::streamoff length = stream.tellg();
-	if (length < 0 || static_cast<uint64_t>(length) > kRaStateMaxFileSize) {
-		SetError(error, "invalid RA state file size");
-		return false;
-	}
-	bytes->resize(static_cast<size_t>(length));
-	stream.seekg(0);
-	if (!bytes->empty()) {
-		stream.read(reinterpret_cast<char *>(bytes->data()), length);
-	}
-	if (!stream) {
-		SetError(error, "cannot read RA state");
-		bytes->clear();
+	if (!ReadRaFile(path, bytes, kRaStateMaxFileSize, error)) {
 		return false;
 	}
 	SetError(error, std::string());
@@ -428,35 +361,16 @@ bool WriteRaStateFileAtomically(const std::string& path,
 		SetError(error, "RA state file is too large");
 		return false;
 	}
-	if (!MakeDirectoryTree(ParentPath(path), error)) {
+	if (!EnsureRaDirectoryTree(ParentPath(path), error)) {
 		return false;
 	}
 	const std::string temporary = path + ".tmp";
-	{
-		std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
-		if (!stream) {
-			SetError(error, "cannot create temporary RA state");
-			return false;
-		}
-		if (!bytes.empty()) {
-			stream.write(reinterpret_cast<const char *>(bytes.data()),
-				static_cast<std::streamsize>(bytes.size()));
-		}
-		stream.flush();
-		if (!stream) {
-			stream.close();
-			std::remove(temporary.c_str());
-			SetError(error, "cannot finish temporary RA state");
-			return false;
-		}
+	if (!WriteRaFile(temporary, bytes.data(), bytes.size(), error)) {
+		RemoveRaFile(temporary, nullptr);
+		return false;
 	}
-#ifdef _WIN32
-	std::remove(path.c_str());
-#endif
-	if (std::rename(temporary.c_str(), path.c_str()) != 0) {
-		const std::string message = std::strerror(errno);
-		std::remove(temporary.c_str());
-		SetError(error, "cannot commit RA state: " + message);
+	if (!MoveRaFile(temporary, path, true, error)) {
+		RemoveRaFile(temporary, nullptr);
 		return false;
 	}
 	SetError(error, std::string());

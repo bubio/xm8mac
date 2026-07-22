@@ -1,18 +1,11 @@
 #include "ra_library_fixture_seed.h"
 
 #include "Fixtures/d88_fixture.h"
+#include "ra_file_util.h"
 #include "ra_library.h"
 #include "ra_media_store.h"
 #include "sqlite3.h"
 
-#include <cerrno>
-#include <cstring>
-
-#ifdef _WIN32
-#include <direct.h>
-#else
-#include <sys/stat.h>
-#endif
 
 namespace RaLibraryFixtureSeed {
 namespace {
@@ -30,48 +23,7 @@ std::string JoinPath(const std::string& base, const char *child)
 
 bool MakeDirectoryTree(const std::string& path, std::string *error)
 {
-	if (path.empty()) {
-		if (error != nullptr) {
-			*error = "empty directory path";
-		}
-		return false;
-	}
-
-	std::string current;
-	size_t index = 0;
-	if (path[0] == '/') {
-		current = "/";
-		index = 1;
-	}
-
-	while (index <= path.size()) {
-		const size_t slash = path.find_first_of("/\\", index);
-		const std::string part = path.substr(index,
-			slash == std::string::npos ? std::string::npos : slash - index);
-		if (!part.empty()) {
-			if (!current.empty() && current.back() != '/' &&
-				current.back() != '\\') {
-				current += '/';
-			}
-			current += part;
-#ifdef _WIN32
-			const int rc = _mkdir(current.c_str());
-#else
-			const int rc = mkdir(current.c_str(), 0755);
-#endif
-			if (rc != 0 && errno != EEXIST) {
-				if (error != nullptr) {
-					*error = std::strerror(errno);
-				}
-				return false;
-			}
-		}
-		if (slash == std::string::npos) {
-			break;
-		}
-		index = slash + 1;
-	}
-	return true;
+	return Xm8Ra::EnsureRaDirectoryTree(path, error);
 }
 
 bool StepDone(sqlite3 *db, sqlite3_stmt *stmt, std::string *error)

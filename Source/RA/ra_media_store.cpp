@@ -1,18 +1,14 @@
 #include "ra_media_store.h"
 
+#include "ra_file_util.h"
 #include "m3u.h"
 #include "pathresolver.h"
 
 #include <chrono>
-#include <cerrno>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <dirent.h>
-#include <fstream>
 #include <random>
-#include <sys/stat.h>
-#include <unistd.h>
 
 namespace Xm8Ra {
 namespace {
@@ -70,18 +66,6 @@ bool HasExtension(const std::string& path, const char *extension)
 	return ToLowerAscii(path.substr(dot)) == extension;
 }
 
-bool PathExists(const std::string& path)
-{
-	struct stat st;
-	return stat(path.c_str(), &st) == 0;
-}
-
-bool IsRegularFileNoFollow(const std::string& path)
-{
-	struct stat st;
-	return lstat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
-}
-
 bool ResolveSourcePath(const std::string& source_path, std::string *resolved,
 	std::string *error)
 {
@@ -98,101 +82,25 @@ bool ResolveSourcePath(const std::string& source_path, std::string *resolved,
 	return true;
 }
 
-bool MakeDirectoryTree(const std::string& path, std::string *error)
-{
-	if (path.empty()) {
-		if (error != nullptr) {
-			*error = "empty directory path";
-		}
-		return false;
-	}
-
-	std::string current;
-	size_t index = 0;
-	if (path[0] == '/') {
-		current = "/";
-		index = 1;
-	}
-
-	while (index <= path.size()) {
-		const size_t slash = path.find('/', index);
-		const std::string part = path.substr(index,
-			slash == std::string::npos ? std::string::npos : slash - index);
-		if (!part.empty()) {
-			if (!current.empty() && current.back() != '/') {
-				current += '/';
-			}
-			current += part;
-			if (mkdir(current.c_str(), 0755) != 0 && errno != EEXIST) {
-				if (error != nullptr) {
-					*error = std::strerror(errno);
-				}
-				return false;
-			}
-		}
-		if (slash == std::string::npos) {
-			break;
-		}
-		index = slash + 1;
-	}
-	return true;
-}
-
-bool RemoveFile(const std::string& path, std::string *error)
-{
-	if (std::remove(path.c_str()) == 0 || errno == ENOENT) {
-		return true;
-	}
-	if (error != nullptr) {
-		*error = std::strerror(errno);
-	}
-	return false;
-}
-
-bool MoveFile(const std::string& source, const std::string& destination,
-	std::string *error)
-{
-	if (std::rename(source.c_str(), destination.c_str()) == 0) {
-		return true;
-	}
-	if (error != nullptr) {
-		*error = std::strerror(errno);
-	}
-	return false;
-}
-
 bool CollectRecursiveCandidates(const std::string& folder_path,
 	std::vector<std::string> *m3u_paths, std::vector<std::string> *d88_paths,
 	int *scanned_candidates, std::string *error)
 {
-	DIR *dir = opendir(folder_path.c_str());
-	if (dir == nullptr) {
-		if (error != nullptr) {
-			*error = std::strerror(errno);
-		}
+	std::vector<RaDirectoryEntry> entries;
+	if (!ListRaDirectoryNoFollow(folder_path, &entries, error)) {
 		return false;
 	}
 
 	std::vector<std::string> directories;
 	std::vector<std::string> files;
-	while (dirent *entry = readdir(dir)) {
-		const std::string name = entry->d_name;
-		if (name == "." || name == "..") {
-			continue;
+	for (const RaDirectoryEntry& entry : entries) {
+		if (entry.kind == RaFileKind::Directory) {
+			directories.push_back(entry.path);
 		}
-		const std::string path = JoinPath(folder_path, name);
-		struct stat st;
-		if (lstat(path.c_str(), &st) != 0) {
-			continue;
-		}
-		if (S_ISDIR(st.st_mode)) {
-			directories.push_back(path);
-		}
-		else if (S_ISREG(st.st_mode)) {
-			files.push_back(path);
+		else if (entry.kind == RaFileKind::Regular) {
+			files.push_back(entry.path);
 		}
 	}
-	closedir(dir);
 
 	std::sort(directories.begin(), directories.end());
 	std::sort(files.begin(), files.end());
@@ -373,34 +281,34 @@ bool RaMediaStore::ResetWorkingCopy(const std::string& source_path,
 		media.md5 + "-" + RandomPartName() + ".old");
 	*working_path = target;
 
-	if (!MakeDirectoryTree(library_->TempRoot(), error) ||
-		!MakeDirectoryTree(media_dir, error)) {
+	if (!EnsureRaDirectoryTree(library_->TempRoot(), error) ||
+		!EnsureRaDirectoryTree(media_dir, error)) {
 		return false;
 	}
 	if (!CopyAndVerify(io_source_path, temporary, media, error)) {
-		RemoveFile(temporary, nullptr);
+		RemoveRaFile(temporary, nullptr);
 		return false;
 	}
 
 	bool had_existing = false;
-	if (PathExists(target)) {
+	if (RaPathExists(target)) {
 		had_existing = true;
-		if (!MoveFile(target, backup, error)) {
-			RemoveFile(temporary, nullptr);
+		if (!MoveRaFile(target, backup, false, error)) {
+			RemoveRaFile(temporary, nullptr);
 			return false;
 		}
 	}
 
-	if (!MoveFile(temporary, target, error)) {
-		RemoveFile(temporary, nullptr);
+	if (!MoveRaFile(temporary, target, false, error)) {
+		RemoveRaFile(temporary, nullptr);
 		if (had_existing) {
-			MoveFile(backup, target, nullptr);
+			MoveRaFile(backup, target, false, nullptr);
 		}
 		return false;
 	}
 
 	if (had_existing) {
-		RemoveFile(backup, nullptr);
+		RemoveRaFile(backup, nullptr);
 	}
 	return true;
 }
@@ -425,7 +333,7 @@ bool RaMediaStore::CheckMediaHealth(const std::string& md5,
 
 	const std::string working_path =
 		JoinPath(library_->Root(), record.working_relpath);
-	checked.working_exists = IsRegularFileNoFollow(working_path);
+	checked.working_exists = RaIsRegularFileNoFollow(working_path);
 	if (checked.working_exists) {
 		D88MediaInfo working;
 		checked.working_probe_ok =
@@ -433,14 +341,14 @@ bool RaMediaStore::CheckMediaHealth(const std::string& md5,
 	}
 
 	std::string io_source_path;
-	struct stat source_stat;
+	RaFileInfo source_info;
 	checked.source_exists =
 		ResolveSourcePath(record.source_locator, &io_source_path, nullptr) &&
-		stat(io_source_path.c_str(),
-		&source_stat) == 0 && S_ISREG(source_stat.st_mode);
+		GetRaFileInfoNoFollow(io_source_path, &source_info, nullptr) &&
+		source_info.kind == RaFileKind::Regular;
 	if (checked.source_exists) {
-		checked.source_size = static_cast<int64_t>(source_stat.st_size);
-		checked.source_mtime = static_cast<int64_t>(source_stat.st_mtime);
+		checked.source_size = static_cast<int64_t>(source_info.size);
+		checked.source_mtime = source_info.modified_time;
 		checked.source_metadata_changed =
 			checked.source_size != record.source_size ||
 			(record.source_mtime >= 0 &&
@@ -628,7 +536,7 @@ bool RaMediaStore::ImportD88IntoGame(const std::string& source_path,
 			&record, error);
 	if (!registered) {
 		if (copied) {
-			RemoveFile(working_path, nullptr);
+				RemoveRaFile(working_path, nullptr);
 		}
 		return false;
 	}
@@ -649,29 +557,26 @@ bool RaMediaStore::EnsureWorkingCopy(const std::string& source_path,
 	*working_path = target;
 	*copied = false;
 
-	if (IsRegularFileNoFollow(target)) {
+	if (RaIsRegularFileNoFollow(target)) {
 		D88MediaInfo existing;
 		if (ProbeD88File(target.c_str(), &existing, nullptr)) {
 			return true;
 		}
 	}
 
-	if (!MakeDirectoryTree(library_->TempRoot(), error) ||
-		!MakeDirectoryTree(media_dir, error)) {
+	if (!EnsureRaDirectoryTree(library_->TempRoot(), error) ||
+		!EnsureRaDirectoryTree(media_dir, error)) {
 		return false;
 	}
 
 	const std::string temporary = JoinPath(library_->TempRoot(), RandomPartName());
 	if (!CopyAndVerify(source_path, temporary, media, error)) {
-		RemoveFile(temporary, nullptr);
+		RemoveRaFile(temporary, nullptr);
 		return false;
 	}
 
-	if (std::rename(temporary.c_str(), target.c_str()) != 0) {
-		if (error != nullptr) {
-			*error = std::strerror(errno);
-		}
-		RemoveFile(temporary, nullptr);
+	if (!MoveRaFile(temporary, target, true, error)) {
+		RemoveRaFile(temporary, nullptr);
 		return false;
 	}
 	*copied = true;
@@ -682,33 +587,9 @@ bool RaMediaStore::CopyAndVerify(const std::string& source_path,
 	const std::string& temporary_path, const D88MediaInfo& expected,
 	std::string *error)
 {
-	std::ifstream input(source_path, std::ios::binary);
-	std::ofstream output(temporary_path,
-		std::ios::binary | std::ios::trunc);
-	if (!input.is_open() || !output.is_open()) {
-		if (error != nullptr) {
-			*error = "cannot open media copy streams";
-		}
+	if (!CopyRaFile(source_path, temporary_path, error)) {
 		return false;
 	}
-
-	char buffer[65536];
-	while (input.good()) {
-		input.read(buffer, sizeof(buffer));
-		const std::streamsize got = input.gcount();
-		if (got > 0) {
-			output.write(buffer, got);
-			if (!output.good()) {
-				if (error != nullptr) {
-					*error = "cannot write working copy";
-				}
-				return false;
-			}
-		}
-	}
-	output.flush();
-	output.close();
-	input.close();
 
 	D88MediaInfo copied;
 	if (!ProbeD88File(temporary_path.c_str(), &copied, error)) {
@@ -726,11 +607,12 @@ bool RaMediaStore::CopyAndVerify(const std::string& source_path,
 
 int64_t RaMediaStore::FileMtime(const std::string& path) const
 {
-	struct stat st;
-	if (stat(path.c_str(), &st) != 0) {
+	RaFileInfo info;
+	if (!GetRaFileInfoNoFollow(path, &info, nullptr) ||
+		info.kind != RaFileKind::Regular) {
 		return -1;
 	}
-	return static_cast<int64_t>(st.st_mtime);
+	return info.modified_time;
 }
 
 } // namespace Xm8Ra

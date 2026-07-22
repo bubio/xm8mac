@@ -182,6 +182,18 @@ Builder/Windowsフォルダにあるsetup_sdl2.ps1を実行すると、ビルド
 Builder/Windows/XM8.sln をVisual Studioでビルドします。
 Builder/Windows/x64、Builder/Windows/Win32、Builder/Windows/ARM64に出力されます。実行に必要なのは、XM8.exeとSDL2.dllです。
 
+RetroAchievements対応は通常のWindows配布buildで有効になります。機能を完全に除外した
+互換確認用buildが必要な場合は、Developer PowerShellから共通property
+`XM8_ENABLE_RETROACHIEVEMENTS=false`を指定できます。
+
+```powershell
+msbuild Builder\Windows\XM8.sln /m /p:Configuration=Release /p:Platform=x64 /p:XM8_ENABLE_RETROACHIEVEMENTS=true
+msbuild Builder\Windows\XM8.sln /m /p:Configuration=Release /p:Platform=x64 /p:XM8_ENABLE_RETROACHIEVEMENTS=false
+```
+
+RA有効buildでは、`THIRD_PARTY_NOTICES.md`と`Licenses` directoryも出力先へコピーされます。
+Win32、x64、ARM64のDebug／Releaseで同じpropertyを利用できます。
+
 BIOS ROMファイルの置き場所は以下になります。
 
 ```shell

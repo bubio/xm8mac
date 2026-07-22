@@ -1,12 +1,12 @@
 #include "ra_media_probe.h"
 
+#include "ra_file_util.h"
+
 #include "rc_consoles.h"
 #include "rc_hash.h"
 
 #include <array>
 #include <cstring>
-#include <fstream>
-#include <iterator>
 #include <limits>
 #include <vector>
 
@@ -41,7 +41,9 @@ bool HashPc8800File(const char *path, char hash[33])
 	if (path == nullptr || hash == nullptr) {
 		return false;
 	}
-	return rc_hash_generate_from_file(hash, RC_CONSOLE_PC8800, path) != 0;
+	std::vector<uint8_t> data;
+	return ReadRaFile(path, &data, std::numeric_limits<size_t>::max(), nullptr) &&
+		!data.empty() && HashPc8800Buffer(data.data(), data.size(), hash);
 }
 
 bool HashPc8800Buffer(const uint8_t *buffer, size_t buffer_size, char hash[33])
@@ -65,23 +67,11 @@ bool ProbeD88File(const char *path, D88MediaInfo *info, std::string *error)
 		return false;
 	}
 
-	std::ifstream stream(path, std::ios::binary | std::ios::ate);
-	if (!stream.is_open()) {
-		if (error != nullptr) {
-			*error = "cannot open D88 file";
-		}
+	std::vector<uint8_t> file_data;
+	if (!ReadRaFile(path, &file_data, std::numeric_limits<size_t>::max(), error)) {
 		return false;
 	}
-
-	const std::streamoff end = stream.tellg();
-	if (end < 0) {
-		if (error != nullptr) {
-			*error = "cannot determine D88 file size";
-		}
-		return false;
-	}
-	const uint64_t file_size = static_cast<uint64_t>(end);
-	stream.seekg(0, std::ios::beg);
+	const uint64_t file_size = static_cast<uint64_t>(file_data.size());
 
 	D88MediaInfo probed;
 	probed.size = file_size;
@@ -93,12 +83,8 @@ bool ProbeD88File(const char *path, D88MediaInfo *info, std::string *error)
 		}
 
 		std::array<uint8_t, kD88HeaderSize> header{};
-		stream.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
-		stream.read(reinterpret_cast<char*>(header.data()),
-			static_cast<std::streamsize>(header.size()));
-		if (stream.gcount() != static_cast<std::streamsize>(header.size())) {
-			break;
-		}
+		std::memcpy(header.data(), file_data.data() + static_cast<size_t>(offset),
+			header.size());
 
 		if ((header[0x23] != 0x00) ||
 			(header[0x22] != 0x00) ||
@@ -118,18 +104,15 @@ bool ProbeD88File(const char *path, D88MediaInfo *info, std::string *error)
 		}
 
 		probed.bank_names.push_back(ReadBankName(header));
-		std::vector<uint8_t> image(image_size);
-		stream.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
-		stream.read(reinterpret_cast<char*>(image.data()),
-			static_cast<std::streamsize>(image.size()));
-		if (stream.gcount() != static_cast<std::streamsize>(image.size())) {
+		if (offset + image_size > file_size) {
 			if (error != nullptr) {
 				*error = "cannot read D88 bank";
 			}
 			return false;
 		}
 		char bank_hash[33] = {};
-		if (!HashPc8800Buffer(image.data(), image.size(), bank_hash)) {
+		if (!HashPc8800Buffer(file_data.data() + static_cast<size_t>(offset),
+			image_size, bank_hash)) {
 			if (error != nullptr) {
 				*error = "cannot hash D88 bank";
 			}
@@ -148,7 +131,7 @@ bool ProbeD88File(const char *path, D88MediaInfo *info, std::string *error)
 	}
 
 	char hash[33] = {};
-	if (!HashPc8800File(path, hash)) {
+	if (!HashPc8800Buffer(file_data.data(), file_data.size(), hash)) {
 		if (error != nullptr) {
 			*error = "cannot hash D88 file";
 		}
