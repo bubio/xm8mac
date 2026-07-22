@@ -1728,6 +1728,7 @@ void App::ProcessRaService(bool emulation_idle)
 				ra_overlay->CloseScreen();
 				SDL_StopTextInput();
 				ClearRaOverlayPointerState();
+				video->SetMenuMode(false);
 				CtrlAudio();
 			}
 			const std::string name = login.display_name.empty() ?
@@ -3396,36 +3397,43 @@ void App::DrawRaOverlay()
 		const Xm8Ra::RaOverlayLoginSnapshot login =
 			ra_overlay->LoginSnapshot();
 		SDL_Rect panel = {104, 78, 432, 218};
-		Uint32 *buf = video->GetFrameBuf(0);
+		video->SetMenuMode(true);
+		Uint32 *buf = video->GetMenuFrame();
+		SDL_Rect clear = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+		font->DrawFillRect(buf, &clear, 0x00000000);
+		const Uint32 panel_alpha = 0xe0000000;
+		const Uint32 foreground_alpha = 0xff000000;
 		font->DrawFillRect(buf, &panel,
-			RGB_COLOR(16, 16, 16) | 0xe0000000);
+			RGB_COLOR(16, 16, 16) | panel_alpha);
 		font->DrawRect(buf, &panel,
-			RGB_COLOR(255, 255, 255) | 0xe0000000,
-			RGB_COLOR(16, 16, 16) | 0xe0000000);
+			RGB_COLOR(255, 255, 255) | foreground_alpha,
+			RGB_COLOR(16, 16, 16) | panel_alpha);
 
 		SDL_Rect title = {panel.x, panel.y + 12, panel.w, 24};
 		font->DrawSjisCenterOr(buf, &title, "RetroAchievements Login",
-			RGB_COLOR(255, 255, 255));
+			RGB_COLOR(255, 255, 255) | foreground_alpha);
 
 		SDL_Rect user_label = {panel.x + 24, panel.y + 56, 104, 22};
 		SDL_Rect user_box = {panel.x + 128, panel.y + 52, 272, 28};
 		SDL_Rect pass_label = {panel.x + 24, panel.y + 96, 104, 22};
 		SDL_Rect pass_box = {panel.x + 128, panel.y + 92, 272, 28};
 		font->DrawSjisLeftOr(buf, &user_label, "Username",
-			RGB_COLOR(220, 220, 220));
+			RGB_COLOR(220, 220, 220) | foreground_alpha);
 		font->DrawSjisLeftOr(buf, &pass_label, "Password",
-			RGB_COLOR(220, 220, 220));
+			RGB_COLOR(220, 220, 220) | foreground_alpha);
 
 		const bool user_focus =
 			login.focus == Xm8Ra::RaOverlayLoginTarget::Username;
 		const bool pass_focus =
 			login.focus == Xm8Ra::RaOverlayLoginTarget::Password;
 		font->DrawRect(buf, &user_box,
-			user_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
-			RGB_COLOR(0, 0, 0) | 0xe0000000);
+			(user_focus ? RGB_COLOR(255, 255, 128) :
+				RGB_COLOR(128, 128, 128)) | foreground_alpha,
+			RGB_COLOR(0, 0, 0) | panel_alpha);
 		font->DrawRect(buf, &pass_box,
-			pass_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
-			RGB_COLOR(0, 0, 0) | 0xe0000000);
+			(pass_focus ? RGB_COLOR(255, 255, 128) :
+				RGB_COLOR(128, 128, 128)) | foreground_alpha,
+			RGB_COLOR(0, 0, 0) | panel_alpha);
 
 		char user[64];
 		char pass[64];
@@ -3437,9 +3445,9 @@ void App::DrawRaOverlay()
 		pass_box.x += 8;
 		pass_box.w -= 16;
 		font->DrawSjisLeftOr(buf, &user_box, user,
-			RGB_COLOR(255, 255, 255));
+			RGB_COLOR(255, 255, 255) | foreground_alpha);
 		font->DrawSjisLeftOr(buf, &pass_box, pass,
-			RGB_COLOR(255, 255, 255));
+			RGB_COLOR(255, 255, 255) | foreground_alpha);
 		if ((user_focus || pass_focus) &&
 			((SDL_GetTicks() / 500) & 1) == 0) {
 			const char *focused_text = user_focus ? user : pass;
@@ -3451,7 +3459,8 @@ void App::DrawRaOverlay()
 				cursor_x = cursor_limit;
 			}
 			SDL_Rect cursor = {cursor_x, cursor_box.y + 5, 2, 16};
-			font->DrawFillRect(buf, &cursor, RGB_COLOR(255, 255, 255));
+			font->DrawFillRect(buf, &cursor,
+				RGB_COLOR(255, 255, 255) | foreground_alpha);
 		}
 
 		SDL_Rect login_button = {256, 220, 112, 30};
@@ -3461,22 +3470,24 @@ void App::DrawRaOverlay()
 		const bool cancel_focus =
 			login.focus == Xm8Ra::RaOverlayLoginTarget::Cancel;
 		font->DrawRect(buf, &login_button,
-			login_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
-			login.can_submit ? RGB_COLOR(48, 72, 96) | 0xe0000000 :
-				RGB_COLOR(32, 32, 32) | 0xe0000000);
+			(login_focus ? RGB_COLOR(255, 255, 128) :
+				RGB_COLOR(128, 128, 128)) | foreground_alpha,
+			login.can_submit ? RGB_COLOR(48, 72, 96) | panel_alpha :
+				RGB_COLOR(32, 32, 32) | panel_alpha);
 		font->DrawRect(buf, &cancel_button,
-			cancel_focus ? RGB_COLOR(255, 255, 128) : RGB_COLOR(128, 128, 128),
-			RGB_COLOR(64, 64, 64) | 0xe0000000);
+			(cancel_focus ? RGB_COLOR(255, 255, 128) :
+				RGB_COLOR(128, 128, 128)) | foreground_alpha,
+			RGB_COLOR(64, 64, 64) | panel_alpha);
 		font->DrawSjisCenterOr(buf, &login_button, "Login",
-			login.can_submit ? RGB_COLOR(255, 255, 255) :
-				RGB_COLOR(160, 160, 160));
+			(login.can_submit ? RGB_COLOR(255, 255, 255) :
+				RGB_COLOR(160, 160, 160)) | foreground_alpha);
 		font->DrawSjisCenterOr(buf, &cancel_button, "Cancel",
-			RGB_COLOR(255, 255, 255));
+			RGB_COLOR(255, 255, 255) | foreground_alpha);
 
 		SDL_Rect hint = {panel.x + 24, panel.y + 178, panel.w - 48, 22};
 		font->DrawSjisLeftOr(buf, &hint,
 			"Tab/Arrows: Move  Enter: Select  Esc: Cancel",
-			RGB_COLOR(200, 200, 200));
+			RGB_COLOR(200, 200, 200) | foreground_alpha);
 		if (!login.status_message.empty()) {
 			char status[72];
 			std::snprintf(status, sizeof(status), "%s",
@@ -3484,7 +3495,7 @@ void App::DrawRaOverlay()
 			SDL_Rect status_rect = {panel.x + 24, panel.y + 194,
 				panel.w - 48, 22};
 			font->DrawSjisLeftOr(buf, &status_rect, status,
-				RGB_COLOR(255, 192, 96));
+				RGB_COLOR(255, 192, 96) | foreground_alpha);
 		}
 		video->DrawCtrl();
 	}

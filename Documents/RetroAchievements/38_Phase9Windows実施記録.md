@@ -3,11 +3,13 @@
 ## 1. 状態
 
 2026-07-22時点で、Windows移植コード、Visual Studio RA ON／OFF構成、Windowsで必要に応じて
-利用できるCTest導線まで実装した。既存のWindows CI workflowは変更していない。
+利用できるCTest導線まで実装した。既存のWindows CI workflowは構成と3配布物を維持したまま、
+通常のRelease buildでRAを有効にした。
 
-現在の判定は**実装完了・Windows実機受入待ち**である。作業環境がmacOSのため、Visual Studio
-2022による実build、Windows上のCTest、Credential Manager、proxy、切断復旧、実RA login、
-x64手動受入はまだ実行していない。これらを実施するまでPhase 9受入完了とはしない。
+Windows CIではx64／Win32／ARM64のRA有効Release buildと3成果物の生成に成功した。また、
+Windows実機でRAの基本動作に問題がないことを確認した。詳細な受入項目、Windows上のCTest、
+Credential Manager、proxy、切断復旧等は引き続き未確認であるため、現在の判定は
+**実装完了・Windows詳細受入継続中**とする。
 
 ## 2. 実装内容
 
@@ -62,6 +64,14 @@ WinHTTPの寿命管理はMicrosoftの`WinHttpCloseHandle`、status callback、op
 - Windows testを妨げていたRA test内のPOSIX directory操作を共通adapterへ移した。
 - WindowsではHTTP client生成、非HTTPS拒否、connectivity monitor生成を自動確認する。
 
+### 2.5 共通overlay修正
+
+- Windows実機確認後、200ライン・Scan Line OFFで起動またはresetした状態からRA loginを開くと、
+  login画面だけが縦2倍になる問題をmacOSとWindowsの共通描画経路で確認した。
+- login画面だけが400ライン座標のまま通常frame bufferへ描かれ、200ライン表示時の拡大を受けていた。
+- 他のRA全画面UIと同じ400ライン固定のmenu textureへ描画し、login成功時にmenu modeを解除する
+  よう修正した。400ライン表示とScan Line設定に依存せず同じ座標系で表示する。
+
 ## 3. macOS回帰結果
 
 Windows向け共通コード変更後、macOSで次を実行した。
@@ -72,15 +82,18 @@ Windows向け共通コード変更後、macOSで次を実行した。
 | RA ON test | `ctest --test-dir build-ra --output-on-failure` | 24/24成功 |
 | RA OFF build | `cmake --build build -j4` | 成功 |
 | RA OFF test | `ctest --test-dir build --output-on-failure` | 10/10成功 |
-| Visual Studio XML | `xmllint --noout` | project／filters／propsすべて成功 |
+| Visual Studio XML | `xmllint --noout` | project／filters成功 |
 | whitespace | `git diff --check` | 問題なし |
 
 従来23件だったRA ON testは、file adapter test追加により24件となった。
 
+Windows CI run `29882728877`ではRA有効Releaseのx64／Win32／ARM64がすべて成功し、従来どおり
+3成果物を生成した。Windows実機ではRAの基本動作に問題がないことを確認した。
+
 ## 4. Windowsで実行する残作業
 
-1. Visual Studio 2022／v143／Windows 10 SDKで手動受入buildを実行する。RA OFF確認は
-   互換性確認用であり、配布物として保存しない。
+1. 必要に応じてVisual Studio 2022／v143／Windows 10 SDKでローカル手動buildを実行する。
+   RA OFF確認は互換性確認用であり、配布物として保存しない。
 2. RA OFF binaryにRA source、WinHTTP、SQLite等が混入していないことを確認する。
 3. x64 RA ONでCTestを実行し、全RA testの結果を本書へ追記する。
 4. WinHTTPのGET、空POST、POST、gzip、redirect、oversize、cancel、timeout、shutdownを
@@ -89,6 +102,7 @@ Windows向け共通コード変更後、macOSで次を実行した。
 6. Credential Managerの保存、再login、拒否token削除、logout削除を確認し、試験credentialを消す。
 7. system proxy、offline／online遷移、証明書errorを確認する。
 8. Normal回帰、Softcore、Hardcore、overlay、mouse／keyboard／controller、2 drive、M3Uを確認する。
+   login overlayは200ラインのScan Line ON／OFFと400ラインで同じ寸法になることを再確認する。
 9. ARM64実機がなければruntime未確認を明記する。
 10. macOS sanitizerと実RA主要シナリオを再実行する。
 
