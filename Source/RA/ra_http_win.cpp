@@ -60,7 +60,7 @@ std::atomic<uintptr_t> g_next_transport_id(1);
 std::wstring Utf8ToWide(const std::string& value)
 {
 	if (value.empty() ||
-		value.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+		value.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		return std::wstring();
 	}
 	const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
@@ -79,7 +79,7 @@ std::wstring Utf8ToWide(const std::string& value)
 std::string WideToUtf8(const std::wstring& value)
 {
 	if (value.empty() ||
-		value.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+		value.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		return std::string();
 	}
 	const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
@@ -552,7 +552,7 @@ bool StartRequest(const std::shared_ptr<WinHttpOwnerState>& owner,
 	std::wstring path;
 	INTERNET_PORT port = INTERNET_DEFAULT_HTTPS_PORT;
 	if (!CrackHttpsUrl(url, &host, &path, &port) ||
-		request.post_data.size() > std::numeric_limits<DWORD>::max()) {
+		request.post_data.size() > (std::numeric_limits<DWORD>::max)()) {
 		return false;
 	}
 

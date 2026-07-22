@@ -35,7 +35,7 @@ namespace fs = std::filesystem;
 bool Utf8Path(const std::string& path, fs::path *output)
 {
 	if (output == nullptr || path.empty() ||
-		path.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+		path.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		return false;
 	}
 	const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
@@ -399,7 +399,7 @@ bool ReadRaFile(const std::string& path, std::vector<uint8_t> *data,
 	}
 	const std::streamoff length = stream.tellg();
 	if (length < 0 || static_cast<uint64_t>(length) > maximum_size ||
-		static_cast<uint64_t>(length) > std::numeric_limits<size_t>::max()) {
+		static_cast<uint64_t>(length) > (std::numeric_limits<size_t>::max)()) {
 		SetError(error, "invalid RA file size");
 		return false;
 	}
