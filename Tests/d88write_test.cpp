@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #ifdef _WIN32
@@ -70,35 +71,35 @@ int main()
 	uint8 original = 0;
 	uint8 replacement = 0;
 	{
-		DISK disk(nullptr);
+		std::unique_ptr<DISK> disk(new DISK(nullptr));
 		char mutable_path[_MAX_PATH];
 		std::strncpy(mutable_path, path.c_str(), sizeof(mutable_path));
 		mutable_path[sizeof(mutable_path) - 1] = '\0';
-		disk.open(mutable_path, 0);
-		Check(disk.inserted, "open generated D88");
-		Check(!disk.write_protected, "generated D88 is writable");
-		Check(disk.get_sector(0, 0, 0), "read generated sector");
-		Check(disk.sector_size.sd == 0x100, "generated sector size");
-		if (disk.sector != nullptr) {
-			original = disk.sector[0];
+		disk->open(mutable_path, 0);
+		Check(disk->inserted, "open generated D88");
+		Check(!disk->write_protected, "generated D88 is writable");
+		Check(disk->get_sector(0, 0, 0), "read generated sector");
+		Check(disk->sector_size.sd == 0x100, "generated sector size");
+		if (disk->sector != nullptr) {
+			original = disk->sector[0];
 			replacement = static_cast<uint8>(original ^ 0xff);
-			disk.sector[0] = replacement;
-			disk.changed = true;
+			disk->sector[0] = replacement;
+			disk->changed = true;
 		}
-		disk.close();
+		disk->close();
 	}
 
 	Check(FileSize(path) == 0x3c0, "D88 size unchanged after write");
 	{
-		DISK disk(nullptr);
+		std::unique_ptr<DISK> disk(new DISK(nullptr));
 		char mutable_path[_MAX_PATH];
 		std::strncpy(mutable_path, path.c_str(), sizeof(mutable_path));
 		mutable_path[sizeof(mutable_path) - 1] = '\0';
-		disk.open(mutable_path, 0);
-		Check(disk.get_sector(0, 0, 0), "reopen written sector");
-		Check(disk.sector != nullptr && disk.sector[0] == replacement &&
-			disk.sector[0] != original, "sector write persisted");
-		disk.close();
+		disk->open(mutable_path, 0);
+		Check(disk->get_sector(0, 0, 0), "reopen written sector");
+		Check(disk->sector != nullptr && disk->sector[0] == replacement &&
+			disk->sector[0] != original, "sector write persisted");
+		disk->close();
 	}
 
 	for (const char *name : {"single.d88", "second.d88", "multi.d88", "pair.m3u"}) {

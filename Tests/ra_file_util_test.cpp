@@ -6,6 +6,11 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 namespace {
 
 int failures = 0;
@@ -76,6 +81,20 @@ int main()
 	const std::string invalid_utf8("bad-\xc0\xaf", 6);
 	Check(!Xm8Ra::EnsureRaDirectoryTree(JoinPath(root, invalid_utf8), &error),
 		"reject invalid UTF-8 path");
+
+	std::string long_directory = root;
+	for (int i = 0; i < 4; ++i) {
+		long_directory = JoinPath(long_directory,
+			"long-path-segment-0123456789012345678901234567890123456789");
+	}
+	const std::string long_file = JoinPath(long_directory, u8"長いパス.bin");
+	Check(long_file.size() > MAX_PATH, "long path exceeds legacy MAX_PATH");
+	Check(Xm8Ra::EnsureRaDirectoryTree(long_directory, &error),
+		"create long directory tree");
+	Check(Xm8Ra::WriteRaFile(long_file, first.data(), first.size(), &error),
+		"write long UTF-8 file path");
+	Check(Xm8Ra::ReadRaFile(long_file, &loaded, 1024, &error) && loaded == first,
+		"read long UTF-8 file path");
 #endif
 
 	Check(Xm8Ra::RemoveRaTree(root, &error), "remove test directory tree");

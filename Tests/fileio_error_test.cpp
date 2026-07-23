@@ -26,8 +26,20 @@ int main()
 {
 	const auto unique = std::chrono::steady_clock::now()
 		.time_since_epoch().count();
-	const std::string path = "/tmp/xm8-fileio-error-" +
-		std::to_string(unique);
+	const char *temporary = std::getenv(
+#ifdef _WIN32
+		"TEMP"
+#else
+		"TMPDIR"
+#endif
+	);
+	const std::string path = std::string(temporary != nullptr ? temporary :
+#ifdef _WIN32
+		"."
+#else
+		"/tmp"
+#endif
+	) + "/xm8-fileio-error-" + std::to_string(unique);
 	FILEIO file;
 	Check(!file.HasError(), "new FILEIO has no error");
 	Check(file.Fopen(const_cast<char *>(path.c_str()), FILEIO_WRITE_BINARY),

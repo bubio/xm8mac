@@ -1,17 +1,12 @@
 #include "ra_state_store.h"
+#include "ra_file_util.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
-
-#ifdef _WIN32
-#include <process.h>
-#define getpid _getpid
-#else
-#include <unistd.h>
-#endif
 
 namespace {
 
@@ -168,8 +163,22 @@ void TestCorruptionRejection()
 void TestPathsAndAtomicFile()
 {
 	const std::string md5 = "0123456789abcdef0123456789abcdef";
-	const std::string root = "/tmp/xm8-ra-state-store-" +
-		std::to_string(static_cast<long long>(getpid()));
+	const char *temporary = std::getenv(
+#ifdef _WIN32
+		"TEMP"
+#else
+		"TMPDIR"
+#endif
+	);
+	const auto unique = std::chrono::steady_clock::now()
+		.time_since_epoch().count();
+	const std::string root = std::string(temporary != nullptr ? temporary :
+#ifdef _WIN32
+		"."
+#else
+		"/tmp"
+#endif
+	) + "/xm8-ra-state-store-" + std::to_string(unique);
 	const std::string casual = Xm8Ra::RaStatePath(root,
 		Xm8Ra::RaStateMode::Casual, 42, md5, 3);
 	const std::string offline = Xm8Ra::RaStatePath(root,
@@ -196,7 +205,7 @@ void TestPathsAndAtomicFile()
 		"atomic state replacement");
 	Check(Xm8Ra::ReadRaStateFile(casual, &loaded, &error) &&
 		loaded == replacement, "replacement is complete");
-	std::remove(casual.c_str());
+	Check(Xm8Ra::RemoveRaTree(root, &error), "remove state test directory");
 	Check(!Xm8Ra::ReadRaStateFile(casual, &loaded, &error),
 		"missing state file rejected");
 	Check(loaded.empty(), "failed read clears output");

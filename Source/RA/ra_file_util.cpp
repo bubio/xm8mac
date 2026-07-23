@@ -48,6 +48,31 @@ bool Utf8Path(const std::string& path, fs::path *output)
 		static_cast<int>(path.size()), &wide[0], length) != length) {
 		return false;
 	}
+	if (wide.size() >= MAX_PATH) {
+		for (wchar_t& value : wide) {
+			if (value == L'/') value = L'\\';
+		}
+		if (wide.compare(0, 4, L"\\\\?\\") == 0) {
+			// Already in extended-length form.
+		}
+		else if (wide.size() >= 3 && wide[1] == L':' && wide[2] == L'\\') {
+			wide.insert(0, L"\\\\?\\");
+		}
+		else if (wide.compare(0, 2, L"\\\\") == 0) {
+			wide = L"\\\\?\\UNC\\" + wide.substr(2);
+		}
+		else {
+			const DWORD required = GetFullPathNameW(wide.c_str(), 0, nullptr,
+				nullptr);
+			if (required == 0) return false;
+			std::wstring absolute(static_cast<size_t>(required), L'\0');
+			const DWORD written = GetFullPathNameW(wide.c_str(), required,
+				&absolute[0], nullptr);
+			if (written == 0 || written >= required) return false;
+			absolute.resize(written);
+			wide = L"\\\\?\\" + absolute;
+		}
+	}
 	*output = fs::path(wide);
 	return true;
 }

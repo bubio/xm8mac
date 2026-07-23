@@ -59,7 +59,20 @@ int main(int argc, char *argv[])
 	}
 
 	const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
-	const std::string base = "/tmp/xm8-d88probe-" + std::to_string(unique);
+	const char *temporary = std::getenv(
+#ifdef _WIN32
+		"TEMP"
+#else
+		"TMPDIR"
+#endif
+	);
+	const std::string base = std::string(temporary != nullptr ? temporary :
+#ifdef _WIN32
+		"."
+#else
+		"/tmp"
+#endif
+	) + "/xm8-d88probe-" + std::to_string(unique);
 	const std::string one = base + "-one.d88";
 	const std::string two = base + "-two.d88";
 	const std::string invalid = base + "-invalid.d88";
@@ -81,7 +94,7 @@ int main(int argc, char *argv[])
 	Check(banks == 2 && names == 12, "two-bank metadata");
 	Check(!ProbeD88Image(invalid.c_str(), &banks),
 		"reject invalid image");
-	Check(!ProbeD88Image("/tmp/xm8-no-such-image.d88", &banks),
+	Check(!ProbeD88Image((base + "-missing.d88").c_str(), &banks),
 		"reject missing image");
 	Check(!ProbeD88Image(one.c_str(), nullptr),
 		"reject null output");

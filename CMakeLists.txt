@@ -169,6 +169,12 @@ endif()
 set(BIN_TARGET "xm8")
 add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Builder/macOS/AppIcon.icns)
 target_compile_definitions(${BIN_TARGET} PRIVATE SDL _PC8801MA) 
+if(WIN32)
+  # Match Builder/Windows/XM8.vcxproj's Unicode character set. platform.cpp's
+  # Win32 file browser implementation uses the wide Win32 API behind UNICODE.
+  target_compile_definitions(${BIN_TARGET} PRIVATE UNICODE _UNICODE)
+  target_link_libraries(${BIN_TARGET} PRIVATE imm32)
+endif()
 
 if(XM8_ENABLE_RETROACHIEVEMENTS)
   xm8_enable_ra_for_target(${BIN_TARGET})
@@ -564,6 +570,30 @@ if(BUILD_TESTING)
     set_tests_properties(ra_credentials_http_test PROPERTIES
       ENVIRONMENT "XM8_RA_CREDENTIALS_TEST_MEMORY=1")
 
+    if(WIN32)
+      add_executable(ra_credentials_win_test
+        Tests/ra_credentials_win_test.cpp
+        $<TARGET_OBJECTS:xm8_ra_core>
+        $<TARGET_OBJECTS:xm8_ra_platform>
+      )
+      target_link_libraries(ra_credentials_win_test PRIVATE
+        xm8_ra_dependencies)
+      target_include_directories(ra_credentials_win_test PRIVATE Source/RA)
+      target_compile_definitions(ra_credentials_win_test PRIVATE
+        XM8_ENABLE_RETROACHIEVEMENTS=1)
+      add_test(NAME ra_credentials_win_test COMMAND ra_credentials_win_test)
+
+      add_executable(ra_http_win_test Tests/ra_http_win_test.cpp
+        $<TARGET_OBJECTS:xm8_ra_core>
+        $<TARGET_OBJECTS:xm8_ra_platform>)
+      target_link_libraries(ra_http_win_test PRIVATE
+        xm8_ra_dependencies ws2_32)
+      target_include_directories(ra_http_win_test PRIVATE Source/RA)
+      target_compile_definitions(ra_http_win_test PRIVATE
+        XM8_ENABLE_RETROACHIEVEMENTS=1)
+      add_test(NAME ra_http_win_test COMMAND ra_http_win_test)
+    endif()
+
     add_executable(ra_service_test
       Tests/ra_service_test.cpp
       Source/RA/ra_http_fake.cpp
@@ -598,6 +628,21 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_text_converter_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_text_converter_test COMMAND ra_text_converter_test)
+  endif()
+
+  if(WIN32 AND TARGET SDL2::SDL2)
+    foreach(SDL_TEST_TARGET
+        d88probe_test
+        d88fixture_test
+        d88write_test
+        event_host_frame_integration_test
+        fileio_error_test)
+      add_custom_command(TARGET ${SDL_TEST_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:SDL2::SDL2>
+          $<TARGET_FILE_DIR:${SDL_TEST_TARGET}>
+      )
+    endforeach()
   endif()
 endif()
 
