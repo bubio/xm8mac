@@ -131,7 +131,16 @@ system proxyや証明書storeは変更していない。GET／POST／gzip／redi
 RA OFF生成projectとbinary importを確認し、RA source、rcheevos、SQLite、WinHTTPのcompile／link
 およびimportがないことを確認した。
 
-## 4. Windowsで実行する残作業
+### 3.3 実機受入・最終回帰・Phase 9完了（2026-07-24）
+
+Windows実機でNormalおよびRAの実働を確認し、問題がないことを確認した。ARM64実機でもruntimeを
+確認し、問題がないことを確認した。Windows対応後のmacOS最終動作確認も完了し、問題はなかった。
+
+この個人環境にはproxy、PAC／WPAD、認証proxy、企業証明書環境がないため、それらの環境固有項目は
+未実施として記録する。利用可能な環境での通常接続、Windows自動試験、Windows実機受入、ARM64実機、
+macOS最終回帰が完了し、重大な失敗がないため、2026-07-24付でPhase 9を完了と判定する。
+
+## 4. Windows作業項目と結果
 
 1. 必要に応じてVisual Studio 2022／v143／Windows 10 SDKでローカル手動buildを実行する。
    RA OFF確認は互換性確認用であり、配布物として保存しない。
@@ -148,13 +157,21 @@ RA OFF生成projectとbinary importを確認し、RA source、rcheevos、SQLite�
 6. Credential Managerの保存、再login、拒否token削除、logout削除を確認し、試験credentialを消す。
    2026-07-23に自動試験で確認済み。
 7. system proxy、offline／online遷移、証明書errorを確認する。
+   proxy環境はないため環境固有項目は未実施。不正TLSの安全な拒否は自動試験済み。
 8. Normal回帰、Softcore、Hardcore、overlay、mouse／keyboard／controller、2 drive、M3Uを確認する。
    login overlayは200ラインのScan Line ON／OFFと400ラインで同じ寸法になることを再確認する。
+   2026-07-24にWindows実機の実働に問題がないことを確認済み。
 9. ARM64実機がなければruntime未確認を明記する。
+   2026-07-24にARM64実機runtimeを確認済み。
 10. macOS sanitizerと実RA主要シナリオを再実行する。
+   2026-07-24にmacOS最終動作確認済み。
 
 ## 5. Phase 9完了条件
 
 上記Windows残作業に重大な失敗がなく、結果を本書へ追記した時点でPhase 9を完了とする。
 CIの通常buildだけではWindows RA build成功の証跡にしない。Windows受入完了後にmacOS最終回帰を行い、
 その完了までLinux Phase 10へ進まない。
+
+2026-07-24、Windows x64 RA ON／OFF build・CTest、Credential Manager、path、WinHTTP安全失敗、
+Windows実機、ARM64実機、macOS最終回帰の結果をもって上記条件を満たした。Phase 9を完了し、
+Linux Phase 10へ進む。
