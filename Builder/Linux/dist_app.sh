@@ -5,15 +5,15 @@
 #
 
 # Debian and Ubuntu
-# sudo apt install build-essential cmake libsdl2-dev
+# sudo apt install build-essential cmake pkg-config libsdl2-dev libcurl4-openssl-dev libsecret-1-dev
 
 # Fedora
 # for dnf4
 #   sudo dnf groupinstall "Development Tools"
-#   sudo dnf install cmake gcc-c++ rpm-build SDL2-devel
+#   sudo dnf install cmake gcc-c++ rpm-build SDL2-devel libcurl-devel libsecret-devel
 # for dnf5
 #   sudo dnf install @development-tools
-#   sudo dnf install cmake  gcc-c++ rpm-build SDL2-devel
+#   sudo dnf install cmake gcc-c++ rpm-build SDL2-devel libcurl-devel libsecret-devel
 
 pushd .
 cd ../../
@@ -21,7 +21,7 @@ cd ../../
 # Remove previous artifact.
 rm -rf build
 
-cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr -DXM8_ENABLE_RETROACHIEVEMENTS=ON
 cmake --build build -j 2 --target package
 
 if [ -f build/xm8*.rpm ]; then

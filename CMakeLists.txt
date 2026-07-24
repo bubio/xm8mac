@@ -592,6 +592,15 @@ if(BUILD_TESTING)
       target_compile_definitions(ra_http_win_test PRIVATE
         XM8_ENABLE_RETROACHIEVEMENTS=1)
       add_test(NAME ra_http_win_test COMMAND ra_http_win_test)
+    elseif(UNIX AND NOT APPLE AND NOT ANDROID)
+      add_executable(ra_http_linux_test Tests/ra_http_linux_test.cpp
+        $<TARGET_OBJECTS:xm8_ra_core>
+        $<TARGET_OBJECTS:xm8_ra_platform>)
+      target_link_libraries(ra_http_linux_test PRIVATE xm8_ra_dependencies)
+      target_include_directories(ra_http_linux_test PRIVATE Source/RA)
+      target_compile_definitions(ra_http_linux_test PRIVATE
+        XM8_ENABLE_RETROACHIEVEMENTS=1)
+      add_test(NAME ra_http_linux_test COMMAND ra_http_linux_test)
     endif()
 
     add_executable(ra_service_test
@@ -674,12 +683,21 @@ if(ENABLE_PACKAGING)
     # -G DEB
     set(CPACK_PACKAGE_CONTACT "bubio")
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "PC-8801MA Emulator\neXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
+    if(XM8_ENABLE_RETROACHIEVEMENTS)
+      set(CPACK_DEBIAN_PACKAGE_DEPENDS
+        "libsdl2-2.0-0, libcurl4, libsecret-1-0")
+    else()
+      set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
+    endif()
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
     # -G RPM
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
-    set(CPACK_RPM_PACKAGE_REQUIRES "SDL2")
+    if(XM8_ENABLE_RETROACHIEVEMENTS)
+      set(CPACK_RPM_PACKAGE_REQUIRES "SDL2, libcurl, libsecret")
+    else()
+      set(CPACK_RPM_PACKAGE_REQUIRES "SDL2")
+    endif()
 
     find_program(RPMBUILD rpmbuild)
     if(RPMBUILD)

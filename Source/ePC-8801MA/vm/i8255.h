@@ -37,6 +37,9 @@ public:
 		for(int i = 0; i < 3; i++) {
 			init_output_signals(&port[i].outputs);
 			port[i].wreg = port[i].rreg = 0;//0xff;
+			port[i].rmask = 0xff;
+			port[i].mode = 0;
+			port[i].first = true;
 		}
 		clear_ports_by_cmdreg = false;
 	}

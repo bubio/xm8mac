@@ -47,7 +47,7 @@ public:
 		// primary event manager
 		event_manager = NULL;
 	}
-	~DEVICE(void) {}
+	virtual ~DEVICE(void) {}
 	
 	virtual void initialize() {}
 	virtual void release() {}

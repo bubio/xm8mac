@@ -86,6 +86,7 @@ ePC-8801MAの旧版
 | [36_macOS総合回帰修正記録.md](36_macOS総合回帰修正記録.md) | RA起動時の保存済みInput remap適用漏れと回帰確認 |
 | [37_Phase9Windows移植計画.md](37_Phase9Windows移植計画.md) | Windows事前監査、UTF-8 path、WinHTTP、Visual Studio構成、試験matrix、受入計画 |
 | [38_Phase9Windows実施記録.md](38_Phase9Windows実施記録.md) | Phase 9完了記録、Windows移植・自動試験、Windows／ARM64実機受入、macOS回帰、環境固有の未実施項目 |
+| [39_Phase10Linux実施記録.md](39_Phase10Linux実施記録.md) | Linux libcurl multi、接続監視、Secret Service、CMake／配布、Linux自動受入、実機受入項目 |
 
 ## 3. 確定事項
 

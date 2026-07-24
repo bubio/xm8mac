@@ -105,6 +105,11 @@ elseif(APPLE)
     ${PROJECT_SOURCE_DIR}/Source/RA/ra_connectivity_mac.cpp
     ${PROJECT_SOURCE_DIR}/Source/RA/ra_http_mac.mm
   )
+elseif(UNIX AND NOT ANDROID)
+  target_sources(xm8_ra_platform PRIVATE
+    ${PROJECT_SOURCE_DIR}/Source/RA/ra_connectivity_linux.cpp
+    ${PROJECT_SOURCE_DIR}/Source/RA/ra_http_linux.cpp
+  )
 endif()
 
 add_library(xm8_ra_media_xm8 OBJECT
@@ -142,10 +147,24 @@ elseif(APPLE)
     "-framework SystemConfiguration"
   )
 elseif(UNIX AND NOT ANDROID)
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(LIBSECRET REQUIRED IMPORTED_TARGET libsecret-1)
-  target_link_libraries(xm8_ra_dependencies INTERFACE PkgConfig::LIBSECRET)
-  target_compile_definitions(xm8_ra_platform PRIVATE XM8_RA_HAS_LIBSECRET=1)
+  find_package(CURL REQUIRED)
+  find_package(Threads REQUIRED)
+  target_link_libraries(xm8_ra_dependencies INTERFACE
+    CURL::libcurl
+    Threads::Threads
+  )
+
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(LIBSECRET QUIET IMPORTED_TARGET libsecret-1)
+  endif()
+  if(LIBSECRET_FOUND)
+    target_link_libraries(xm8_ra_dependencies INTERFACE PkgConfig::LIBSECRET)
+    target_compile_definitions(xm8_ra_platform PRIVATE XM8_RA_HAS_LIBSECRET=1)
+  else()
+    message(STATUS
+      "libsecret-1 not found; RetroAchievements credentials will not persist")
+  endif()
 endif()
 
 function(xm8_enable_ra_for_target target_name)

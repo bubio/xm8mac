@@ -1,6 +1,4 @@
 #include "Fixtures/d88_fixture.h"
-#include "disk.h"
-
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -9,6 +7,8 @@
 #include <iostream>
 #include <memory>
 #include <string>
+
+#include "disk.h"
 
 #ifdef _WIN32
 #include <direct.h>
