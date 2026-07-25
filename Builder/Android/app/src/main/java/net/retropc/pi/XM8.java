@@ -38,6 +38,7 @@ import android.util.Base64;
 import org.libsdl.app.SDLActivity;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -46,12 +47,18 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import androidx.core.content.ContextCompat;
 import android.content.pm.PackageManager;
 import androidx.core.app.ActivityCompat;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.Toast;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.text.InputType;
 import androidx.core.os.EnvironmentCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.annotation.RequiresApi;
@@ -119,6 +126,13 @@ public class XM8 extends SDLActivity {
     private native void nativeDelete();
     private static native void nativeRaHttpComplete(long requestId, int result,
             int status, String contentType, byte[] body, String error);
+    private static native void nativeRaLoginSubmitted(String username, String password);
+    private static native void nativeRaLoginCanceled();
+
+    private AlertDialog mRaLoginDialog;
+    private EditText mRaLoginUsername;
+    private EditText mRaLoginPassword;
+    private TextView mRaLoginStatus;
 
     // setup
     @Override
@@ -229,8 +243,11 @@ public class XM8 extends SDLActivity {
             // get external storage path
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 String[] extDirs = getExternalStorageDirectories();
-                if (extDirs.length == 1) {
-                    // only one path is found
+                if (extDirs.length > 0 && extDirs[0] != null) {
+                    // The first path is the primary app-specific external
+                    // storage. Emulators can report additional candidates;
+                    // leaving mExtDir unset in that case crashes the SAF
+                    // bridge before it can reject an unavailable tree URI.
                     mExtDir = extDirs[0];
                     nativeExtDir(mExtDir);
                 }
@@ -357,6 +374,130 @@ public class XM8 extends SDLActivity {
     public void raCancelAllHttp() {
         for (Long requestId : mRaConnections.keySet()) raCancelHttp(requestId);
         for (Long requestId : mRaHttpTasks.keySet()) raCancelHttp(requestId);
+    }
+
+    // Android owns the password UI. The scroll container remains usable when
+    // the landscape IME reduces the available height.
+    public void raShowLogin(final String initialUsername) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (isFinishing() || isDestroyed()) return;
+                if (mRaLoginDialog != null && mRaLoginDialog.isShowing()) return;
+
+                final int padding = (int)(20 * getResources().getDisplayMetrics().density);
+                final ScrollView scroll = new ScrollView(XM8.this);
+                scroll.setFillViewport(true);
+                final LinearLayout content = new LinearLayout(XM8.this);
+                content.setOrientation(LinearLayout.VERTICAL);
+                content.setPadding(padding, padding, padding, padding);
+                scroll.addView(content, new ScrollView.LayoutParams(
+                        ScrollView.LayoutParams.MATCH_PARENT,
+                        ScrollView.LayoutParams.WRAP_CONTENT));
+
+                mRaLoginUsername = new EditText(XM8.this);
+                mRaLoginUsername.setHint("Username");
+                mRaLoginUsername.setSingleLine(true);
+                mRaLoginUsername.setInputType(InputType.TYPE_CLASS_TEXT |
+                        InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                mRaLoginUsername.setText(initialUsername == null ? "" : initialUsername);
+                content.addView(mRaLoginUsername, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+
+                mRaLoginPassword = new EditText(XM8.this);
+                mRaLoginPassword.setHint("Password");
+                mRaLoginPassword.setSingleLine(true);
+                mRaLoginPassword.setInputType(InputType.TYPE_CLASS_TEXT |
+                        InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                mRaLoginPassword.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+                content.addView(mRaLoginPassword, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+
+                mRaLoginStatus = new TextView(XM8.this);
+                content.addView(mRaLoginStatus, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+
+                final View.OnFocusChangeListener revealFocusedField =
+                        new View.OnFocusChangeListener() {
+                    @Override public void onFocusChange(final View view, boolean focused) {
+                        if (focused) scroll.post(new Runnable() {
+                            @Override public void run() {
+                                scroll.smoothScrollTo(0, Math.max(0, view.getTop() - padding));
+                            }
+                        });
+                    }
+                };
+                mRaLoginUsername.setOnFocusChangeListener(revealFocusedField);
+                mRaLoginPassword.setOnFocusChangeListener(revealFocusedField);
+                mRaLoginPassword.setOnEditorActionListener((view, actionId, event) -> {
+                    if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                        submitRaLogin();
+                        return true;
+                    }
+                    return false;
+                });
+
+                mRaLoginDialog = new AlertDialog.Builder(XM8.this)
+                        .setTitle("RetroAchievements Login")
+                        .setView(scroll)
+                        .setNegativeButton(android.R.string.cancel, (dialog, which) -> {
+                            nativeRaLoginCanceled();
+                        })
+                        .setPositiveButton("Login", null)
+                        .create();
+                mRaLoginDialog.setCanceledOnTouchOutside(false);
+                mRaLoginDialog.setOnCancelListener(dialog -> nativeRaLoginCanceled());
+                mRaLoginDialog.setOnShowListener(dialog -> {
+                    mRaLoginDialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                            .setOnClickListener(view -> submitRaLogin());
+                    EditText first = mRaLoginUsername.getText().length() == 0 ?
+                            mRaLoginUsername : mRaLoginPassword;
+                    first.requestFocus();
+                    mRaLoginDialog.getWindow().setSoftInputMode(
+                            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE |
+                            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+                });
+                mRaLoginDialog.show();
+            }
+        });
+    }
+
+    private void submitRaLogin() {
+        if (mRaLoginDialog == null || mRaLoginUsername == null || mRaLoginPassword == null) return;
+        String username = mRaLoginUsername.getText().toString();
+        String password = mRaLoginPassword.getText().toString();
+        if (username.length() == 0 || password.length() == 0) {
+            mRaLoginStatus.setText("Enter username and password");
+            return;
+        }
+        mRaLoginStatus.setText("Logging in…");
+        mRaLoginUsername.setEnabled(false);
+        mRaLoginPassword.setEnabled(false);
+        mRaLoginDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+        nativeRaLoginSubmitted(username, password);
+    }
+
+    public void raSetLoginResult(final String message, final boolean success) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (mRaLoginDialog == null) return;
+                if (success) {
+                    mRaLoginDialog.dismiss();
+                    mRaLoginDialog = null;
+                    mRaLoginUsername = null;
+                    mRaLoginPassword = null;
+                    mRaLoginStatus = null;
+                    return;
+                }
+                mRaLoginStatus.setText(message == null ? "Login failed" : message);
+                mRaLoginUsername.setEnabled(true);
+                mRaLoginPassword.setEnabled(true);
+                mRaLoginDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                mRaLoginPassword.requestFocus();
+            }
+        });
     }
 
     public boolean raHasNetwork() {
@@ -553,6 +694,10 @@ public class XM8 extends SDLActivity {
     // get file descriptor from treeUri
     public int getFileDescriptor(String file, int type) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            if (file == null || mExtDir == null || mExtDir.length() == 0 ||
+                    mTreeUri == null || mTreeUri.length() == 0) {
+                return -1;
+            }
             String[] extDirSplit = mExtDir.split("/");
             String[] targetSplit = file.split("/");
 

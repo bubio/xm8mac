@@ -58,6 +58,30 @@
 #endif // __ANDROID__
 #include "app.h"
 
+#if defined(__ANDROID__) && defined(XM8_ENABLE_RETROACHIEVEMENTS)
+namespace {
+std::mutex g_android_ra_login_app_mutex;
+App *g_android_ra_login_app = NULL;
+}
+
+extern "C" void Android_RaLoginSubmitted(const char *username,
+	const char *password)
+{
+	std::lock_guard<std::mutex> lock(g_android_ra_login_app_mutex);
+	if (g_android_ra_login_app != NULL) {
+		g_android_ra_login_app->QueueAndroidRaLogin(username, password, false);
+	}
+}
+
+extern "C" void Android_RaLoginCanceled(void)
+{
+	std::lock_guard<std::mutex> lock(g_android_ra_login_app_mutex);
+	if (g_android_ra_login_app != NULL) {
+		g_android_ra_login_app->QueueAndroidRaLogin(NULL, NULL, true);
+	}
+}
+#endif
+
 //
 // defines
 //
@@ -1737,6 +1761,9 @@ void App::ProcessRaEmulationFrame()
 //
 void App::ProcessRaService(bool emulation_idle)
 {
+	#ifdef __ANDROID__
+	ProcessAndroidRaLogin();
+	#endif
 	if (!ra_mode_enabled || ra_service == NULL) {
 		return;
 	}
@@ -1806,6 +1833,9 @@ void App::ProcessRaService(bool emulation_idle)
 			ra_manual_login_started = false;
 			if (ra_overlay != NULL &&
 				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
+				#ifdef __ANDROID__
+				Android_RaSetLoginResult("Logged in", 1);
+				#endif
 				CloseRaOverlayToMenu();
 			}
 			const std::string name = login.display_name.empty() ?
@@ -1821,6 +1851,10 @@ void App::ProcessRaService(bool emulation_idle)
 				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) {
 				ra_overlay->SetLoginStatus(login.message.empty() ?
 					"Login failed" : login.message);
+				#ifdef __ANDROID__
+				Android_RaSetLoginResult(login.message.empty() ?
+					"Login failed" : login.message.c_str(), 0);
+				#endif
 				UpdateRaOverlayTextInput();
 			}
 			ReplaceRaNotice("RA: login failed");
@@ -2386,6 +2420,10 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 //
 void App::UpdateRaOverlayTextInput()
 {
+	#ifdef __ANDROID__
+	SDL_StopTextInput();
+	return;
+	#endif
 	if (ra_overlay == NULL ||
 		ra_overlay->Screen() != Xm8Ra::RaOverlayScreen::Login) {
 		SDL_StopTextInput();
@@ -2402,6 +2440,50 @@ void App::UpdateRaOverlayTextInput()
 		SDL_StopTextInput();
 	}
 }
+
+#ifdef __ANDROID__
+void App::QueueAndroidRaLogin(const char *username, const char *password,
+	bool canceled)
+{
+	std::lock_guard<std::mutex> lock(ra_android_login_mutex);
+	std::fill(ra_android_login_password.begin(),
+		ra_android_login_password.end(), '\0');
+	ra_android_login_pending = true;
+	ra_android_login_canceled = canceled;
+	ra_android_login_username = canceled || username == NULL ? "" : username;
+	ra_android_login_password = canceled || password == NULL ? "" : password;
+}
+
+void App::ProcessAndroidRaLogin()
+{
+	std::string username;
+	std::string password;
+	bool canceled = false;
+	{
+		std::lock_guard<std::mutex> lock(ra_android_login_mutex);
+		if (!ra_android_login_pending) return;
+		ra_android_login_pending = false;
+		canceled = ra_android_login_canceled;
+		username.swap(ra_android_login_username);
+		password.swap(ra_android_login_password);
+	}
+
+	if (canceled) {
+		CloseRaOverlayToMenu();
+	}
+	else if (ra_overlay != NULL) {
+		const Xm8Ra::RaOverlayAction action =
+			ra_overlay->SubmitLoginCredentials(username.c_str(), password.c_str());
+		if (action == Xm8Ra::RaOverlayAction::None) {
+			Android_RaSetLoginResult("Enter username and password", 0);
+		}
+		else {
+			HandleRaOverlayAction(action);
+		}
+	}
+	std::fill(password.begin(), password.end(), '\0');
+}
+#endif
 
 //
 // ClearRaOverlayPointerState()
@@ -2939,6 +3021,11 @@ void App::DrawRaOverlay()
 		}
 		return;
 	}
+	#ifdef __ANDROID__
+	// Android owns the complete login UI. Keep the native overlay only as
+	// login state while its standard dialog is visible.
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) return;
+	#endif
 	ProcessRaImages();
 	auto clear_menu_detail = [this]() {
 		SDL_Rect detail_rect = {
@@ -3830,6 +3917,13 @@ void App::Deinit()
 {
 	int drive;
 
+	#if defined(__ANDROID__) && defined(XM8_ENABLE_RETROACHIEVEMENTS)
+	{
+		std::lock_guard<std::mutex> lock(g_android_ra_login_app_mutex);
+		if (g_android_ra_login_app == this) g_android_ra_login_app = NULL;
+	}
+	#endif
+
 #ifdef __ANDROID__
 	// check skip flag
 	if (Android_ChkSkipMain() != 0) {
@@ -4118,6 +4212,9 @@ bool App::IsRaOverlayBlocking() const
 {
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) return false;
+	#ifdef __ANDROID__
+	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Login) return false;
+	#endif
 	// Browsing RA information in Hardcore is an input-capturing overlay, not
 	// an emulator pause. Login remains blocking because it owns text input.
 	return !IsRaHardcoreActive() ||
@@ -7033,7 +7130,15 @@ bool App::OpenRaLoginOverlay()
 	ra_overlay->OpenLogin(username);
 	ra_overlay_joystick_prev = 0;
 	ClearRaOverlayPointerState();
+	#ifdef __ANDROID__
+	{
+		std::lock_guard<std::mutex> lock(g_android_ra_login_app_mutex);
+		g_android_ra_login_app = this;
+	}
+	Android_RaShowLogin(username.c_str());
+	#else
 	SDL_StartTextInput();
+	#endif
 	if (app_menu == true) {
 		LeaveMenu(false);
 	}

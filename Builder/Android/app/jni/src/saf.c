@@ -575,6 +575,60 @@ static jmethodID JNI_RaMethod(JNIEnv *env, const char *name, const char *signatu
 	return (*env)->GetMethodID(env, java_class, name, signature);
 }
 
+void Android_RaShowLogin(const char *username)
+{
+	JNIEnv *env = JNI_GetEnvironment();
+	if (env == NULL || java_activity == NULL) return;
+	jmethodID id = JNI_RaMethod(env, "raShowLogin", "(Ljava/lang/String;)V");
+	if (id == NULL) return;
+	jstring user = (*env)->NewStringUTF(env, username == NULL ? "" : username);
+	if (user == NULL) return;
+	(*env)->CallVoidMethod(env, java_activity, id, user);
+	JNI_HasException(env);
+	(*env)->DeleteLocalRef(env, user);
+}
+
+void Android_RaSetLoginResult(const char *message, int success)
+{
+	JNIEnv *env = JNI_GetEnvironment();
+	if (env == NULL || java_activity == NULL) return;
+	jmethodID id = JNI_RaMethod(env, "raSetLoginResult", "(Ljava/lang/String;Z)V");
+	if (id == NULL) return;
+	jstring text = (*env)->NewStringUTF(env, message == NULL ? "" : message);
+	if (text == NULL) return;
+	(*env)->CallVoidMethod(env, java_activity, id, text,
+		success ? JNI_TRUE : JNI_FALSE);
+	JNI_HasException(env);
+	(*env)->DeleteLocalRef(env, text);
+}
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+extern void Android_RaLoginSubmitted(const char *username, const char *password);
+extern void Android_RaLoginCanceled(void);
+#endif
+
+JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeRaLoginSubmitted(JNIEnv *env,
+	jclass jcls, jstring username, jstring password)
+{
+	const char *user = username == NULL ? "" : (*env)->GetStringUTFChars(env, username, NULL);
+	const char *pass = password == NULL ? "" : (*env)->GetStringUTFChars(env, password, NULL);
+	#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (user != NULL && pass != NULL) Android_RaLoginSubmitted(user, pass);
+	#endif
+	if (pass != NULL && password != NULL) (*env)->ReleaseStringUTFChars(env, password, pass);
+	if (user != NULL && username != NULL) (*env)->ReleaseStringUTFChars(env, username, user);
+}
+
+JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeRaLoginCanceled(JNIEnv *env,
+	jclass jcls)
+{
+	(void)env;
+	(void)jcls;
+	#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	Android_RaLoginCanceled();
+	#endif
+}
+
 int Android_RaHttpSend(unsigned long long request_id, const char *url,
 	const char *post_data, const char *content_type, int connect_timeout_ms,
 	int total_timeout_ms, int max_response_bytes)

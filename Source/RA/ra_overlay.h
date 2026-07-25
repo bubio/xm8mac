@@ -282,6 +282,8 @@ public:
 	bool LoginTargetAt(int x, int y, RaOverlayLoginTarget *target) const;
 	RaOverlayAction OnLoginPointer(int x, int y, bool activate);
 	bool ConsumeSubmittedLogin(std::string *username, std::string *password);
+	RaOverlayAction SubmitLoginCredentials(const char *username,
+		const char *password);
 	bool SelectedLibraryGameId(int64_t *game_id) const;
 	bool CanLaunchSelectedLibraryGame() const;
 	bool CanResolveSelectedLibraryConflict() const;

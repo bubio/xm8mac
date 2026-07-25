@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -148,6 +149,10 @@ public:
 										// toggle pseudo fast disk through RA policy
 	bool OpenRaLoginOverlay();
 										// open RA password login overlay
+	#ifdef __ANDROID__
+	void QueueAndroidRaLogin(const char *username, const char *password,
+		bool canceled);
+	#endif
 	void OpenRaLibraryOverlay();
 										// open RA library overlay
 	void OpenRaAchievementsOverlay();
@@ -328,6 +333,9 @@ private:
 	void ClearRaOverlayPointerState();
 										// clear RA overlay pointer state
 	bool SubmitRaOverlayLogin();
+	#ifdef __ANDROID__
+	void ProcessAndroidRaLogin();
+	#endif
 										// submit RA overlay login form
 	void DrawRaOverlay();
 										// draw RA notice overlay
@@ -459,6 +467,13 @@ private:
 										// saved token login started
 	bool ra_manual_login_started;
 										// manual password login started
+	#ifdef __ANDROID__
+	std::mutex ra_android_login_mutex;
+	bool ra_android_login_pending = false;
+	bool ra_android_login_canceled = false;
+	std::string ra_android_login_username;
+	std::string ra_android_login_password;
+	#endif
 	bool ra_library_sync_started_for_login;
 										// current login already attempted library sync
 	Xm8Ra::RaSessionState ra_session_state;

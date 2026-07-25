@@ -117,6 +117,8 @@ int Android_RaLoadCredential(const char *username, unsigned char **token,
 	size_t *token_size);
 int Android_RaDeleteCredential(const char *username);
 void Android_RaFreeCredential(unsigned char *token);
+void Android_RaShowLogin(const char *username);
+void Android_RaSetLoginResult(const char *message, int success);
 
 #ifdef __cplusplus
 }

@@ -1021,6 +1021,29 @@ bool RaOverlay::ConsumeSubmittedLogin(std::string *username,
 	return true;
 }
 
+RaOverlayAction RaOverlay::SubmitLoginCredentials(const char *username,
+	const char *password)
+{
+	if (screen_ != RaOverlayScreen::Login || login_submit_pending_) {
+		return RaOverlayAction::None;
+	}
+
+	login_username_.clear();
+	WipeLoginPassword();
+	SetLoginFieldFocus(RaOverlayLoginField::Username);
+	AppendLoginText(username);
+	SetLoginFieldFocus(RaOverlayLoginField::Password);
+	AppendLoginText(password);
+	if (!CanSubmitLogin()) {
+		login_status_ = "Enter username and password";
+		return RaOverlayAction::None;
+	}
+
+	login_status_ = "Login pending";
+	login_submit_pending_ = true;
+	return RaOverlayAction::SubmitLogin;
+}
+
 void RaOverlay::SetLoginStatus(const std::string& message)
 {
 	login_status_ = message;
