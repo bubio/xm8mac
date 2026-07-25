@@ -166,7 +166,17 @@ std::string MakeRaUserAgent()
 	std::ostringstream stream;
 	stream << "XM8/" << GetAppVersionString()
 		<< " rcheevos/" << Xm8RaBuildInfo::RcheevosVersionString()
-		<< " (macOS)";
+		<< " (";
+#ifdef __ANDROID__
+	stream << "Android";
+#elif defined(_WIN32)
+	stream << "Windows";
+#elif defined(__linux__)
+	stream << "Linux";
+#else
+	stream << "macOS";
+#endif
+	stream << ")";
 	return stream.str();
 }
 

@@ -18,6 +18,8 @@
 #elif defined(__linux__) && !defined(__ANDROID__) && defined(XM8_RA_HAS_LIBSECRET)
 #include <glib.h>
 #include <libsecret/secret.h>
+#elif defined(__ANDROID__)
+#include "xm8jni.h"
 #endif
 
 namespace Xm8Ra {
@@ -342,6 +344,10 @@ bool SavePlatformToken(const std::string& username, const std::string& token,
 		return SetError(error, "failed to save RA token");
 	}
 	return true;
+#elif defined(__ANDROID__)
+	return Android_RaSaveCredential(username.c_str(),
+		reinterpret_cast<const unsigned char *>(token.data()), token.size()) != 0 ||
+		SetError(error, "failed to save RA token");
 #else
 	return SetError(error, "secure RA credential storage is unavailable");
 #endif
@@ -427,6 +433,17 @@ bool LoadPlatformToken(const std::string& username, std::string *token,
 	token->assign(secret);
 	secret_password_free(secret);
 	return !token->empty() || SetError(error, "RA token is empty");
+#elif defined(__ANDROID__)
+	unsigned char *stored = nullptr;
+	size_t stored_size = 0;
+	if (Android_RaLoadCredential(username.c_str(), &stored, &stored_size) == 0) {
+		return SetError(error, "RA token is not stored");
+	}
+	token->assign(reinterpret_cast<const char *>(stored), stored_size);
+	volatile unsigned char *clear = stored;
+	for (size_t index = 0; index < stored_size; ++index) clear[index] = 0;
+	Android_RaFreeCredential(stored);
+	return !token->empty() || SetError(error, "RA token is empty");
 #else
 	return SetError(error, "secure RA credential storage is unavailable");
 #endif
@@ -489,6 +506,9 @@ bool DeletePlatformToken(const std::string& username, std::string *error)
 		return SetError(error, "failed to delete RA token");
 	}
 	return true;
+#elif defined(__ANDROID__)
+	return Android_RaDeleteCredential(username.c_str()) != 0 ||
+		SetError(error, "failed to delete RA token");
 #else
 	return true;
 #endif

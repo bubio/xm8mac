@@ -3,4 +3,5 @@
     <exclude domain="file" path="ra/" />
     <exclude domain="file" path="credentials_user.txt" />
     <exclude domain="file" path="ra_token_blob" />
+    <exclude domain="sharedpref" path="ra_credentials.xml" />
 </full-backup-content>

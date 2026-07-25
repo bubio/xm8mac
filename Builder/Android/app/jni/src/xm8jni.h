@@ -104,6 +104,20 @@ int Android_ChDir(char *dir, const char *name);
 //
 void Android_PollJoystick(void);
 
+// RetroAchievements Android bridge (available only in RA-enabled builds).
+int Android_RaHttpSend(unsigned long long request_id, const char *url,
+	const char *post_data, const char *content_type, int connect_timeout_ms,
+	int total_timeout_ms, int max_response_bytes);
+void Android_RaHttpCancel(unsigned long long request_id);
+void Android_RaHttpCancelAll(void);
+int Android_RaHasNetwork(void);
+int Android_RaSaveCredential(const char *username, const unsigned char *token,
+	size_t token_size);
+int Android_RaLoadCredential(const char *username, unsigned char **token,
+	size_t *token_size);
+int Android_RaDeleteCredential(const char *username);
+void Android_RaFreeCredential(unsigned char *token);
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus

@@ -10,6 +10,7 @@ cmake_minimum_required(VERSION 3.4.1)
 set(SDL_PATH ${CMAKE_CURRENT_SOURCE_DIR}/jni/SDL)
 set(JNI_PATH ${CMAKE_CURRENT_SOURCE_DIR}/jni/src)
 set(XM8_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../../Source)
+option(XM8_ENABLE_RETROACHIEVEMENTS "Enable RetroAchievements support" OFF)
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
@@ -125,6 +126,39 @@ target_include_directories(main PRIVATE
         ${XM8_PATH}/ePC-8801MA/vm
         ${XM8_PATH}/ePC-8801MA/vm/fmgen
         ${XM8_PATH}/ePC-8801MA/vm/pc8801)
+
+if(XM8_ENABLE_RETROACHIEVEMENTS)
+    file(GLOB RA_SOURCE_FILES ${XM8_PATH}/RA/*.cpp)
+    list(REMOVE_ITEM RA_SOURCE_FILES
+        ${XM8_PATH}/RA/ra_http_linux.cpp
+        ${XM8_PATH}/RA/ra_http_win.cpp
+        ${XM8_PATH}/RA/ra_connectivity_linux.cpp
+        ${XM8_PATH}/RA/ra_connectivity_win.cpp
+        ${XM8_PATH}/RA/ra_connectivity_mac.cpp)
+    file(GLOB RC_SOURCE_FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rcheevos/*.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rapi/*.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rhash/*.c)
+    list(APPEND RC_SOURCE_FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rc_client.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rc_client_raintegration.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rc_compat.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rc_util.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rc_version.c)
+    target_sources(main PRIVATE ${RA_SOURCE_FILES} ${RC_SOURCE_FILES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/sqlite/sqlite3.c)
+    target_include_directories(main PRIVATE ${XM8_PATH}/RA
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rcheevos
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rapi
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/rcheevos/src/rhash
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/sqlite
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdParty/stb)
+    target_compile_definitions(main PRIVATE XM8_ENABLE_RETROACHIEVEMENTS=1
+        RC_DISABLE_LUA RC_CLIENT_SUPPORTS_HASH SQLITE_THREADSAFE=1
+        SQLITE_DEFAULT_FOREIGN_KEYS=1 SQLITE_OMIT_LOAD_EXTENSION SQLITE_DQS=0)
+endif()
 
 # definitions(-D option) for main
 target_compile_definitions(main PRIVATE SDL _PC8801MA)

@@ -59,6 +59,10 @@ cd Builder/Android
 ./gradlew lintDebug
 ```
 
+RetroAchievementsを有効にする場合は、同じコマンドへ
+`-PXM8_ENABLE_RETROACHIEVEMENTS=1`を付ける。RA有効版はAndroid 6.0 / API 23以上、
+通常版は従来どおりAndroid 4.4 / API 19以上を対象とする。
+
 debug APKは以下へ生成されます。
 
 ```text
@@ -91,7 +95,7 @@ app/build/outputs/aar/net.retropc.pi.aar
 ## 互換性上の注意
 
 - Javaコンパイル互換レベルはJava 8です。JDK 17はGradle/AGPの実行に使用します。
-- native側の最低APIも `android-19` に固定しています。
+- native側の最低APIは通常版が`android-19`、RA有効版が`android-23`です。
 - C++ランタイムはstatic linkし、NDK r23の4KB alignment版
   `libc++_shared.so` をAPKへ同梱しません。
 - 64bit nativeライブラリは16KBページサイズ対応のELF alignmentでリンクします。

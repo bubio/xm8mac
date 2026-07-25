@@ -19,6 +19,10 @@
 #include <unistd.h>
 #endif
 
+#ifdef __ANDROID__
+#include "xm8jni.h"
+#endif
+
 namespace Xm8Ra {
 namespace {
 
@@ -142,6 +146,21 @@ bool GetRaFileInfoNoFollow(const std::string& path, RaFileInfo *info,
 #else
 	struct stat status = {};
 	if (lstat(path.c_str(), &status) != 0) {
+	#ifdef __ANDROID__
+		const int descriptor = Android_GetFileDescriptor(path.c_str(), 0);
+		if (descriptor >= 0) {
+			const int result = fstat(descriptor, &status);
+			close(descriptor);
+			if (result == 0) {
+				if (S_ISREG(status.st_mode)) {
+					info->kind = RaFileKind::Regular;
+					info->size = static_cast<uint64_t>(status.st_size);
+					info->modified_time = static_cast<int64_t>(status.st_mtime);
+					return true;
+				}
+			}
+		}
+	#endif
 		if (errno == ENOENT) return true;
 		SetError(error, "cannot inspect RA file");
 		return false;
@@ -375,6 +394,13 @@ bool CopyRaFile(const std::string& source, const std::string& destination,
 		return false;
 	}
 #else
+#ifdef __ANDROID__
+	std::vector<uint8_t> source_data;
+	if (!ReadRaFile(source, &source_data, std::numeric_limits<size_t>::max(), error)) {
+		return false;
+	}
+	return WriteRaFile(destination, source_data.data(), source_data.size(), error);
+#else
 	std::ifstream input(source, std::ios::binary);
 	std::ofstream output(destination, std::ios::binary | std::ios::trunc);
 	if (!input || !output) {
@@ -397,6 +423,7 @@ bool CopyRaFile(const std::string& source, const std::string& destination,
 		return false;
 	}
 #endif
+#endif
 	return true;
 }
 
@@ -417,6 +444,34 @@ bool ReadRaFile(const std::string& path, std::vector<uint8_t> *data,
 	std::ifstream stream(native, std::ios::binary | std::ios::ate);
 #else
 	std::ifstream stream(path, std::ios::binary | std::ios::ate);
+#endif
+
+#ifdef __ANDROID__
+	if (!stream) {
+		const int descriptor = Android_GetFileDescriptor(path.c_str(), 0);
+		if (descriptor >= 0) {
+			struct stat status = {};
+			if (fstat(descriptor, &status) == 0 && status.st_size >= 0 &&
+				static_cast<uint64_t>(status.st_size) <= maximum_size &&
+				static_cast<uint64_t>(status.st_size) <=
+					(std::numeric_limits<size_t>::max)()) {
+				data->resize(static_cast<size_t>(status.st_size));
+				size_t offset = 0;
+				while (offset < data->size()) {
+					const ssize_t count = read(descriptor, data->data() + offset,
+						data->size() - offset);
+					if (count <= 0) break;
+					offset += static_cast<size_t>(count);
+				}
+				close(descriptor);
+				if (offset == data->size()) return true;
+				data->clear();
+			}
+			else {
+				close(descriptor);
+			}
+		}
+	}
 #endif
 	if (!stream) {
 		SetError(error, "cannot open RA file");

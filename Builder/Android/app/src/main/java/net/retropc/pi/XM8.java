@@ -10,6 +10,30 @@ import java.io.InputStreamReader;
 import java.io.FileOutputStream;
 import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.SocketTimeoutException;
+import java.security.KeyStore;
+import java.security.SecureRandom;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import android.util.Base64;
 
 import org.libsdl.app.SDLActivity;
 
@@ -62,6 +86,25 @@ public class XM8 extends SDLActivity {
     // control flag
     private boolean mROMError;
 
+    // RetroAchievements: HTTP runs off the SDL/UI thread.  These members are
+    // deliberately owned by the Activity so background work can be cancelled
+    // before the JNI activity reference is released.
+    private final ExecutorService mRaHttpExecutor = Executors.newCachedThreadPool();
+    private final Map<Long, HttpURLConnection> mRaConnections = new ConcurrentHashMap<>();
+    private final Map<Long, Future<?>> mRaHttpTasks = new ConcurrentHashMap<>();
+    private static final String RA_CREDENTIALS = "ra_credentials";
+    private static final String RA_KEY_ALIAS = "net.retropc.pi.XM8.RetroAchievements";
+    private static final int RA_HTTP_SUCCESS = 0;
+    private static final int RA_HTTP_CLIENT_ERROR = 1;
+    private static final int RA_HTTP_RETRYABLE = 2;
+    private static final int RA_HTTP_CANCELED = 3;
+    private static final int RA_HTTP_TIMEOUT = 4;
+    private static final int RA_HTTP_OVERSIZE = 5;
+
+    private static final class RaResponseTooLargeException extends IOException {
+        RaResponseTooLargeException() { super("response too large"); }
+    }
+
     // request id
     private static final int REQUEST_PERMISSION = 1;
     private static final int REQUEST_DOCUMENT = 2;
@@ -74,6 +117,8 @@ public class XM8 extends SDLActivity {
     private native void nativeUri(String treeUri);
     private native void nativeSkipMain(int skip);
     private native void nativeDelete();
+    private static native void nativeRaHttpComplete(long requestId, int result,
+            int status, String contentType, byte[] body, String error);
 
     // setup
     @Override
@@ -209,11 +254,174 @@ public class XM8 extends SDLActivity {
     protected void onDestroy() {
         Log.i(LOG_TAG, "onDestroy");
 
+        raCancelAllHttp();
+        mRaHttpExecutor.shutdownNow();
+
         // call DeleteGlobalRef()
         nativeDelete();
 
         // super class
         super.onDestroy();
+    }
+
+    // Called from native only in an RA-enabled (minSdk 23) build.
+    public void raSendHttp(final long requestId, final String url, final byte[] postData,
+            final String contentType, final int connectTimeoutMs, final int totalTimeoutMs,
+            final int maxResponseBytes) {
+        if (url == null || !url.startsWith("https://") || maxResponseBytes < 0) {
+            nativeRaHttpComplete(requestId, RA_HTTP_CLIENT_ERROR, 0, "", null,
+                    "HTTPS URL required");
+            return;
+        }
+        Future<?> task = mRaHttpExecutor.submit(new Runnable() {
+            @Override public void run() {
+                HttpURLConnection connection = null;
+                int result = RA_HTTP_CLIENT_ERROR;
+                int status = 0;
+                String responseType = "";
+                byte[] responseBody = null;
+                String error = "HTTP request failed";
+                try {
+                    connection = (HttpURLConnection) new URL(url).openConnection();
+                    mRaConnections.put(requestId, connection);
+                    connection.setConnectTimeout(Math.max(1, connectTimeoutMs));
+                    connection.setReadTimeout(Math.max(1, totalTimeoutMs));
+                    connection.setInstanceFollowRedirects(false);
+                    connection.setRequestProperty("User-Agent", "XM8 RetroAchievements Android");
+                    connection.setRequestMethod(postData == null ? "GET" : "POST");
+                    if (postData != null) {
+                        connection.setDoOutput(true);
+                        if (contentType != null && !contentType.isEmpty()) {
+                            connection.setRequestProperty("Content-Type", contentType);
+                        }
+                        connection.getOutputStream().write(postData);
+                    }
+                    status = connection.getResponseCode();
+                    responseType = connection.getContentType();
+                    long length = connection.getContentLengthLong();
+                    if (length > maxResponseBytes) {
+                        result = RA_HTTP_OVERSIZE;
+                        error = "HTTP response exceeds limit";
+                    } else {
+                        InputStream input = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+                        responseBody = readRaResponse(input, maxResponseBytes);
+                        result = RA_HTTP_SUCCESS;
+                        error = "";
+                    }
+                } catch (RaResponseTooLargeException e) {
+                    result = RA_HTTP_OVERSIZE;
+                    error = "HTTP response exceeds limit";
+                } catch (SocketTimeoutException e) {
+                    result = RA_HTTP_TIMEOUT;
+                    error = "HTTP request timed out";
+                } catch (IOException e) {
+                    result = Thread.currentThread().isInterrupted() ? RA_HTTP_CANCELED : RA_HTTP_RETRYABLE;
+                    error = "HTTP transport error";
+                } catch (SecurityException e) {
+                    result = RA_HTTP_CLIENT_ERROR;
+                    error = "HTTP security error";
+                } finally {
+                    mRaConnections.remove(requestId);
+                    mRaHttpTasks.remove(requestId);
+                    if (connection != null) connection.disconnect();
+                }
+                nativeRaHttpComplete(requestId, result, status,
+                        responseType == null ? "" : responseType, responseBody, error);
+            }
+        });
+        mRaHttpTasks.put(requestId, task);
+    }
+
+    private static byte[] readRaResponse(InputStream input, int maxBytes) throws IOException {
+        if (input == null) return new byte[0];
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            for (int count; (count = input.read(chunk)) != -1;) {
+                if (output.size() > maxBytes - count) throw new RaResponseTooLargeException();
+                output.write(chunk, 0, count);
+            }
+            return output.toByteArray();
+        } finally {
+            input.close();
+        }
+    }
+
+    public void raCancelHttp(long requestId) {
+        HttpURLConnection connection = mRaConnections.remove(requestId);
+        if (connection != null) connection.disconnect();
+        Future<?> task = mRaHttpTasks.remove(requestId);
+        if (task != null) task.cancel(true);
+    }
+
+    public void raCancelAllHttp() {
+        for (Long requestId : mRaConnections.keySet()) raCancelHttp(requestId);
+        for (Long requestId : mRaHttpTasks.keySet()) raCancelHttp(requestId);
+    }
+
+    public boolean raHasNetwork() {
+        ConnectivityManager manager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (manager == null) return false;
+        NetworkInfo network = manager.getActiveNetworkInfo();
+        return network != null && network.isConnected();
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private SecretKey raCredentialKey() throws Exception {
+        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+        store.load(null);
+        if (!store.containsAlias(RA_KEY_ALIAS)) {
+            KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,
+                    "AndroidKeyStore");
+            generator.init(new KeyGenParameterSpec.Builder(RA_KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .build());
+            generator.generateKey();
+        }
+        return ((KeyStore.SecretKeyEntry) store.getEntry(RA_KEY_ALIAS, null)).getSecretKey();
+    }
+
+    private String raCredentialName(String username) {
+        return Base64.encodeToString(username.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                Base64.NO_WRAP | Base64.URL_SAFE);
+    }
+
+    public boolean raSaveCredential(String username, byte[] token) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || username == null || token == null || token.length == 0) return false;
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, raCredentialKey());
+            byte[] encrypted = cipher.doFinal(token);
+            byte[] iv = cipher.getIV();
+            byte[] blob = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, blob, 0, iv.length);
+            System.arraycopy(encrypted, 0, blob, iv.length, encrypted.length);
+            return getSharedPreferences(RA_CREDENTIALS, MODE_PRIVATE).edit()
+                    .putString(raCredentialName(username), Base64.encodeToString(blob, Base64.NO_WRAP))
+                    .commit();
+        } catch (Exception e) { return false; }
+    }
+
+    public byte[] raLoadCredential(String username) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || username == null) return null;
+        try {
+            String text = getSharedPreferences(RA_CREDENTIALS, MODE_PRIVATE)
+                    .getString(raCredentialName(username), null);
+            if (text == null) return null;
+            byte[] blob = Base64.decode(text, Base64.NO_WRAP);
+            if (blob.length <= 12) return null;
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, raCredentialKey(), new GCMParameterSpec(128, blob, 0, 12));
+            return cipher.doFinal(blob, 12, blob.length - 12);
+        } catch (Exception e) { return null; }
+    }
+
+    public boolean raDeleteCredential(String username) {
+        if (username == null) return true;
+        return getSharedPreferences(RA_CREDENTIALS, MODE_PRIVATE).edit()
+                .remove(raCredentialName(username)).commit();
     }
 
     @Override

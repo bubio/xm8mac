@@ -13,6 +13,7 @@
 #ifdef __ANDROID__
 
 #include <string.h>
+#include <stdlib.h>
 #include <jni.h>
 #include <pthread.h>
 #include <android/log.h>
@@ -57,8 +58,8 @@ static pthread_key_t java_thread_key;
 										// pthread key for detach
 static JavaVM *java_vm;
 										// Java virtual machine
-static int java_attached;
-										// Java AttachCurrentThread flag
+static jobject java_activity;
+										// Java activity instance
 static jclass java_class;
 										// Java activity class
 static int sdk_version;
@@ -95,14 +96,9 @@ static void JNI_DetachThread(void *value)
 	// get Java environment
 	env = (JNIEnv*)value;
 	if (env != NULL) {
-		if (java_attached != 0) {
-			// detach thread
-			__android_log_print(ANDROID_LOG_INFO, LOG_TAG, "JNI:DetachCurrentThread");
-			(*java_vm)->DetachCurrentThread(java_vm);
-
-			// detached
-			java_attached = 0;
-		}
+		// Only threads attached by JNI_GetEnvironment have this key.
+		__android_log_print(ANDROID_LOG_INFO, LOG_TAG, "JNI:DetachCurrentThread");
+		(*java_vm)->DetachCurrentThread(java_vm);
 
 		// clear pthread key
 		pthread_setspecific(java_thread_key, NULL);
@@ -115,9 +111,6 @@ static void JNI_DetachThread(void *value)
 //
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
-	// not attached
-	java_attached = 0;
-
 	// save java vm
 	java_vm = vm;
 
@@ -137,18 +130,14 @@ static JNIEnv* JNI_GetEnvironment(void)
 	JNIEnv *env;
 	int status;
 
-	// attach current thread
-	status = (*java_vm)->AttachCurrentThread(java_vm, &env, NULL);
-	if (status < 0) {
-		return NULL;
-	}
-
-	// attached
-	if (java_attached == 0) {
+	status = (*java_vm)->GetEnv(java_vm, (void**)&env, JNI_VERSION_1_4);
+	if (status == JNI_EDETACHED) {
+		status = (*java_vm)->AttachCurrentThread(java_vm, &env, NULL);
+		if (status < 0) return NULL;
+		pthread_setspecific(java_thread_key, (void*)env);
 		__android_log_print(ANDROID_LOG_INFO, LOG_TAG, "JNI:AttachCurrentThread");
 	}
-	java_attached = 1;
-	pthread_setspecific(java_thread_key, (void*)env);
+	else if (status != JNI_OK) return NULL;
 
 	return env;
 }
@@ -160,8 +149,23 @@ JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeBuildVer(JNIEnv *env, jclas
 {
 	__android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Build.VERSION.SDK_INT=%d", (int)ver);
 
-	// save activity class
-	java_class = (jclass)((*env)->NewGlobalRef(env, jcls));
+	// The Java declaration is an instance method. Keep its object for method
+	// calls and a real Class object for GetMethodID; CheckJNI rejects using an
+	// Activity object where a jclass is required.
+	if (java_activity != NULL) {
+		(*env)->DeleteGlobalRef(env, java_activity);
+		java_activity = NULL;
+	}
+	if (java_class != NULL) {
+		(*env)->DeleteGlobalRef(env, java_class);
+		java_class = NULL;
+	}
+	java_activity = (*env)->NewGlobalRef(env, jcls);
+	jclass local_class = (*env)->GetObjectClass(env, jcls);
+	if (local_class != NULL) {
+		java_class = (jclass)(*env)->NewGlobalRef(env, local_class);
+		(*env)->DeleteLocalRef(env, local_class);
+	}
 
 	// set running sdk version
 	sdk_version = ver;
@@ -263,7 +267,11 @@ JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeSkipMain(JNIEnv *env, jclas
 //
 JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeDelete(JNIEnv *env, jclass jcls)
 {
-	// save activity class
+	// clear activity references
+	if (java_activity != NULL) {
+		(*env)->DeleteGlobalRef(env, java_activity);
+		java_activity = NULL;
+	}
 	if (java_class != NULL) {
 		(*env)->DeleteGlobalRef(env, java_class);
 		java_class = NULL;
@@ -299,7 +307,7 @@ void Android_RequestActivity(void)
 	}
 
 	// call
-	(*env)->CallVoidMethod(env, java_class, id);
+	(*env)->CallVoidMethod(env, java_activity, id);
 
     (*env)->DeleteLocalRef(env, jcls);
 }
@@ -406,7 +414,7 @@ void Android_ClearTreeUri(void)
 	}
 
 	// call
-	(*env)->CallVoidMethod(env, java_class, id);
+	(*env)->CallVoidMethod(env, java_activity, id);
 
     (*env)->DeleteLocalRef(env, jcls);
 }
@@ -465,7 +473,7 @@ int Android_GetFileDescriptor(const char *path, int type)
 
 	// call
 	jstr = (*env)->NewStringUTF(env, path);
-	int ret = (*env)->CallIntMethod(env, java_class, id, jstr, type);
+	int ret = (*env)->CallIntMethod(env, java_activity, id, jstr, type);
 
     (*env)->DeleteLocalRef(env, jstr);
     (*env)->DeleteLocalRef(env, jcls);
@@ -549,6 +557,120 @@ void Android_PollJoystick(void)
 //	SDL_SYS_JoystickDetect();
 	SDL_JoystickUpdate();
 }
+
+//
+// RetroAchievements bridge. Java owns TLS verification and the background
+// executor; JNI only marshals requests and copies completed responses.
+//
+static int JNI_HasException(JNIEnv *env)
+{
+	if (!(*env)->ExceptionCheck(env)) return 0;
+	(*env)->ExceptionClear(env);
+	return 1;
+}
+
+static jmethodID JNI_RaMethod(JNIEnv *env, const char *name, const char *signature)
+{
+	if (java_class == NULL) return NULL;
+	return (*env)->GetMethodID(env, java_class, name, signature);
+}
+
+int Android_RaHttpSend(unsigned long long request_id, const char *url,
+	const char *post_data, const char *content_type, int connect_timeout_ms,
+	int total_timeout_ms, int max_response_bytes)
+{
+	JNIEnv *env = JNI_GetEnvironment();
+	if (env == NULL || url == NULL) return 0;
+	jmethodID id = JNI_RaMethod(env, "raSendHttp", "(JLjava/lang/String;[BLjava/lang/String;III)V");
+	if (id == NULL) return 0;
+	jstring jurl = (*env)->NewStringUTF(env, url);
+	jstring jtype = content_type == NULL ? NULL : (*env)->NewStringUTF(env, content_type);
+	jbyteArray jpost = NULL;
+	if (post_data != NULL) {
+		size_t length = strlen(post_data);
+		if (length > 0x7fffffff) { if (jurl) (*env)->DeleteLocalRef(env, jurl); if (jtype) (*env)->DeleteLocalRef(env, jtype); return 0; }
+		jpost = (*env)->NewByteArray(env, (jsize)length);
+		if (jpost != NULL && length != 0) (*env)->SetByteArrayRegion(env, jpost, 0, (jsize)length, (const jbyte*)post_data);
+	}
+	if (jurl == NULL || (post_data != NULL && jpost == NULL) || JNI_HasException(env)) {
+		if (jpost) (*env)->DeleteLocalRef(env, jpost); if (jtype) (*env)->DeleteLocalRef(env, jtype); if (jurl) (*env)->DeleteLocalRef(env, jurl); return 0;
+	}
+	(*env)->CallVoidMethod(env, java_activity, id, (jlong)request_id, jurl, jpost, jtype,
+		(jint)connect_timeout_ms, (jint)total_timeout_ms, (jint)max_response_bytes);
+	const int ok = !JNI_HasException(env);
+	if (jpost) (*env)->DeleteLocalRef(env, jpost); if (jtype) (*env)->DeleteLocalRef(env, jtype); (*env)->DeleteLocalRef(env, jurl);
+	return ok;
+}
+
+void Android_RaHttpCancel(unsigned long long request_id)
+{
+	JNIEnv *env = JNI_GetEnvironment(); if (env == NULL) return;
+	jmethodID id = JNI_RaMethod(env, "raCancelHttp", "(J)V");
+	if (id == NULL) return;
+	(*env)->CallVoidMethod(env, java_activity, id, (jlong)request_id); JNI_HasException(env);
+}
+
+void Android_RaHttpCancelAll(void)
+{
+	JNIEnv *env = JNI_GetEnvironment(); if (env == NULL) return;
+	jmethodID id = JNI_RaMethod(env, "raCancelAllHttp", "()V");
+	if (id == NULL) return;
+	(*env)->CallVoidMethod(env, java_activity, id); JNI_HasException(env);
+}
+
+int Android_RaHasNetwork(void)
+{
+	JNIEnv *env = JNI_GetEnvironment(); if (env == NULL) return 0;
+	jmethodID id = JNI_RaMethod(env, "raHasNetwork", "()Z");
+	if (id == NULL) return 0;
+	const jboolean result = (*env)->CallBooleanMethod(env, java_activity, id);
+	return !JNI_HasException(env) && result == JNI_TRUE;
+}
+
+int Android_RaSaveCredential(const char *username, const unsigned char *token, size_t token_size)
+{
+	JNIEnv *env = JNI_GetEnvironment(); if (env == NULL || username == NULL || token == NULL || token_size > 0x7fffffff) return 0;
+	jmethodID id = JNI_RaMethod(env, "raSaveCredential", "(Ljava/lang/String;[B)Z");
+	if (id == NULL) return 0;
+	jstring user = (*env)->NewStringUTF(env, username); jbyteArray bytes = (*env)->NewByteArray(env, (jsize)token_size);
+	if (user == NULL || bytes == NULL) { if (user) (*env)->DeleteLocalRef(env, user); if (bytes) (*env)->DeleteLocalRef(env, bytes); return 0; }
+	(*env)->SetByteArrayRegion(env, bytes, 0, (jsize)token_size, (const jbyte*)token);
+	const jboolean result = (*env)->CallBooleanMethod(env, java_activity, id, user, bytes);
+	const int ok = !JNI_HasException(env) && result == JNI_TRUE;
+	(*env)->DeleteLocalRef(env, bytes); (*env)->DeleteLocalRef(env, user); return ok;
+}
+
+int Android_RaLoadCredential(const char *username, unsigned char **token, size_t *token_size)
+{
+	if (token == NULL || token_size == NULL) return 0;
+	*token = NULL; *token_size = 0;
+	JNIEnv *env = JNI_GetEnvironment(); if (env == NULL || username == NULL) return 0;
+	jmethodID id = JNI_RaMethod(env, "raLoadCredential", "(Ljava/lang/String;)[B");
+	if (id == NULL) return 0;
+	jstring user = (*env)->NewStringUTF(env, username); if (user == NULL) return 0;
+	jbyteArray bytes = (jbyteArray)(*env)->CallObjectMethod(env, java_activity, id, user);
+	(*env)->DeleteLocalRef(env, user);
+	if (JNI_HasException(env) || bytes == NULL) return 0;
+	const jsize length = (*env)->GetArrayLength(env, bytes);
+	if (length <= 0) { (*env)->DeleteLocalRef(env, bytes); return 0; }
+	unsigned char *copy = (unsigned char*)malloc((size_t)length);
+	if (copy == NULL) { (*env)->DeleteLocalRef(env, bytes); return 0; }
+	(*env)->GetByteArrayRegion(env, bytes, 0, length, (jbyte*)copy); (*env)->DeleteLocalRef(env, bytes);
+	if (JNI_HasException(env)) { free(copy); return 0; }
+	*token = copy; *token_size = (size_t)length; return 1;
+}
+
+int Android_RaDeleteCredential(const char *username)
+{
+	JNIEnv *env = JNI_GetEnvironment(); if (env == NULL || username == NULL) return 0;
+	jmethodID id = JNI_RaMethod(env, "raDeleteCredential", "(Ljava/lang/String;)Z");
+	if (id == NULL) return 0;
+	jstring user = (*env)->NewStringUTF(env, username); if (user == NULL) return 0;
+	const jboolean result = (*env)->CallBooleanMethod(env, java_activity, id, user);
+	const int ok = !JNI_HasException(env) && result == JNI_TRUE; (*env)->DeleteLocalRef(env, user); return ok;
+}
+
+void Android_RaFreeCredential(unsigned char *token) { free(token); }
 
 #endif // __ANDROID__
 

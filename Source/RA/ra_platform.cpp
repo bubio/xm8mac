@@ -8,6 +8,8 @@
 #include "ra_http_win.h"
 #elif defined(__linux__) && !defined(__ANDROID__)
 #include "ra_http_linux.h"
+#elif defined(__ANDROID__)
+#include "ra_http_android.h"
 #endif
 
 namespace Xm8Ra {
@@ -18,6 +20,8 @@ std::unique_ptr<RaConnectivityMonitor> CreateMacRaConnectivityMonitor();
 std::unique_ptr<RaConnectivityMonitor> CreateWinRaConnectivityMonitor();
 #elif defined(__linux__) && !defined(__ANDROID__)
 std::unique_ptr<RaConnectivityMonitor> CreateLinuxRaConnectivityMonitor();
+#elif defined(__ANDROID__)
+std::unique_ptr<RaConnectivityMonitor> CreateAndroidRaConnectivityMonitor();
 #endif
 
 std::unique_ptr<RaHttpClient> CreatePlatformRaHttpClient(
@@ -29,6 +33,8 @@ std::unique_ptr<RaHttpClient> CreatePlatformRaHttpClient(
 	return CreateWinRaHttpClient(user_agent);
 #elif defined(__linux__) && !defined(__ANDROID__)
 	return CreateLinuxRaHttpClient(user_agent);
+#elif defined(__ANDROID__)
+	return CreateAndroidRaHttpClient(user_agent);
 #else
 	(void)user_agent;
 	return nullptr;
@@ -43,6 +49,8 @@ std::unique_ptr<RaConnectivityMonitor> CreatePlatformRaConnectivityMonitor()
 	return CreateWinRaConnectivityMonitor();
 #elif defined(__linux__) && !defined(__ANDROID__)
 	return CreateLinuxRaConnectivityMonitor();
+#elif defined(__ANDROID__)
+	return CreateAndroidRaConnectivityMonitor();
 #else
 	return nullptr;
 #endif
