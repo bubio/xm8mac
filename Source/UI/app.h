@@ -27,6 +27,7 @@
 #include "ra_connectivity.h"
 #include "ra_library.h"
 #include "ra_media_store.h"
+#include "ra_menu_status.h"
 #include "ra_overlay.h"
 #include "ra_service.h"
 #include "ra_session_policy.h"
@@ -227,6 +228,10 @@ private:
 										// clear App media change transaction
 	void EnterRaOfflineSession(const std::string& message);
 										// stop RA evaluation for the current game
+	void SetRaMenuStatusAfterSessionStop();
+										// set the non-game RA menu state
+	void SetRaMenuStatusForConnectivity(bool disconnected);
+										// reflect a session connectivity transition
 	void StopRaSession();
 										// end current game session and allow a new launch
 	void ProcessRaLibrarySync();
@@ -458,6 +463,8 @@ private:
 										// current login already attempted library sync
 	Xm8Ra::RaSessionState ra_session_state;
 										// current launch/active/disconnected/offline state
+	Xm8Ra::RaMenuStatus ra_menu_status;
+										// current RA menu status row
 	Uint32 ra_overlay_joystick_prev;
 										// RA overlay joystick previous state
 	bool ra_overlay_mouse_target_valid;
