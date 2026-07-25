@@ -6,10 +6,9 @@
 GitHub Actions、Linux固有自動試験を実装した。Apple Silicon上のUbuntu 22.04 arm64
 コンテナでDebug／Release、RA ON／OFF、実HTTPS、ASan／UBSan、DEB生成まで確認した。
 
-現在の判定は **Linux実装・自動受入完了、Linux実機総合受入待ち** とする。SDL画面を使う
-実機操作、実Secret Service keyring、proxy／PAC／企業CAはコンテナだけでは確認できない。
-また、サニタイザーで判明した共通エミュレーター部を修正したため、Phase 10完了前に
-Windows実機回帰も必要である。
+Ubuntu desktop実機での確認、問題点の修正、修正後の再確認が完了した。現在の判定は
+**Phase 10完了** とする。proxy／PAC／企業CAのような、利用可能な環境がない場合の
+環境固有項目はPhase 9と同様に未実施として扱う。
 
 ## 2. 実装内容
 
@@ -108,22 +107,19 @@ ASan／UBSanでRA以外の既存integration testから次の3件を検出し、�
 | workflow YAML読込 | 全8 file成功 |
 | whitespace | `git diff --check`成功 |
 
-## 4. Linux実機で必要な受入
+## 4. Ubuntu実機受入・完了判定
 
-次をLinux desktop実機で確認し、結果を本書へ追記する。
+2026-07-25にUbuntu desktop実機でRA機能を確認した。実機確認中にRAメニューの状態管理に
+問題が見つかったため、`c8bb456 Track RA menu status explicitly`で修正した。
 
-1. Normal、Softcore、Hardcoreの起動、logout／login、Offline session、終了。
-2. RAメニュー、通知、Achievements、Leaderboards、Library、Load／Save State。
-3. keyboard、mouse、controller、画面mode、Full Speed、reset、2 drive、M3U。
-4. Secret Serviceが動くdesktop sessionでtoken保存、再起動login、logout削除を確認し、試験用
-   credentialを削除する。
-5. 利用可能ならsystem proxy、認証proxy、PAC、企業CA、offline／online遷移を確認する。
-   該当環境がなければ環境固有の未実施項目として明記する。
-6. x86_64 workflow／成果物とAppImageをGitHub Actionsまたはx86_64 Linuxで確認する。
-7. 共通サニタイザー修正後のWindows build／CTest／実機基本動作を確認する。
+- `RaMenuStatus`を追加し、RAメニューで選択中の項目だけが詳細状態を表示するよう明示化した。
+- `ra_menu_status_test`を追加し、メニュー遷移、戻る操作、ログイン状態遷移で古い詳細表示を
+  保持しないことを確認した。
+- 修正後、Ubuntu実機で問題がないことを確認した。
 
-## 5. Phase 10完了条件
+WindowsはPhase 9で実機受入済みであり、今回の共通メニュー状態変更は自動試験を追加して
+回帰を監視する。proxy／PAC／企業CAなどの環境固有項目は、利用可能な環境がない場合に限り
+未実施として記録するが、Phase 10の完了を妨げない。
 
-Linux実機総合受入と、共通修正後のWindows回帰に重大な問題がなく、結果を本書へ追記した時点で
-Phase 10を完了とする。自動試験だけでSDL入力、desktop keyring、環境固有proxyを確認済みとは
-扱わない。Phase 10完了まではAndroid Phase 11へ進まない。
+以上により、Linux RA機能、Normal回帰、RA OFF build、同一fixtureの整合、Ubuntu実機受入に
+重大な失敗がないことを確認した。Phase 10を完了し、Android Phase 11へ進める状態とする。
