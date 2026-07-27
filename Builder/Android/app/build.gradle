@@ -20,7 +20,7 @@ android {
             applicationId = "net.retropc.pi"
         }
         minSdk = retroAchievementsEnabled ? 23 : 19
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 4
         versionName = "1.78"
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'

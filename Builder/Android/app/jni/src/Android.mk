@@ -12,6 +12,7 @@ LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/$(SDL_PATH)/include \
 	$(LOCAL_PATH) \
 	$(XM8_SRC_PATH)/UI \
+	$(XM8_SRC_PATH)/RA \
 	$(XM8_SRC_PATH)/ePC-8801MA \
 	$(XM8_SRC_PATH)/ePC-8801MA/vm \
 	$(XM8_SRC_PATH)/ePC-8801MA/vm/fmgen \
@@ -20,7 +21,6 @@ LOCAL_C_INCLUDES := \
 
 ifeq ($(XM8_ENABLE_RETROACHIEVEMENTS),1)
 LOCAL_C_INCLUDES += \
-	$(XM8_SRC_PATH)/RA \
 	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/include \
 	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src \
 	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rcheevos \
@@ -32,26 +32,26 @@ endif
 
 # Add your application source files here...
 LOCAL_SRC_FILES := \
-    $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/*.cpp) \
-    $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/vm/*.cpp) \
-    $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/vm/fmgen/*.cpp) \
-    $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/vm/pc8801/*.cpp) \
-    $(wildcard $(XM8_SRC_PATH)/Filter/xBRZ/*.cpp) \
-    $(wildcard $(XM8_SRC_PATH)/UI/*.cpp) \
-    $(wildcard $(LOCAL_PATH)/*.c)
+    $(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/*.cpp)) \
+    $(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/vm/*.cpp)) \
+    $(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/vm/fmgen/*.cpp)) \
+    $(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(XM8_SRC_PATH)/ePC-8801MA/vm/pc8801/*.cpp)) \
+    $(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(XM8_SRC_PATH)/Filter/xBRZ/*.cpp)) \
+    $(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(XM8_SRC_PATH)/UI/*.cpp)) \
+    $(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(LOCAL_PATH)/*.c))
 
 ifeq ($(XM8_ENABLE_RETROACHIEVEMENTS),1)
 LOCAL_SRC_FILES += \
-	$(filter-out $(XM8_SRC_PATH)/RA/ra_http_linux.cpp $(XM8_SRC_PATH)/RA/ra_http_win.cpp $(XM8_SRC_PATH)/RA/ra_connectivity_linux.cpp $(XM8_SRC_PATH)/RA/ra_connectivity_win.cpp $(XM8_SRC_PATH)/RA/ra_connectivity_mac.cpp $(XM8_SRC_PATH)/RA/ra_http_fake.cpp,$(wildcard $(XM8_SRC_PATH)/RA/*.cpp)) \
-	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_client.c \
-	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_client_raintegration.c \
-	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_compat.c \
-	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_util.c \
-	$(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_version.c \
-	$(wildcard $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rcheevos/*.c) \
-	$(wildcard $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rapi/*.c) \
-	$(wildcard $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rhash/*.c) \
-	$(LOCAL_PATH)/../../../../../ThirdParty/sqlite/sqlite3.c
+	$(patsubst $(LOCAL_PATH)/%,%, $(filter-out $(XM8_SRC_PATH)/RA/ra_http_linux.cpp $(XM8_SRC_PATH)/RA/ra_http_win.cpp $(XM8_SRC_PATH)/RA/ra_connectivity_linux.cpp $(XM8_SRC_PATH)/RA/ra_connectivity_win.cpp $(XM8_SRC_PATH)/RA/ra_connectivity_mac.cpp $(XM8_SRC_PATH)/RA/ra_http_fake.cpp,$(wildcard $(XM8_SRC_PATH)/RA/*.cpp))) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_client.c) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_client_raintegration.c) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_compat.c) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_util.c) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rc_version.c) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rcheevos/*.c)) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rapi/*.c)) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(wildcard $(LOCAL_PATH)/../../../../../ThirdParty/rcheevos/src/rhash/*.c)) \
+	$(patsubst $(LOCAL_PATH)/%,%, $(LOCAL_PATH)/../../../../../ThirdParty/sqlite/sqlite3.c)
 endif
 
 LOCAL_SHARED_LIBRARIES := SDL2
