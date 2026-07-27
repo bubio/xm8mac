@@ -56,6 +56,7 @@ import androidx.core.app.ActivityCompat;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.Toast;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -137,6 +138,7 @@ public class XM8 extends SDLActivity {
     private EditText mRaLoginUsername;
     private EditText mRaLoginPassword;
     private TextView mRaLoginStatus;
+    private Button mRaLoginButton;
 
     // setup
 
@@ -439,6 +441,27 @@ public class XM8 extends SDLActivity {
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT));
 
+                final int buttonGap = (int)(8 * getResources().getDisplayMetrics().density);
+                final LinearLayout actions = new LinearLayout(XM8.this);
+                actions.setOrientation(LinearLayout.HORIZONTAL);
+                mRaLoginButton = new Button(XM8.this);
+                mRaLoginButton.setText("Login");
+                final Button cancelButton = new Button(XM8.this);
+                cancelButton.setText(android.R.string.cancel);
+                final LinearLayout.LayoutParams loginButtonParams =
+                        new LinearLayout.LayoutParams(0,
+                                LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+                loginButtonParams.setMargins(0, padding, buttonGap / 2, 0);
+                final LinearLayout.LayoutParams cancelButtonParams =
+                        new LinearLayout.LayoutParams(0,
+                                LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+                cancelButtonParams.setMargins(buttonGap / 2, padding, 0, 0);
+                actions.addView(mRaLoginButton, loginButtonParams);
+                actions.addView(cancelButton, cancelButtonParams);
+                content.addView(actions, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+
                 final View.OnFocusChangeListener revealFocusedField =
                         new View.OnFocusChangeListener() {
                     @Override public void onFocusChange(final View view, boolean focused) {
@@ -462,16 +485,21 @@ public class XM8 extends SDLActivity {
                 mRaLoginDialog = new AlertDialog.Builder(XM8.this)
                         .setTitle("RetroAchievements Login")
                         .setView(scroll)
-                        .setNegativeButton(android.R.string.cancel, (dialog, which) -> {
-                            nativeRaLoginCanceled();
-                        })
-                        .setPositiveButton("Login", null)
                         .create();
+                final AlertDialog loginDialog = mRaLoginDialog;
                 mRaLoginDialog.setCanceledOnTouchOutside(false);
                 mRaLoginDialog.setOnCancelListener(dialog -> nativeRaLoginCanceled());
+                mRaLoginDialog.setOnDismissListener(dialog -> {
+                    if (mRaLoginDialog != loginDialog) return;
+                    mRaLoginDialog = null;
+                    mRaLoginUsername = null;
+                    mRaLoginPassword = null;
+                    mRaLoginStatus = null;
+                    mRaLoginButton = null;
+                });
+                mRaLoginButton.setOnClickListener(view -> submitRaLogin());
+                cancelButton.setOnClickListener(view -> loginDialog.cancel());
                 mRaLoginDialog.setOnShowListener(dialog -> {
-                    mRaLoginDialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                            .setOnClickListener(view -> submitRaLogin());
                     EditText first = mRaLoginUsername.getText().length() == 0 ?
                             mRaLoginUsername : mRaLoginPassword;
                     first.requestFocus();
@@ -495,7 +523,7 @@ public class XM8 extends SDLActivity {
         mRaLoginStatus.setText("Logging in…");
         mRaLoginUsername.setEnabled(false);
         mRaLoginPassword.setEnabled(false);
-        mRaLoginDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+        mRaLoginButton.setEnabled(false);
         nativeRaLoginSubmitted(username, password);
     }
 
@@ -505,16 +533,12 @@ public class XM8 extends SDLActivity {
                 if (mRaLoginDialog == null) return;
                 if (success) {
                     mRaLoginDialog.dismiss();
-                    mRaLoginDialog = null;
-                    mRaLoginUsername = null;
-                    mRaLoginPassword = null;
-                    mRaLoginStatus = null;
                     return;
                 }
                 mRaLoginStatus.setText(message == null ? "Login failed" : message);
                 mRaLoginUsername.setEnabled(true);
                 mRaLoginPassword.setEnabled(true);
-                mRaLoginDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                mRaLoginButton.setEnabled(true);
                 mRaLoginPassword.requestFocus();
             }
         });
