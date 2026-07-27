@@ -51,6 +51,14 @@ public:
 										// enter system menu
 	void EnterRa(int id);
 										// enter RetroAchievements menu
+	void EnterRaLibrary(int focus = 0);
+	void EnterRaGameDetail();
+	void EnterRaAchievements(int focus = 0);
+	void EnterRaAchievementDetail();
+	void EnterRaLeaderboards(int focus = 0);
+	bool IsRaContentMenu() const;
+	bool IsRaGameDetailMenu() const;
+	int GetRaContentSelection() const;
 	void EnterRaHardcoreConfirmation();
 										// confirm ending an active Hardcore session
 	void UpdateRaStatus();

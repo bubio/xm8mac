@@ -632,6 +632,7 @@ void RaOverlay::OpenLeaderboards(
 	achievements_ = RaOverlayAchievementListSnapshot();
 	screen_ = RaOverlayScreen::Leaderboards;
 	achievement_detail_scroll_ = 0;
+	++achievement_selection_revision_;
 	NormalizeListSelection();
 	login_status_.clear();
 	login_submit_pending_ = false;
@@ -712,6 +713,7 @@ RaOverlayLeaderboardListSnapshot RaOverlay::LeaderboardListSnapshot() const
 {
 	RaOverlayLeaderboardListSnapshot snapshot = leaderboards_;
 	snapshot.active = screen_ == RaOverlayScreen::Leaderboards;
+	snapshot.selection_revision = achievement_selection_revision_;
 	return snapshot;
 }
 
@@ -1244,6 +1246,91 @@ bool RaOverlay::OpenSelectedLibraryGameDetail()
 	}
 	screen_ = RaOverlayScreen::GameDetail;
 	return true;
+}
+
+void RaOverlay::SelectLibraryIndex(size_t index)
+{
+	if (index < library_.games.size() &&
+		library_.selected_index != index) {
+		library_.selected_index = index;
+		++achievement_selection_revision_;
+		NormalizeListSelection();
+	}
+}
+
+void RaOverlay::SelectAchievementIndex(size_t index)
+{
+	if (index < achievements_.achievements.size() &&
+		achievements_.selected_index != index) {
+		achievements_.selected_index = index;
+		achievement_detail_scroll_ = 0;
+		++achievement_selection_revision_;
+		NormalizeListSelection();
+	}
+}
+
+void RaOverlay::SelectLeaderboardIndex(size_t index)
+{
+	if (index < leaderboards_.leaderboards.size() &&
+		leaderboards_.selected_index != index) {
+		leaderboards_.selected_index = index;
+		++achievement_selection_revision_;
+		NormalizeListSelection();
+	}
+}
+
+void RaOverlay::SetListFirstVisibleIndex(size_t index)
+{
+	if (screen_ == RaOverlayScreen::Library) {
+		library_.first_visible_index = index;
+	}
+	else if (screen_ == RaOverlayScreen::Achievements) {
+		achievements_.first_visible_index = index;
+	}
+	else if (screen_ == RaOverlayScreen::Leaderboards) {
+		leaderboards_.first_visible_index = index;
+	}
+	else {
+		return;
+	}
+	NormalizeListSelection();
+}
+
+bool RaOverlay::OpenSelectedAchievementDetail()
+{
+	if (screen_ != RaOverlayScreen::Achievements ||
+		achievements_.selected_index >= achievements_.achievements.size()) {
+		return false;
+	}
+	OpenAchievementDetail();
+	return screen_ == RaOverlayScreen::AchievementDetail;
+}
+
+void RaOverlay::ShowLibrary()
+{
+	if (!library_.games.empty() || library_.active) screen_ = RaOverlayScreen::Library;
+}
+
+void RaOverlay::ShowAchievements()
+{
+	if (!achievements_.achievements.empty() || achievements_.active) screen_ = RaOverlayScreen::Achievements;
+}
+
+void RaOverlay::ShowLeaderboards()
+{
+	if (!leaderboards_.leaderboards.empty() || leaderboards_.active) screen_ = RaOverlayScreen::Leaderboards;
+}
+
+void RaOverlay::ScrollAchievementDetail(int delta)
+{
+	MoveAchievementDetailScroll(delta);
+}
+
+void RaOverlay::SetAchievementDetailScroll(int offset)
+{
+	if (screen_ == RaOverlayScreen::AchievementDetail) {
+		achievement_detail_scroll_ = offset < 0 ? 0 : offset;
+	}
 }
 
 void RaOverlay::MoveLoginFocus(int delta)

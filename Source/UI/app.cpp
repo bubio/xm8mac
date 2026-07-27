@@ -82,6 +82,29 @@ extern "C" void Android_RaLoginCanceled(void)
 }
 #endif
 
+#ifdef __ANDROID__
+static const int ANDROID_MENU_BACK_EVENT = 0x584d3842;
+static const int ANDROID_MOUSE_BACK_EVENT = 0x584d3858;
+
+extern "C" void Android_MenuBackRequested(void)
+{
+	SDL_Event event;
+	SDL_zero(event);
+	event.type = SDL_USEREVENT;
+	event.user.code = ANDROID_MENU_BACK_EVENT;
+	SDL_PushEvent(&event);
+}
+
+extern "C" void Android_MouseBackRequested(void)
+{
+	SDL_Event event;
+	SDL_zero(event);
+	event.type = SDL_USEREVENT;
+	event.user.code = ANDROID_MOUSE_BACK_EVENT;
+	SDL_PushEvent(&event);
+}
+#endif
+
 //
 // defines
 //
@@ -128,7 +151,9 @@ namespace {
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 SDL_Rect RaGameDetailStartButtonRect();
+SDL_Rect RaOverlayDialogRect();
 bool PointInRect(int x, int y, const SDL_Rect& rect);
+const Uint32 RA_OVERLAY_FINGER_TIME_THRES = 250;
 #endif
 
 int HexValue(char ch)
@@ -454,11 +479,14 @@ App::App()
 	ra_session_state = Xm8Ra::RaSessionState::Ready;
 	ra_overlay_joystick_prev = 0;
 	ra_overlay_mouse_target_valid = false;
+	ra_overlay_mouse_outside = false;
 	ra_overlay_mouse_target = Xm8Ra::RaOverlayLoginTarget::Username;
 	ra_overlay_mouse_detail_target = 0;
 	ra_overlay_mouse_list_target_valid = false;
 	ra_overlay_mouse_list_target = 0;
 	ra_overlay_finger_target_valid = false;
+	ra_overlay_finger_outside = false;
+	ra_overlay_finger_tick = 0;
 	ra_overlay_finger_target = Xm8Ra::RaOverlayLoginTarget::Username;
 	ra_overlay_finger_detail_target = 0;
 	ra_overlay_finger_list_target_valid = false;
@@ -1302,7 +1330,14 @@ void App::ProcessRaLibrarySync()
 		if (ra_library->ApplyLibrarySync(payload, &error)) {
 			if (ra_overlay != NULL &&
 				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library) {
+				int focus = 0;
+				if (app_menu && menu != NULL && menu->IsRaContentMenu()) {
+					focus = menu->GetRaContentSelection() -
+						MENU_RA_LIBRARY_ITEM_MIN;
+				}
 				ra_overlay->OpenLibrary(MakeRaLibraryOverlaySnapshot());
+				if (app_menu && menu != NULL)
+					menu->EnterRaLibrary(focus < 0 ? 0 : focus);
 			}
 		}
 		else {
@@ -2307,6 +2342,7 @@ void App::HandleRaResetRequest()
 //
 bool App::HandleRaOverlayKeyDown(SDL_Event *e)
 {
+	if (app_menu) return false;
 	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
 		return false;
 	}
@@ -2376,11 +2412,7 @@ bool App::HandleRaOverlayAction(Xm8Ra::RaOverlayAction action)
 			ra_overlay->CloseScreen();
 			SDL_StopTextInput();
 			ClearRaOverlayPointerState();
-			input->LostFocus();
-			input->ResetList();
-			CtrlAudio();
-			video->SetMenuMode(false);
-			video->DrawCtrl();
+			LeaveMenu(false);
 		}
 	}
 	else if (action == Xm8Ra::RaOverlayAction::ResolveLibraryConflict) {
@@ -2495,6 +2527,8 @@ void App::ClearRaOverlayPointerState()
 	ra_overlay_mouse_detail_target = 0;
 	ra_overlay_mouse_list_target_valid = false;
 	ra_overlay_finger_target_valid = false;
+	ra_overlay_finger_outside = false;
+	ra_overlay_finger_tick = 0;
 	ra_overlay_finger_detail_target = 0;
 	ra_overlay_finger_list_target_valid = false;
 	ra_overlay_finger_scroll_valid = false;
@@ -2652,6 +2686,33 @@ bool App::HandleRaStatusFinger(SDL_Event *e)
 //
 bool App::HandleRaOverlayMouse(SDL_Event *e)
 {
+	if (app_menu) {
+		// Game Detail keeps its rich custom drawing, but activation remains a
+		// normal Menu command. Translate only the visible START button into the
+		// corresponding menu item; all back operations continue through MenuList.
+		if (menu == NULL || !menu->IsRaGameDetailMenu() ||
+			(e->type != SDL_MOUSEBUTTONDOWN &&
+			 e->type != SDL_MOUSEBUTTONUP) ||
+			e->button.button != SDL_BUTTON_LEFT) {
+			return false;
+		}
+		int x = e->button.x;
+		int y = e->button.y;
+		if (!video->ConvertPoint(&x, &y)) return false;
+		const bool inside_dialog = PointInRect(x, y, RaOverlayDialogRect());
+		if (!inside_dialog) return false;
+		const bool inside_start = PointInRect(x, y,
+			RaGameDetailStartButtonRect());
+		if (e->type == SDL_MOUSEBUTTONDOWN) {
+			ra_overlay_mouse_detail_target = inside_start ? 2 : 0;
+			return true;
+		}
+		const bool activate = ra_overlay_mouse_detail_target == 2 &&
+			inside_start;
+		ra_overlay_mouse_detail_target = 0;
+		if (activate) menu->Command(false, MENU_RA_GAME_START);
+		return true;
+	}
 	if (ra_overlay == NULL) {
 		return false;
 	}
@@ -2704,10 +2765,25 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 	if (!video->ConvertPoint(&x, &y)) {
 		if (e->type == SDL_MOUSEBUTTONUP) {
 			ra_overlay_mouse_target_valid = false;
+			ra_overlay_mouse_outside = false;
 			ra_overlay_mouse_detail_target = 0;
 			ra_overlay_mouse_list_target_valid = false;
 		}
 		return true;
+	}
+	if (ra_overlay->Screen() != Xm8Ra::RaOverlayScreen::Login) {
+		const bool outside = !PointInRect(x, y, RaOverlayDialogRect());
+		if (e->type == SDL_MOUSEBUTTONDOWN) {
+			ra_overlay_mouse_outside = outside;
+		}
+		else {
+			const bool close = ra_overlay_mouse_outside && outside;
+			ra_overlay_mouse_outside = false;
+			if (close) {
+				return HandleRaOverlayAction(ra_overlay->OnControlKey(
+					Xm8Ra::RaOverlayKey::Escape));
+			}
+		}
 	}
 
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
@@ -2783,6 +2859,30 @@ bool App::HandleRaOverlayMouse(SDL_Event *e)
 //
 bool App::HandleRaOverlayFinger(SDL_Event *e)
 {
+	if (app_menu) {
+		if (menu == NULL || !menu->IsRaGameDetailMenu() ||
+			(e->type != SDL_FINGERDOWN && e->type != SDL_FINGERUP &&
+			 e->type != SDL_FINGERMOTION)) {
+			return false;
+		}
+		int x = 0;
+		int y = 0;
+		if (!video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y))
+			return false;
+		if (!PointInRect(x, y, RaOverlayDialogRect())) return false;
+		const bool inside_start = PointInRect(x, y,
+			RaGameDetailStartButtonRect());
+		if (e->type == SDL_FINGERDOWN) {
+			ra_overlay_finger_detail_target = inside_start ? 2 : 0;
+			return true;
+		}
+		if (e->type == SDL_FINGERMOTION) return true;
+		const bool activate = ra_overlay_finger_detail_target == 2 &&
+			inside_start;
+		ra_overlay_finger_detail_target = 0;
+		if (activate) menu->Command(false, MENU_RA_GAME_START);
+		return true;
+	}
 	if (ra_overlay == NULL) {
 		return false;
 	}
@@ -2799,12 +2899,32 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 	if (!video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y)) {
 		if (e->type == SDL_FINGERUP) {
 			ra_overlay_finger_target_valid = false;
+			ra_overlay_finger_outside = false;
+			ra_overlay_finger_tick = 0;
 			ra_overlay_finger_detail_target = 0;
 			ra_overlay_finger_list_target_valid = false;
 			ra_overlay_finger_scroll_valid = false;
 			ra_overlay_finger_scrolled = false;
 		}
 		return true;
+	}
+	if (ra_overlay->Screen() != Xm8Ra::RaOverlayScreen::Login) {
+		const bool outside = !PointInRect(x, y, RaOverlayDialogRect());
+		if (e->type == SDL_FINGERDOWN) {
+			ra_overlay_finger_outside = outside;
+			ra_overlay_finger_tick = SDL_GetTicks();
+		}
+		else if (e->type == SDL_FINGERUP) {
+			const bool close = ra_overlay_finger_outside && outside &&
+				(Uint32)(SDL_GetTicks() - ra_overlay_finger_tick) <=
+				RA_OVERLAY_FINGER_TIME_THRES;
+			ra_overlay_finger_outside = false;
+			ra_overlay_finger_tick = 0;
+			if (close) {
+				return HandleRaOverlayAction(ra_overlay->OnControlKey(
+					Xm8Ra::RaOverlayKey::Escape));
+			}
+		}
 	}
 
 	if (ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library ||
@@ -2904,6 +3024,7 @@ bool App::HandleRaOverlayFinger(SDL_Event *e)
 //
 bool App::HandleRaOverlayJoystick()
 {
+	if (app_menu) return false;
 	if (ra_overlay == NULL || !ra_overlay->IsBlocking()) {
 		return false;
 	}
@@ -3075,9 +3196,9 @@ void App::DrawRaOverlay()
 				achievements.status_message : leaderboards.status_message);
 		const uint32_t selection_revision = library_screen ?
 			library.selection_revision : (achievements_screen ?
-				achievements.selection_revision : 0);
-		if ((library_screen || achievements_screen) &&
-			ra_overlay_auto_scroll_revision != selection_revision) {
+				achievements.selection_revision :
+				leaderboards.selection_revision);
+		if (ra_overlay_auto_scroll_revision != selection_revision) {
 			ra_overlay_auto_scroll_revision = selection_revision;
 			ra_overlay_auto_scroll_started = SDL_GetTicks();
 		}
@@ -3704,6 +3825,8 @@ void App::DrawRaOverlay()
 	const bool error_focused = app_menu && menu != NULL && ra_overlay != NULL &&
 		menu->IsRaStatusFocused() &&
 		!ra_overlay->LastSubmissionError().empty();
+	const bool ra_content_menu = app_menu && menu != NULL &&
+		menu->IsRaContentMenu();
 	if (presence_focused || error_focused) {
 		if (!ra_menu_presence_scroll_active ||
 			ra_menu_error_scroll_active != error_focused) {
@@ -3746,7 +3869,7 @@ void App::DrawRaOverlay()
 		video->DrawCtrl();
 	}
 	else {
-		if (app_menu && ra_menu_detail_active) {
+		if (app_menu && ra_menu_detail_active && !ra_content_menu) {
 			clear_menu_detail();
 			video->DrawCtrl();
 		}
@@ -4771,6 +4894,28 @@ void App::Poll(SDL_Event *e)
 {
 	// handle SDL events
 	switch (e->type) {
+	case SDL_USEREVENT:
+#ifdef __ANDROID__
+		if (e->user.code == ANDROID_MENU_BACK_EVENT) {
+			if (app_menu) {
+				menu->Command(false, MENU_BACK);
+			}
+			else {
+				EnterMenu(MENU_QUIT);
+			}
+		}
+		else if (e->user.code == ANDROID_MOUSE_BACK_EVENT && app_menu) {
+			SDL_Event mouse_event;
+			SDL_zero(mouse_event);
+			mouse_event.type = SDL_MOUSEBUTTONUP;
+			mouse_event.button.which = 0;
+			mouse_event.button.button = SDL_BUTTON_X1;
+			mouse_event.button.state = SDL_RELEASED;
+			menu->OnMouseButtonUp(&mouse_event);
+		}
+#endif
+		break;
+
 	case SDL_QUIT:
 		app_quit = true;
 		break;
@@ -4868,7 +5013,8 @@ void App::Poll(SDL_Event *e)
 	case SDL_KEYDOWN:
 		if (app_background == false) {
 #ifdef __ANDROID__
-			if (e->key.keysym.scancode == SDL_SCANCODE_AC_BACK) {
+			if (e->key.keysym.scancode == SDL_SCANCODE_AC_BACK ||
+				e->key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
 				OnKeyDown(e);
 				break;
 			}
@@ -6580,16 +6726,21 @@ std::string FormatRaUnixTime(int64_t unix_time)
 
 SDL_Rect RaGameDetailStartButtonRect()
 {
-	SDL_Rect panel = {
+	SDL_Rect panel = RaOverlayDialogRect();
+	SDL_Rect body = {panel.x + 1, panel.y + MENUITEM_HEIGHT + 1,
+		panel.w - 2, panel.h - MENUITEM_HEIGHT - 2};
+	SDL_Rect button = {body.x + 104, body.y + 142, body.w - 128, 34};
+	return button;
+}
+
+SDL_Rect RaOverlayDialogRect()
+{
+	return {
 		(SCREEN_WIDTH / 2) - (MENUITEM_WIDTH / 2),
 		(SCREEN_HEIGHT / 2) - ((MENUITEM_HEIGHT * MENUITEM_LINES) / 2),
 		MENUITEM_WIDTH,
 		MENUITEM_HEIGHT * MENUITEM_LINES
 	};
-	SDL_Rect body = {panel.x + 1, panel.y + MENUITEM_HEIGHT + 1,
-		panel.w - 2, panel.h - MENUITEM_HEIGHT - 2};
-	SDL_Rect button = {body.x + 104, body.y + 142, body.w - 128, 34};
-	return button;
 }
 
 bool PointInRect(int x, int y, const SDL_Rect& rect)
@@ -6802,7 +6953,13 @@ void App::RefreshRaAchievementsOverlay()
 {
 	if (ra_overlay != NULL &&
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
+		int focus = 0;
+		if (app_menu && menu != NULL && menu->IsRaContentMenu()) {
+			focus = menu->GetRaContentSelection() - MENU_RA_ACHIEVEMENT_ITEM_MIN;
+		}
 		ra_overlay->OpenAchievements(MakeRaAchievementsOverlaySnapshot());
+		if (app_menu && menu != NULL)
+			menu->EnterRaAchievements(focus < 0 ? 0 : focus);
 	}
 }
 
@@ -6814,7 +6971,13 @@ void App::RefreshRaLeaderboardsOverlay()
 {
 	if (ra_overlay != NULL &&
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
+		int focus = 0;
+		if (app_menu && menu != NULL && menu->IsRaContentMenu()) {
+			focus = menu->GetRaContentSelection() - MENU_RA_LEADERBOARD_ITEM_MIN;
+		}
 		ra_overlay->UpdateLeaderboards(MakeRaLeaderboardsOverlaySnapshot());
+		if (app_menu && menu != NULL)
+			menu->EnterRaLeaderboards(focus < 0 ? 0 : focus);
 	}
 }
 
@@ -6877,10 +7040,41 @@ void App::OpenRaLibraryOverlay()
 	ra_overlay_joystick_prev = 0;
 	ClearRaOverlayPointerState();
 	SDL_StopTextInput();
-	if (app_menu == true) {
-		LeaveMenu(false);
-	}
+	menu->EnterRaLibrary(0);
 	CtrlAudio();
+}
+
+Xm8Ra::RaOverlayLibraryListSnapshot App::GetRaLibraryMenuSnapshot() const
+{
+	return ra_overlay == NULL ? Xm8Ra::RaOverlayLibraryListSnapshot() :
+		ra_overlay->LibraryListSnapshot();
+}
+
+void App::ShowRaLibraryMenu()
+{
+	if (ra_overlay != NULL) ra_overlay->ShowLibrary();
+}
+
+void App::SelectRaLibraryMenuItem(size_t index)
+{
+	if (ra_overlay != NULL) ra_overlay->SelectLibraryIndex(index);
+}
+
+bool App::OpenRaLibraryMenuDetail()
+{
+	return ra_overlay != NULL && ra_overlay->OpenSelectedLibraryGameDetail();
+}
+
+bool App::ActivateRaLibraryMenuDetail()
+{
+	if (ra_overlay == NULL) return false;
+	if (ra_overlay->CanLaunchSelectedLibraryGame()) {
+		return HandleRaOverlayAction(Xm8Ra::RaOverlayAction::OpenLibraryGame);
+	}
+	if (ra_overlay->CanResolveSelectedLibraryConflict()) {
+		return HandleRaOverlayAction(Xm8Ra::RaOverlayAction::ResolveLibraryConflict);
+	}
+	return false;
 }
 
 //
@@ -7040,10 +7234,39 @@ void App::OpenRaAchievementsOverlay()
 	ra_overlay_joystick_prev = 0;
 	ClearRaOverlayPointerState();
 	SDL_StopTextInput();
-	if (app_menu == true) {
-		LeaveMenu(false);
-	}
+	menu->EnterRaAchievements(0);
 	CtrlAudio();
+}
+
+Xm8Ra::RaOverlayAchievementListSnapshot App::GetRaAchievementsMenuSnapshot() const
+{
+	return ra_overlay == NULL ? Xm8Ra::RaOverlayAchievementListSnapshot() :
+		ra_overlay->AchievementListSnapshot();
+}
+
+void App::ShowRaAchievementsMenu()
+{
+	if (ra_overlay != NULL) ra_overlay->ShowAchievements();
+}
+
+void App::SelectRaAchievementMenuItem(size_t index)
+{
+	if (ra_overlay != NULL) ra_overlay->SelectAchievementIndex(index);
+}
+
+bool App::OpenRaAchievementMenuDetail()
+{
+	return ra_overlay != NULL && ra_overlay->OpenSelectedAchievementDetail();
+}
+
+void App::ScrollRaAchievementMenuDetail(int delta)
+{
+	if (ra_overlay != NULL) ra_overlay->ScrollAchievementDetail(delta);
+}
+
+void App::SetRaAchievementMenuDetailScroll(int offset)
+{
+	if (ra_overlay != NULL) ra_overlay->SetAchievementDetailScroll(offset);
 }
 
 //
@@ -7062,10 +7285,29 @@ void App::OpenRaLeaderboardsOverlay()
 	ra_overlay_joystick_prev = 0;
 	ClearRaOverlayPointerState();
 	SDL_StopTextInput();
-	if (app_menu == true) {
-		LeaveMenu(false);
-	}
+	menu->EnterRaLeaderboards(0);
 	CtrlAudio();
+}
+
+Xm8Ra::RaOverlayLeaderboardListSnapshot App::GetRaLeaderboardsMenuSnapshot() const
+{
+	return ra_overlay == NULL ? Xm8Ra::RaOverlayLeaderboardListSnapshot() :
+		ra_overlay->LeaderboardListSnapshot();
+}
+
+void App::ShowRaLeaderboardsMenu()
+{
+	if (ra_overlay != NULL) ra_overlay->ShowLeaderboards();
+}
+
+void App::SelectRaLeaderboardMenuItem(size_t index)
+{
+	if (ra_overlay != NULL) ra_overlay->SelectLeaderboardIndex(index);
+}
+
+void App::SetRaMenuFirstVisibleItem(size_t index)
+{
+	if (ra_overlay != NULL) ra_overlay->SetListFirstVisibleIndex(index);
 }
 
 //
@@ -7092,6 +7334,18 @@ void App::CloseRaOverlayToMenu()
 	SDL_StopTextInput();
 	ClearRaOverlayPointerState();
 	EnterMenu(MENU_RA);
+}
+
+//
+// CloseRaMenuContent()
+// finish an RA lower-menu presentation before showing the RA top menu
+//
+void App::CloseRaMenuContent()
+{
+	if (ra_overlay == NULL) return;
+	ra_overlay->CloseScreen();
+	SDL_StopTextInput();
+	ClearRaOverlayPointerState();
 }
 
 //

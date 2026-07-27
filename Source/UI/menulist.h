@@ -71,6 +71,8 @@ public:
 										// get menu id
 	int GetFocusID();
 										// get focused item id
+	int GetTop() const;
+										// get first visible item index
 	const char* GetName(int id);
 										// get menu name
 	void SetFocus(int id);

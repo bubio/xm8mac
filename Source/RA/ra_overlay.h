@@ -209,6 +209,7 @@ struct RaOverlayLeaderboardListSnapshot {
 	bool game_loaded = false;
 	size_t selected_index = 0;
 	size_t first_visible_index = 0;
+	uint32_t selection_revision = 0;
 	std::string game_title;
 	std::string status_message;
 	std::vector<RaOverlayLeaderboardItem> leaderboards;
@@ -288,6 +289,16 @@ public:
 	bool CanLaunchSelectedLibraryGame() const;
 	bool CanResolveSelectedLibraryConflict() const;
 	bool OpenSelectedLibraryGameDetail();
+	void SelectLibraryIndex(size_t index);
+	void SelectAchievementIndex(size_t index);
+	void SelectLeaderboardIndex(size_t index);
+	void SetListFirstVisibleIndex(size_t index);
+	bool OpenSelectedAchievementDetail();
+	void ShowLibrary();
+	void ShowAchievements();
+	void ShowLeaderboards();
+	void ScrollAchievementDetail(int delta);
+	void SetAchievementDetailScroll(int offset);
 	void SetLoginStatus(const std::string& message);
 	void CloseScreen();
 

@@ -606,6 +606,24 @@ void Android_RaSetLoginResult(const char *message, int success)
 extern void Android_RaLoginSubmitted(const char *username, const char *password);
 extern void Android_RaLoginCanceled(void);
 #endif
+extern void Android_MenuBackRequested(void);
+extern void Android_MouseBackRequested(void);
+
+JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeMenuBackRequested(JNIEnv *env,
+	jclass jcls)
+{
+	(void)env;
+	(void)jcls;
+	Android_MenuBackRequested();
+}
+
+JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeMouseBackRequested(JNIEnv *env,
+	jclass jcls)
+{
+	(void)env;
+	(void)jcls;
+	Android_MouseBackRequested();
+}
 
 JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeRaLoginSubmitted(JNIEnv *env,
 	jclass jcls, jstring username, jstring password)

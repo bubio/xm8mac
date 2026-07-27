@@ -155,13 +155,29 @@ public:
 	#endif
 	void OpenRaLibraryOverlay();
 										// open RA library overlay
+	Xm8Ra::RaOverlayLibraryListSnapshot GetRaLibraryMenuSnapshot() const;
+	void ShowRaLibraryMenu();
+	void SelectRaLibraryMenuItem(size_t index);
+	bool OpenRaLibraryMenuDetail();
+	bool ActivateRaLibraryMenuDetail();
 	void OpenRaAchievementsOverlay();
 										// open RA achievements overlay
+	Xm8Ra::RaOverlayAchievementListSnapshot GetRaAchievementsMenuSnapshot() const;
+	void ShowRaAchievementsMenu();
+	void SelectRaAchievementMenuItem(size_t index);
+	bool OpenRaAchievementMenuDetail();
+	void ScrollRaAchievementMenuDetail(int delta);
+	void SetRaAchievementMenuDetailScroll(int offset);
 	void OpenRaLeaderboardsOverlay();
 										// open RA leaderboards overlay
+	Xm8Ra::RaOverlayLeaderboardListSnapshot GetRaLeaderboardsMenuSnapshot() const;
+	void ShowRaLeaderboardsMenu();
+	void SelectRaLeaderboardMenuItem(size_t index);
+	void SetRaMenuFirstVisibleItem(size_t index);
 	void OpenRaWebsite();
 										// open RetroAchievements in the default browser
 	void CloseRaOverlayToMenu();
+	void CloseRaMenuContent();
 										// close RA overlay and return to RA menu
 	bool IsRaLoggedIn() const;
 										// get RA login state
@@ -484,6 +500,8 @@ private:
 										// RA overlay joystick previous state
 	bool ra_overlay_mouse_target_valid;
 										// RA mouse pressed target valid
+	bool ra_overlay_mouse_outside;
+										// RA mouse press began outside the dialog
 	Xm8Ra::RaOverlayLoginTarget ra_overlay_mouse_target;
 										// RA mouse pressed target
 	int ra_overlay_mouse_detail_target;
@@ -494,6 +512,10 @@ private:
 										// RA mouse list pressed row
 	bool ra_overlay_finger_target_valid;
 										// RA touch pressed target valid
+	bool ra_overlay_finger_outside;
+									// RA touch began outside the dialog
+	Uint32 ra_overlay_finger_tick;
+									// RA touch began tick
 	Xm8Ra::RaOverlayLoginTarget ra_overlay_finger_target;
 										// RA touch pressed target
 	int ra_overlay_finger_detail_target;

@@ -670,6 +670,15 @@ int MenuList::GetFocusID()
 }
 
 //
+// GetTop()
+// get first visible item index
+//
+int MenuList::GetTop() const
+{
+	return menu_top;
+}
+
+//
 // GetName()
 // get menu name
 //

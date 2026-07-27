@@ -47,6 +47,8 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
+import android.view.InputDevice;
+import android.view.KeyEvent;
 import android.view.WindowManager;
 import androidx.core.content.ContextCompat;
 import android.content.pm.PackageManager;
@@ -128,6 +130,8 @@ public class XM8 extends SDLActivity {
             int status, String contentType, byte[] body, String error);
     private static native void nativeRaLoginSubmitted(String username, String password);
     private static native void nativeRaLoginCanceled();
+    private static native void nativeMenuBackRequested();
+    private static native void nativeMouseBackRequested();
 
     private AlertDialog mRaLoginDialog;
     private EditText mRaLoginUsername;
@@ -135,6 +139,22 @@ public class XM8 extends SDLActivity {
     private TextView mRaLoginStatus;
 
     // setup
+
+    @Override
+    public void onBackPressed() {
+        nativeMenuBackRequested();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK &&
+                (event.getSource() & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE) {
+            if (event.getAction() == KeyEvent.ACTION_UP) nativeMouseBackRequested();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i(LOG_TAG, "onCreate");

@@ -217,6 +217,47 @@ void Menu::ProcessMenu()
 		// normal
 		list->ProcessMenu(true);
 	}
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	const int focus = list->GetFocusID();
+	switch (list->GetID()) {
+	case MENU_RA_LIBRARY_VIEW:
+		if (focus >= MENU_RA_LIBRARY_ITEM_MIN &&
+			focus < MENU_RA_ACHIEVEMENT_ITEM_MIN) {
+			app->SelectRaLibraryMenuItem(
+				static_cast<size_t>(focus - MENU_RA_LIBRARY_ITEM_MIN));
+			app->SetRaMenuFirstVisibleItem(
+				static_cast<size_t>(list->GetTop()));
+		}
+		break;
+	case MENU_RA_ACHIEVEMENTS_VIEW:
+		if (focus >= MENU_RA_ACHIEVEMENT_ITEM_MIN &&
+			focus < MENU_RA_LEADERBOARD_ITEM_MIN) {
+			app->SelectRaAchievementMenuItem(
+				static_cast<size_t>(focus - MENU_RA_ACHIEVEMENT_ITEM_MIN));
+			app->SetRaMenuFirstVisibleItem(
+				static_cast<size_t>(list->GetTop()));
+		}
+		break;
+	case MENU_RA_LEADERBOARDS_VIEW:
+		if (focus >= MENU_RA_LEADERBOARD_ITEM_MIN &&
+			focus < MENU_RA_DETAIL_LINE_MIN) {
+			app->SelectRaLeaderboardMenuItem(
+				static_cast<size_t>(focus - MENU_RA_LEADERBOARD_ITEM_MIN));
+			app->SetRaMenuFirstVisibleItem(
+				static_cast<size_t>(list->GetTop()));
+		}
+		break;
+	case MENU_RA_ACHIEVEMENT_DETAIL:
+		if (focus >= MENU_RA_DETAIL_LINE_MIN) {
+			app->SetRaAchievementMenuDetailScroll(
+				focus - MENU_RA_DETAIL_LINE_MIN);
+		}
+		break;
+	default:
+		break;
+	}
+#endif
 }
 
 //
@@ -725,6 +766,7 @@ void Menu::EnterSystem(int id)
 //
 void Menu::EnterRa(int id)
 {
+	app->CloseRaMenuContent();
 	list->SetTitle("<< RetroAchievements >>", MENU_RA);
 
 	list->AddButton("Login", MENU_RA_LOGIN);
@@ -749,6 +791,94 @@ void Menu::EnterRa(int id)
 		id = MENU_RA_LOGIN;
 	}
 	list->SetFocus(id);
+}
+
+void Menu::EnterRaLibrary(int focus)
+{
+	app->ShowRaLibraryMenu();
+	const Xm8Ra::RaOverlayLibraryListSnapshot snapshot =
+		app->GetRaLibraryMenuSnapshot();
+	list->SetTitle("<< RA Library >>", MENU_RA_LIBRARY_VIEW);
+	for (size_t index = 0; index < snapshot.games.size() &&
+		index < static_cast<size_t>(MENU_RA_ACHIEVEMENT_ITEM_MIN -
+			MENU_RA_LIBRARY_ITEM_MIN); ++index) {
+		const int id = MENU_RA_LIBRARY_ITEM_MIN + static_cast<int>(index);
+		list->AddButton(snapshot.games[index].title.c_str(), id);
+		list->SetUser(id, static_cast<Uint32>(index));
+	}
+	if (snapshot.games.empty()) list->AddButton("No library games", MENU_RA_LIBRARY_ITEM_MIN);
+	list->SetFocus(MENU_RA_LIBRARY_ITEM_MIN + focus);
+}
+
+void Menu::EnterRaGameDetail()
+{
+	list->SetTitle("<< RA Game Detail >>", MENU_RA_GAME_DETAIL);
+	list->AddButton("START", MENU_RA_GAME_START);
+	list->SetFocus(MENU_RA_GAME_START);
+}
+
+void Menu::EnterRaAchievements(int focus)
+{
+	app->ShowRaAchievementsMenu();
+	const Xm8Ra::RaOverlayAchievementListSnapshot snapshot =
+		app->GetRaAchievementsMenuSnapshot();
+	list->SetTitle("<< RA Achievements >>", MENU_RA_ACHIEVEMENTS_VIEW);
+	for (size_t index = 0; index < snapshot.achievements.size() &&
+		index < static_cast<size_t>(MENU_RA_LEADERBOARD_ITEM_MIN -
+			MENU_RA_ACHIEVEMENT_ITEM_MIN); ++index) {
+		const int id = MENU_RA_ACHIEVEMENT_ITEM_MIN + static_cast<int>(index);
+		list->AddButton(snapshot.achievements[index].title.c_str(), id);
+		list->SetUser(id, static_cast<Uint32>(index));
+	}
+	if (snapshot.achievements.empty()) list->AddButton("No achievements", MENU_RA_ACHIEVEMENT_ITEM_MIN);
+	list->SetFocus(MENU_RA_ACHIEVEMENT_ITEM_MIN + focus);
+}
+
+void Menu::EnterRaAchievementDetail()
+{
+	list->SetTitle("<< RA Achievement Detail >>", MENU_RA_ACHIEVEMENT_DETAIL);
+	// MenuList owns scrolling; the rows are intentionally inert content lines.
+	for (int index = 0; index < 24; ++index) {
+		char line[32];
+		std::snprintf(line, sizeof(line), "Detail %d", index + 1);
+		list->AddButton(line, MENU_RA_DETAIL_LINE_MIN + index);
+	}
+	list->SetFocus(MENU_RA_DETAIL_LINE_MIN);
+}
+
+void Menu::EnterRaLeaderboards(int focus)
+{
+	app->ShowRaLeaderboardsMenu();
+	const Xm8Ra::RaOverlayLeaderboardListSnapshot snapshot =
+		app->GetRaLeaderboardsMenuSnapshot();
+	list->SetTitle("<< RA Leaderboards >>", MENU_RA_LEADERBOARDS_VIEW);
+	for (size_t index = 0; index < snapshot.leaderboards.size() &&
+		index < static_cast<size_t>(MENU_RA_DETAIL_LINE_MIN -
+			MENU_RA_LEADERBOARD_ITEM_MIN); ++index) {
+		const int id = MENU_RA_LEADERBOARD_ITEM_MIN + static_cast<int>(index);
+		list->AddButton(snapshot.leaderboards[index].title.c_str(), id);
+		list->SetUser(id, static_cast<Uint32>(index));
+	}
+	if (snapshot.leaderboards.empty()) list->AddButton("No leaderboards", MENU_RA_LEADERBOARD_ITEM_MIN);
+	list->SetFocus(MENU_RA_LEADERBOARD_ITEM_MIN + focus);
+}
+
+bool Menu::IsRaContentMenu() const
+{
+	const int id = list == NULL ? -1 : list->GetID();
+	return id == MENU_RA_LIBRARY_VIEW || id == MENU_RA_GAME_DETAIL ||
+		id == MENU_RA_ACHIEVEMENTS_VIEW || id == MENU_RA_ACHIEVEMENT_DETAIL ||
+		id == MENU_RA_LEADERBOARDS_VIEW;
+}
+
+bool Menu::IsRaGameDetailMenu() const
+{
+	return list != NULL && list->GetID() == MENU_RA_GAME_DETAIL;
+}
+
+int Menu::GetRaContentSelection() const
+{
+	return list == NULL ? MENU_BACK : list->GetFocusID();
 }
 
 void Menu::EnterRaHardcoreConfirmation()
@@ -1814,6 +1944,27 @@ void Menu::CmdBack()
 	case MENU_RA:
 		EnterMain(MENU_MAIN_RA);
 		break;
+	case MENU_RA_LIBRARY_VIEW:
+		EnterRa(MENU_RA_LIBRARY);
+		break;
+	case MENU_RA_ACHIEVEMENTS_VIEW:
+		EnterRa(MENU_RA_ACHIEVEMENTS);
+		break;
+	case MENU_RA_LEADERBOARDS_VIEW:
+		EnterRa(MENU_RA_LEADERBOARDS);
+		break;
+	case MENU_RA_GAME_DETAIL: {
+		const Xm8Ra::RaOverlayLibraryListSnapshot snapshot =
+			app->GetRaLibraryMenuSnapshot();
+		EnterRaLibrary(static_cast<int>(snapshot.selected_index));
+		break;
+	}
+	case MENU_RA_ACHIEVEMENT_DETAIL: {
+		const Xm8Ra::RaOverlayAchievementListSnapshot snapshot =
+			app->GetRaAchievementsMenuSnapshot();
+		EnterRaAchievements(static_cast<int>(snapshot.selected_index));
+		break;
+	}
 #endif
 
 	// video menu
@@ -2352,6 +2503,42 @@ void Menu::CmdRa(int id)
 		UpdateRaStatus();
 	};
 
+	if (id >= MENU_RA_LIBRARY_ITEM_MIN &&
+		id < MENU_RA_ACHIEVEMENT_ITEM_MIN) {
+		const size_t index = static_cast<size_t>(id - MENU_RA_LIBRARY_ITEM_MIN);
+		const Xm8Ra::RaOverlayLibraryListSnapshot snapshot =
+			app->GetRaLibraryMenuSnapshot();
+		if (index < snapshot.games.size()) {
+			app->SelectRaLibraryMenuItem(index);
+			if (app->OpenRaLibraryMenuDetail()) EnterRaGameDetail();
+		}
+		return;
+	}
+	if (id >= MENU_RA_ACHIEVEMENT_ITEM_MIN &&
+		id < MENU_RA_LEADERBOARD_ITEM_MIN) {
+		const size_t index = static_cast<size_t>(id - MENU_RA_ACHIEVEMENT_ITEM_MIN);
+		const Xm8Ra::RaOverlayAchievementListSnapshot snapshot =
+			app->GetRaAchievementsMenuSnapshot();
+		if (index < snapshot.achievements.size()) {
+			app->SelectRaAchievementMenuItem(index);
+			if (app->OpenRaAchievementMenuDetail()) EnterRaAchievementDetail();
+		}
+		return;
+	}
+	if (id >= MENU_RA_LEADERBOARD_ITEM_MIN &&
+		id < MENU_RA_DETAIL_LINE_MIN) {
+		const size_t index = static_cast<size_t>(id - MENU_RA_LEADERBOARD_ITEM_MIN);
+		const Xm8Ra::RaOverlayLeaderboardListSnapshot snapshot =
+			app->GetRaLeaderboardsMenuSnapshot();
+		if (index < snapshot.leaderboards.size()) {
+			app->SelectRaLeaderboardMenuItem(index);
+		}
+		return;
+	}
+	if (id >= MENU_RA_DETAIL_LINE_MIN) {
+		return;
+	}
+
 	switch (id) {
 	case MENU_RA_MODE:
 		app->ToggleRaMode();
@@ -2406,6 +2593,10 @@ void Menu::CmdRa(int id)
 
 	case MENU_RA_LEADERBOARDS:
 		app->OpenRaLeaderboardsOverlay();
+		break;
+
+	case MENU_RA_GAME_START:
+		app->ActivateRaLibraryMenuDetail();
 		break;
 
 	case MENU_RA_LOAD:
