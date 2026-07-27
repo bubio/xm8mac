@@ -224,8 +224,8 @@ void Menu::ProcessMenu()
 	case MENU_RA_LIBRARY_VIEW:
 		if (focus >= MENU_RA_LIBRARY_ITEM_MIN &&
 			focus < MENU_RA_ACHIEVEMENT_ITEM_MIN) {
-			app->SelectRaLibraryMenuItem(
-				static_cast<size_t>(focus - MENU_RA_LIBRARY_ITEM_MIN));
+			app->SelectRaLibraryMenuItemById(
+				static_cast<int64_t>(list->GetUser(focus)));
 			app->SetRaMenuFirstVisibleItem(
 				static_cast<size_t>(list->GetTop()));
 		}
@@ -233,8 +233,8 @@ void Menu::ProcessMenu()
 	case MENU_RA_ACHIEVEMENTS_VIEW:
 		if (focus >= MENU_RA_ACHIEVEMENT_ITEM_MIN &&
 			focus < MENU_RA_LEADERBOARD_ITEM_MIN) {
-			app->SelectRaAchievementMenuItem(
-				static_cast<size_t>(focus - MENU_RA_ACHIEVEMENT_ITEM_MIN));
+			app->SelectRaAchievementMenuItemById(
+				static_cast<uint32_t>(list->GetUser(focus)));
 			app->SetRaMenuFirstVisibleItem(
 				static_cast<size_t>(list->GetTop()));
 		}
@@ -242,8 +242,8 @@ void Menu::ProcessMenu()
 	case MENU_RA_LEADERBOARDS_VIEW:
 		if (focus >= MENU_RA_LEADERBOARD_ITEM_MIN &&
 			focus < MENU_RA_DETAIL_LINE_MIN) {
-			app->SelectRaLeaderboardMenuItem(
-				static_cast<size_t>(focus - MENU_RA_LEADERBOARD_ITEM_MIN));
+			app->SelectRaLeaderboardMenuItemById(
+				static_cast<uint32_t>(list->GetUser(focus)));
 			app->SetRaMenuFirstVisibleItem(
 				static_cast<size_t>(list->GetTop()));
 		}
@@ -804,7 +804,7 @@ void Menu::EnterRaLibrary(int focus)
 			MENU_RA_LIBRARY_ITEM_MIN); ++index) {
 		const int id = MENU_RA_LIBRARY_ITEM_MIN + static_cast<int>(index);
 		list->AddButton(snapshot.games[index].title.c_str(), id);
-		list->SetUser(id, static_cast<Uint32>(index));
+		list->SetUser(id, static_cast<Uint64>(snapshot.games[index].game_id));
 	}
 	if (snapshot.games.empty()) list->AddButton("No library games", MENU_RA_LIBRARY_ITEM_MIN);
 	list->SetFocus(MENU_RA_LIBRARY_ITEM_MIN + focus);
@@ -828,7 +828,7 @@ void Menu::EnterRaAchievements(int focus)
 			MENU_RA_ACHIEVEMENT_ITEM_MIN); ++index) {
 		const int id = MENU_RA_ACHIEVEMENT_ITEM_MIN + static_cast<int>(index);
 		list->AddButton(snapshot.achievements[index].title.c_str(), id);
-		list->SetUser(id, static_cast<Uint32>(index));
+		list->SetUser(id, static_cast<Uint64>(snapshot.achievements[index].id));
 	}
 	if (snapshot.achievements.empty()) list->AddButton("No achievements", MENU_RA_ACHIEVEMENT_ITEM_MIN);
 	list->SetFocus(MENU_RA_ACHIEVEMENT_ITEM_MIN + focus);
@@ -857,7 +857,7 @@ void Menu::EnterRaLeaderboards(int focus)
 			MENU_RA_LEADERBOARD_ITEM_MIN); ++index) {
 		const int id = MENU_RA_LEADERBOARD_ITEM_MIN + static_cast<int>(index);
 		list->AddButton(snapshot.leaderboards[index].title.c_str(), id);
-		list->SetUser(id, static_cast<Uint32>(index));
+		list->SetUser(id, static_cast<Uint64>(snapshot.leaderboards[index].id));
 	}
 	if (snapshot.leaderboards.empty()) list->AddButton("No leaderboards", MENU_RA_LEADERBOARD_ITEM_MIN);
 	list->SetFocus(MENU_RA_LEADERBOARD_ITEM_MIN + focus);
@@ -2505,34 +2505,22 @@ void Menu::CmdRa(int id)
 
 	if (id >= MENU_RA_LIBRARY_ITEM_MIN &&
 		id < MENU_RA_ACHIEVEMENT_ITEM_MIN) {
-		const size_t index = static_cast<size_t>(id - MENU_RA_LIBRARY_ITEM_MIN);
-		const Xm8Ra::RaOverlayLibraryListSnapshot snapshot =
-			app->GetRaLibraryMenuSnapshot();
-		if (index < snapshot.games.size()) {
-			app->SelectRaLibraryMenuItem(index);
-			if (app->OpenRaLibraryMenuDetail()) EnterRaGameDetail();
-		}
+		app->SelectRaLibraryMenuItemById(
+			static_cast<int64_t>(list->GetUser(id)));
+		if (app->OpenRaLibraryMenuDetail()) EnterRaGameDetail();
 		return;
 	}
 	if (id >= MENU_RA_ACHIEVEMENT_ITEM_MIN &&
 		id < MENU_RA_LEADERBOARD_ITEM_MIN) {
-		const size_t index = static_cast<size_t>(id - MENU_RA_ACHIEVEMENT_ITEM_MIN);
-		const Xm8Ra::RaOverlayAchievementListSnapshot snapshot =
-			app->GetRaAchievementsMenuSnapshot();
-		if (index < snapshot.achievements.size()) {
-			app->SelectRaAchievementMenuItem(index);
-			if (app->OpenRaAchievementMenuDetail()) EnterRaAchievementDetail();
-		}
+		app->SelectRaAchievementMenuItemById(
+			static_cast<uint32_t>(list->GetUser(id)));
+		if (app->OpenRaAchievementMenuDetail()) EnterRaAchievementDetail();
 		return;
 	}
 	if (id >= MENU_RA_LEADERBOARD_ITEM_MIN &&
 		id < MENU_RA_DETAIL_LINE_MIN) {
-		const size_t index = static_cast<size_t>(id - MENU_RA_LEADERBOARD_ITEM_MIN);
-		const Xm8Ra::RaOverlayLeaderboardListSnapshot snapshot =
-			app->GetRaLeaderboardsMenuSnapshot();
-		if (index < snapshot.leaderboards.size()) {
-			app->SelectRaLeaderboardMenuItem(index);
-		}
+		app->SelectRaLeaderboardMenuItemById(
+			static_cast<uint32_t>(list->GetUser(id)));
 		return;
 	}
 	if (id >= MENU_RA_DETAIL_LINE_MIN) {
@@ -3510,7 +3498,7 @@ void Menu::CmdFile(int id)
 	strcpy(file_target, file_dir);
 
 	// directory ?
-	if (platform->IsDir(list->GetUser(id)) == true) {
+	if (platform->IsDir(static_cast<Uint32>(list->GetUser(id))) == true) {
 #ifdef __ANDROID__
 		if (Android_ChDir(file_target, name) != 0) {
 			MakeExpect(name);
@@ -3564,21 +3552,10 @@ void Menu::CmdFile(int id)
 	case MENU_DRIVE2_BOTH:
 	{
 		std::string error;
-		// drive 1
-		diskmgr[0]->Close();
-		ret = app->OpenDiskFromMenu({file_target, 0, 0}, &error);
 		drive2 = false;
-
-		// drive 2
-		if (file_id != MENU_DRIVE1_OPEN) {
-			diskmgr[1]->Close();
-			if (ret == true) {
-				if (diskmgr[0]->GetBanks() > 1) {
-					drive2 = app->OpenDiskFromMenu(
-						{file_target, 1, 1}, &error);
-				}
-			}
-		}
+		ret = file_id == MENU_DRIVE1_OPEN ?
+			app->OpenDiskFromMenu({file_target, 0, 0}, &error) :
+			app->OpenDiskPairFromMenu(file_target, &drive2, &error);
 
 		if (ret == true) {
 			if (file_id == MENU_DRIVE2_BOTH) {
@@ -3600,7 +3577,6 @@ void Menu::CmdFile(int id)
 	{
 		std::string error;
 		// drive 2
-		diskmgr[1]->Close();
 		ret = app->OpenDiskFromMenu({file_target, 1, 0}, &error);
 
 		if (ret == true) {

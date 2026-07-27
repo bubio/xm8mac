@@ -63,9 +63,9 @@ public:
 										// get slider state
 	void SetSlider(int id, int current);
 										// set slider state
-	Uint32 GetUser(int id);
+	Uint64 GetUser(int id);
 										// get user info
-	void SetUser(int id, Uint32 user);
+	void SetUser(int id, Uint64 user);
 										// set user info
 	int GetID();
 										// get menu id

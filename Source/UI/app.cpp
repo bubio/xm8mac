@@ -43,10 +43,11 @@
 #include "diskmgr.h"
 #include "tapemgr.h"
 #include "clidisk.h"
+#include "ra_media_change_policy.h"
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_build_info.h"
+#include "ra_leaderboard_fetch_policy.h"
 #include "ra_media_probe.h"
-#include "ra_media_change_policy.h"
 #include "ra_platform.h"
 #include "ra_paths.h"
 #include "ra_session_policy.h"
@@ -514,6 +515,10 @@ App::App()
 	ra_media_change_restore_failed = false;
 	ra_media_change_target = {"", 0, 0};
 	ra_media_change_old_bank = 0;
+	ra_media_change_open_pair = false;
+	ra_media_change_old_drive2_open = false;
+	ra_media_change_old_drive2_bank = 0;
+	ra_media_change_target_banks = 0;
 #endif
 
 	// flags
@@ -954,7 +959,8 @@ bool App::ProbeDisk(const DiskSpec& spec, int *banks, std::string *error)
 // OpenDiskFromUser()
 // validate and open one disk
 //
-bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
+bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
+	bool open_pair)
 {
 	DiskSpec open_spec = spec;
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
@@ -971,21 +977,85 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error)
 		return false;
 	}
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	if (ra_media_change) {
-		return BeginRaMediaChange(open_spec, ra_hash_to_identify, error);
+	const Xm8Ra::RaMediaMountPlan mount_plan = Xm8Ra::PlanRaMediaMount(
+		ra_media_change, open_pair, banks);
+	if (mount_plan.wait_for_ra_approval) {
+		return BeginRaMediaChange(open_spec, ra_hash_to_identify,
+			open_pair, banks, error);
 	}
+#else
+	const Xm8Ra::RaMediaMountPlan mount_plan = Xm8Ra::PlanRaMediaMount(
+		false, open_pair, banks);
 #endif
+	struct DiskSnapshot {
+		bool open = false;
+		std::string path;
+		int bank = 0;
+	};
+	DiskSnapshot snapshots[MAX_DRIVE];
+	const int first_drive = open_pair ? 0 : open_spec.drive;
+	const int last_drive = open_pair ? MAX_DRIVE - 1 : open_spec.drive;
+	for (int drive = first_drive; drive <= last_drive; ++drive) {
+		snapshots[drive].open = diskmgr[drive]->IsOpen();
+		if (snapshots[drive].open) {
+			snapshots[drive].path = diskmgr[drive]->GetPath();
+			snapshots[drive].bank = diskmgr[drive]->GetBank();
+		}
+	}
+	auto restore = [this, &snapshots, first_drive, last_drive]() {
+		bool restored = true;
+		for (int drive = first_drive; drive <= last_drive; ++drive) {
+			if (snapshots[drive].open) {
+				restored = diskmgr[drive]->Open(
+					snapshots[drive].path.c_str(), snapshots[drive].bank) &&
+					restored;
+			}
+			else {
+				diskmgr[drive]->Close();
+			}
+		}
+		return restored;
+	};
 	if (diskmgr[open_spec.drive]->Open(open_spec.path.c_str(),
 		open_spec.bank) == false) {
 		std::ostringstream message;
 		message << "drive " << open_spec.drive << ": failed to insert D88: "
 			<< open_spec.path;
+		if (!restore()) message << "; previous disk could not be restored";
 		*error = message.str();
 		return false;
 	}
+	if (open_pair) {
+		if (open_spec.drive != 0) {
+			*error = "paired disk open requires Drive 1";
+			if (!restore()) *error += "; previous disks could not be restored";
+			return false;
+		}
+		if (mount_plan.drive2_action_after_approval ==
+			Xm8Ra::RaDrive2MountAction::OpenBank1) {
+			if (!diskmgr[1]->Open(open_spec.path.c_str(), 1)) {
+				*error = "drive 1: failed to insert D88 bank 1";
+				if (!restore())
+					*error += "; previous disks could not be restored";
+				return false;
+			}
+		}
+		else if (mount_plan.drive2_action_after_approval ==
+			Xm8Ra::RaDrive2MountAction::Close) {
+			diskmgr[1]->Close();
+		}
+	}
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	if (ra_mode_enabled &&
+	if (ra_mode_enabled && !open_pair &&
 		!RememberRaLaunchDriveForMountedDisk(open_spec.drive, error)) {
+		if (!restore() && error != NULL)
+			*error += "; previous disk could not be restored";
+		return false;
+	}
+	if (ra_mode_enabled && open_pair &&
+		!RememberRaLaunchPairForMountedDisks(error)) {
+		if (!restore() && error != NULL)
+			*error += "; previous disks could not be restored";
 		return false;
 	}
 	if (!ra_hash_to_identify.empty()) {
@@ -1011,6 +1081,25 @@ bool App::OpenDiskFromMenu(const DiskSpec& spec, std::string *error)
 		return false;
 	}
 	RememberDiskOpenDir(spec.path.c_str());
+	return true;
+}
+
+//
+// OpenDiskPairFromMenu()
+// open bank 0/1 without exposing a half-applied two-drive state
+//
+bool App::OpenDiskPairFromMenu(const std::string& path, bool *drive2_open,
+	std::string *error)
+{
+	int banks = 0;
+	if (!ProbeDisk({path, 0, 0}, &banks, error)) {
+		return false;
+	}
+	if (!OpenDiskFromUser({path, 0, 0}, error, true)) {
+		return false;
+	}
+	if (drive2_open != NULL) *drive2_open = banks > 1;
+	RememberDiskOpenDir(path.c_str());
 	return true;
 }
 
@@ -1074,10 +1163,17 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 			return false;
 		}
 		if (action == Xm8Ra::RaMediaChangeAction::RejectDifferentGame) {
-			*error = "RA media belongs to another game; restart required";
-			return false;
+			// This is a title change, not an in-game media swap. Open it as a
+			// fresh launch below; OpenDiskFromUser will cold-reset the VM and
+			// replace the current RA session after the disk has mounted.
+			if (ra_hash_to_identify != NULL) {
+				*ra_hash_to_identify = ra_hash;
+			}
+			if (ra_game_to_identify != NULL) {
+				*ra_game_to_identify = imported.record.game_id;
+			}
 		}
-		if (action == Xm8Ra::RaMediaChangeAction::BeginSameGameChange) {
+		else if (action == Xm8Ra::RaMediaChangeAction::BeginSameGameChange) {
 			if (ra_media_change != NULL) {
 				*ra_media_change = true;
 			}
@@ -1103,7 +1199,8 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 // ask RA to accept a same-game Drive 1 media hash before changing the VM
 //
 bool App::BeginRaMediaChange(const DiskSpec& target,
-	const std::string& hash, std::string *error)
+	const std::string& hash, bool open_pair, int target_banks,
+	std::string *error)
 {
 	if (ra_service == NULL || diskmgr[0] == NULL ||
 		!diskmgr[0]->IsOpen() || target.drive != 0 || hash.empty()) {
@@ -1126,6 +1223,14 @@ bool App::BeginRaMediaChange(const DiskSpec& target,
 	ra_media_change_old_hash = ra_loaded_game_hash;
 	ra_media_change_old_path = diskmgr[0]->GetPath();
 	ra_media_change_old_bank = diskmgr[0]->GetBank();
+	ra_media_change_open_pair = open_pair;
+	ra_media_change_target_banks = target_banks;
+	ra_media_change_old_drive2_open = open_pair && diskmgr[1] != NULL &&
+		diskmgr[1]->IsOpen();
+	if (ra_media_change_old_drive2_open) {
+		ra_media_change_old_drive2_path = diskmgr[1]->GetPath();
+		ra_media_change_old_drive2_bank = diskmgr[1]->GetBank();
+	}
 	if (!ra_service->BeginChangeMediaByHash(hash, error)) {
 		ra_service->ClearMediaChangeResult();
 		ClearRaMediaChangeState();
@@ -1178,12 +1283,29 @@ void App::ProcessRaMediaChange()
 	}
 
 	std::string vm_error;
+	const Xm8Ra::RaMediaMountPlan mount_plan = Xm8Ra::PlanRaMediaMount(false,
+		ra_media_change_open_pair, ra_media_change_target_banks);
 	bool vm_changed = diskmgr[0]->Open(ra_media_change_target.path.c_str(),
 		ra_media_change_target.bank);
 	if (!vm_changed) {
 		vm_error = "VM rejected changed media";
 	}
-	else if (!RememberRaLaunchDriveForMountedDisk(0, &vm_error)) {
+	else if (mount_plan.drive2_action_after_approval ==
+			Xm8Ra::RaDrive2MountAction::OpenBank1 &&
+		!diskmgr[1]->Open(ra_media_change_target.path.c_str(), 1)) {
+		vm_error = "VM rejected changed Drive 2 media";
+		vm_changed = false;
+	}
+	else if (mount_plan.drive2_action_after_approval ==
+		Xm8Ra::RaDrive2MountAction::Close) {
+		diskmgr[1]->Close();
+	}
+	if (vm_changed && ra_media_change_open_pair &&
+		!RememberRaLaunchPairForMountedDisks(&vm_error)) {
+		vm_changed = false;
+	}
+	else if (vm_changed && !ra_media_change_open_pair &&
+		!RememberRaLaunchDriveForMountedDisk(0, &vm_error)) {
 		vm_changed = false;
 	}
 
@@ -1194,10 +1316,23 @@ void App::ProcessRaMediaChange()
 		return;
 	}
 
-	const bool restored = !ra_media_change_old_path.empty() &&
+	const bool drive1_restored = !ra_media_change_old_path.empty() &&
 		diskmgr[0]->Open(ra_media_change_old_path.c_str(),
 			ra_media_change_old_bank);
-	ra_media_change_restore_failed = !restored;
+	bool drive2_restored = true;
+	if (ra_media_change_open_pair) {
+		if (ra_media_change_old_drive2_open) {
+			drive2_restored = diskmgr[1]->Open(
+				ra_media_change_old_drive2_path.c_str(),
+				ra_media_change_old_drive2_bank);
+		}
+		else {
+			diskmgr[1]->Close();
+		}
+	}
+	ra_media_change_restore_failed =
+		!Xm8Ra::RaMediaRollbackRestoredAllDrives(ra_media_change_open_pair,
+			drive1_restored, drive2_restored);
 	ra_media_change_rollback = true;
 	ra_service->ClearMediaChangeResult();
 	std::string rollback_error;
@@ -1221,6 +1356,11 @@ void App::ClearRaMediaChangeState()
 	ra_media_change_old_hash.clear();
 	ra_media_change_old_path.clear();
 	ra_media_change_old_bank = 0;
+	ra_media_change_open_pair = false;
+	ra_media_change_old_drive2_open = false;
+	ra_media_change_old_drive2_path.clear();
+	ra_media_change_old_drive2_bank = 0;
+	ra_media_change_target_banks = 0;
 }
 
 void App::SetRaMenuStatusAfterSessionStop()
@@ -1330,14 +1470,21 @@ void App::ProcessRaLibrarySync()
 		if (ra_library->ApplyLibrarySync(payload, &error)) {
 			if (ra_overlay != NULL &&
 				ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Library) {
-				int focus = 0;
-				if (app_menu && menu != NULL && menu->IsRaContentMenu()) {
-					focus = menu->GetRaContentSelection() -
-						MENU_RA_LIBRARY_ITEM_MIN;
+				const Xm8Ra::RaOverlayLibraryListSnapshot old_snapshot =
+					ra_overlay->LibraryListSnapshot();
+				int64_t selected_id = 0;
+				if (old_snapshot.selected_index < old_snapshot.games.size()) {
+					selected_id = old_snapshot.games[
+						old_snapshot.selected_index].game_id;
 				}
-				ra_overlay->OpenLibrary(MakeRaLibraryOverlaySnapshot());
+				const Xm8Ra::RaOverlayLibraryListSnapshot new_snapshot =
+					MakeRaLibraryOverlaySnapshot();
+				ra_overlay->OpenLibrary(new_snapshot);
+				const size_t focus = Xm8Ra::FindRaLibraryItemIndex(
+					new_snapshot, selected_id);
+				ra_overlay->SelectLibraryIndex(focus);
 				if (app_menu && menu != NULL)
-					menu->EnterRaLibrary(focus < 0 ? 0 : focus);
+					menu->EnterRaLibrary(static_cast<int>(focus));
 			}
 		}
 		else {
@@ -1483,6 +1630,62 @@ bool App::RememberRaLaunchDriveForMountedDisk(int drive, std::string *error)
 	slot.media_md5 = media.md5;
 	slot.bank_index = bank;
 	slot.is_ra_anchor = is_anchor;
+	return ra_library->SaveLaunchProfile(profile, error);
+}
+
+//
+// RememberRaLaunchPairForMountedDisks()
+// persist Drive 1 and Drive 2 with one atomic launch-profile replacement
+//
+bool App::RememberRaLaunchPairForMountedDisks(std::string *error)
+{
+	if (ra_library == NULL || diskmgr[0] == NULL ||
+		!diskmgr[0]->IsOpen()) {
+		return true;
+	}
+
+	Xm8Ra::D88MediaInfo anchor_media;
+	if (!Xm8Ra::ProbeD88File(diskmgr[0]->GetPath(), &anchor_media, error)) {
+		return false;
+	}
+	Xm8Ra::MediaRecord anchor_record;
+	std::string find_error;
+	if (!ra_library->FindMedia(anchor_media.md5, &anchor_record, &find_error)) {
+		if (!find_error.empty() && error != NULL) *error = find_error;
+		return find_error.empty();
+	}
+
+	Xm8Ra::LaunchProfile profile;
+	if (!ra_library->LoadLaunchProfile(anchor_record.game_id, &profile, error)) {
+		return false;
+	}
+	profile.drives[0].assigned = true;
+	profile.drives[0].media_md5 = anchor_media.md5;
+	profile.drives[0].bank_index = diskmgr[0]->GetBank();
+	profile.drives[0].is_ra_anchor = true;
+	profile.drives[1] = Xm8Ra::LaunchDrive();
+
+	if (diskmgr[1] != NULL && diskmgr[1]->IsOpen()) {
+		Xm8Ra::D88MediaInfo drive2_media;
+		if (!Xm8Ra::ProbeD88File(diskmgr[1]->GetPath(), &drive2_media, error)) {
+			return false;
+		}
+		Xm8Ra::MediaRecord drive2_record;
+		find_error.clear();
+		if (!ra_library->FindMedia(drive2_media.md5, &drive2_record,
+			&find_error)) {
+			if (!find_error.empty() && error != NULL) *error = find_error;
+			return find_error.empty() ?
+				ra_library->SaveLaunchProfile(profile, error) : false;
+		}
+		if (drive2_record.game_id == anchor_record.game_id) {
+			profile.drives[1].assigned = true;
+			profile.drives[1].media_md5 = drive2_media.md5;
+			profile.drives[1].bank_index = diskmgr[1]->GetBank();
+			profile.drives[1].is_ra_anchor = false;
+		}
+	}
+
 	return ra_library->SaveLaunchProfile(profile, error);
 }
 
@@ -6953,13 +7156,21 @@ void App::RefreshRaAchievementsOverlay()
 {
 	if (ra_overlay != NULL &&
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Achievements) {
-		int focus = 0;
-		if (app_menu && menu != NULL && menu->IsRaContentMenu()) {
-			focus = menu->GetRaContentSelection() - MENU_RA_ACHIEVEMENT_ITEM_MIN;
+		const Xm8Ra::RaOverlayAchievementListSnapshot old_snapshot =
+			ra_overlay->AchievementListSnapshot();
+		uint32_t selected_id = 0;
+		if (old_snapshot.selected_index < old_snapshot.achievements.size()) {
+			selected_id = old_snapshot.achievements[
+				old_snapshot.selected_index].id;
 		}
-		ra_overlay->OpenAchievements(MakeRaAchievementsOverlaySnapshot());
+		const Xm8Ra::RaOverlayAchievementListSnapshot new_snapshot =
+			MakeRaAchievementsOverlaySnapshot();
+		ra_overlay->OpenAchievements(new_snapshot);
+		const size_t focus = Xm8Ra::FindRaAchievementItemIndex(
+			new_snapshot, selected_id);
+		ra_overlay->SelectAchievementIndex(focus);
 		if (app_menu && menu != NULL)
-			menu->EnterRaAchievements(focus < 0 ? 0 : focus);
+			menu->EnterRaAchievements(static_cast<int>(focus));
 	}
 }
 
@@ -6971,13 +7182,21 @@ void App::RefreshRaLeaderboardsOverlay()
 {
 	if (ra_overlay != NULL &&
 		ra_overlay->Screen() == Xm8Ra::RaOverlayScreen::Leaderboards) {
-		int focus = 0;
-		if (app_menu && menu != NULL && menu->IsRaContentMenu()) {
-			focus = menu->GetRaContentSelection() - MENU_RA_LEADERBOARD_ITEM_MIN;
+		const Xm8Ra::RaOverlayLeaderboardListSnapshot old_snapshot =
+			ra_overlay->LeaderboardListSnapshot();
+		uint32_t selected_id = 0;
+		if (old_snapshot.selected_index < old_snapshot.leaderboards.size()) {
+			selected_id = old_snapshot.leaderboards[
+				old_snapshot.selected_index].id;
 		}
-		ra_overlay->UpdateLeaderboards(MakeRaLeaderboardsOverlaySnapshot());
+		const Xm8Ra::RaOverlayLeaderboardListSnapshot new_snapshot =
+			MakeRaLeaderboardsOverlaySnapshot();
+		ra_overlay->UpdateLeaderboards(new_snapshot);
+		const size_t focus = Xm8Ra::FindRaLeaderboardItemIndex(
+			new_snapshot, selected_id);
+		ra_overlay->SelectLeaderboardIndex(focus);
 		if (app_menu && menu != NULL)
-			menu->EnterRaLeaderboards(focus < 0 ? 0 : focus);
+			menu->EnterRaLeaderboards(static_cast<int>(focus));
 	}
 }
 
@@ -7000,18 +7219,16 @@ void App::EnsureRaLeaderboardEntriesForSelection()
 
 	const uint32_t leaderboard_id =
 		leaderboards.leaderboards[leaderboards.selected_index].id;
-	if (leaderboard_id == 0 ||
-		ra_leaderboard_scoreboards.find(leaderboard_id) !=
-			ra_leaderboard_scoreboards.end()) {
-		return;
-	}
-
 	const Xm8Ra::RaLeaderboardEntriesSnapshot entries =
 		ra_service->LeaderboardEntriesSnapshot();
-	if (entries.leaderboard_id == leaderboard_id &&
-		(entries.state == Xm8Ra::RaLeaderboardEntriesState::FetchPending ||
-		 entries.state == Xm8Ra::RaLeaderboardEntriesState::Loaded ||
-		 entries.state == Xm8Ra::RaLeaderboardEntriesState::Failed)) {
+	const bool request_known =
+		entries.state == Xm8Ra::RaLeaderboardEntriesState::FetchPending ||
+		entries.state == Xm8Ra::RaLeaderboardEntriesState::Loaded ||
+		entries.state == Xm8Ra::RaLeaderboardEntriesState::Failed;
+	if (!Xm8Ra::ShouldFetchLeaderboardEntries(leaderboard_id,
+		ra_leaderboard_scoreboards.find(leaderboard_id) !=
+			ra_leaderboard_scoreboards.end(), entries.leaderboard_id,
+		request_known)) {
 		return;
 	}
 
@@ -7058,6 +7275,16 @@ void App::ShowRaLibraryMenu()
 void App::SelectRaLibraryMenuItem(size_t index)
 {
 	if (ra_overlay != NULL) ra_overlay->SelectLibraryIndex(index);
+}
+
+void App::SelectRaLibraryMenuItemById(int64_t game_id)
+{
+	if (ra_overlay == NULL) return;
+	const Xm8Ra::RaOverlayLibraryListSnapshot snapshot =
+		ra_overlay->LibraryListSnapshot();
+	const size_t index = Xm8Ra::FindRaLibraryItemIndex(snapshot, game_id);
+	if (index < snapshot.games.size() && snapshot.games[index].game_id == game_id)
+		ra_overlay->SelectLibraryIndex(index);
 }
 
 bool App::OpenRaLibraryMenuDetail()
@@ -7254,6 +7481,18 @@ void App::SelectRaAchievementMenuItem(size_t index)
 	if (ra_overlay != NULL) ra_overlay->SelectAchievementIndex(index);
 }
 
+void App::SelectRaAchievementMenuItemById(uint32_t achievement_id)
+{
+	if (ra_overlay == NULL) return;
+	const Xm8Ra::RaOverlayAchievementListSnapshot snapshot =
+		ra_overlay->AchievementListSnapshot();
+	const size_t index = Xm8Ra::FindRaAchievementItemIndex(snapshot,
+		achievement_id);
+	if (index < snapshot.achievements.size() &&
+		snapshot.achievements[index].id == achievement_id)
+		ra_overlay->SelectAchievementIndex(index);
+}
+
 bool App::OpenRaAchievementMenuDetail()
 {
 	return ra_overlay != NULL && ra_overlay->OpenSelectedAchievementDetail();
@@ -7302,7 +7541,33 @@ void App::ShowRaLeaderboardsMenu()
 
 void App::SelectRaLeaderboardMenuItem(size_t index)
 {
-	if (ra_overlay != NULL) ra_overlay->SelectLeaderboardIndex(index);
+	if (ra_overlay == NULL) return;
+	const Xm8Ra::RaOverlayLeaderboardListSnapshot before =
+		ra_overlay->LeaderboardListSnapshot();
+	uint32_t old_id = 0;
+	if (before.selected_index < before.leaderboards.size()) {
+		old_id = before.leaderboards[before.selected_index].id;
+	}
+	ra_overlay->SelectLeaderboardIndex(index);
+	const Xm8Ra::RaOverlayLeaderboardListSnapshot after =
+		ra_overlay->LeaderboardListSnapshot();
+	if (after.selected_index < after.leaderboards.size() &&
+		Xm8Ra::ShouldCheckLeaderboardEntriesAfterSelection(old_id,
+			after.leaderboards[after.selected_index].id)) {
+		EnsureRaLeaderboardEntriesForSelection();
+	}
+}
+
+void App::SelectRaLeaderboardMenuItemById(uint32_t leaderboard_id)
+{
+	if (ra_overlay == NULL) return;
+	const Xm8Ra::RaOverlayLeaderboardListSnapshot snapshot =
+		ra_overlay->LeaderboardListSnapshot();
+	const size_t index = Xm8Ra::FindRaLeaderboardItemIndex(snapshot,
+		leaderboard_id);
+	if (index < snapshot.leaderboards.size() &&
+		snapshot.leaderboards[index].id == leaderboard_id)
+		SelectRaLeaderboardMenuItem(index);
 }
 
 void App::SetRaMenuFirstVisibleItem(size_t index)

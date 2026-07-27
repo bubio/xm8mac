@@ -626,7 +626,7 @@ void MenuList::SetSlider(int id, int current)
 // GetUser()
 // get user info
 //
-Uint32 MenuList::GetUser(int id)
+Uint64 MenuList::GetUser(int id)
 {
 	MenuItem *item;
 
@@ -640,7 +640,7 @@ Uint32 MenuList::GetUser(int id)
 // SetUser()
 // set user info
 //
-void MenuList::SetUser(int id, Uint32 user)
+void MenuList::SetUser(int id, Uint64 user)
 {
 	MenuItem *item;
 

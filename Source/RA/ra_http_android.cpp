@@ -1,5 +1,7 @@
 #include "ra_http_android.h"
 
+#include "ra_callback_lifetime.h"
+
 #include "xm8jni.h"
 
 #include <jni.h>
@@ -7,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <iterator>
+#include <memory>
 #include <unordered_map>
 #include <mutex>
 #include <unordered_set>
@@ -21,24 +24,29 @@ std::mutex g_client_mutex;
 std::atomic<uint64_t> g_next_transport_id(1);
 
 struct AndroidRequestOwner {
-	RaAndroidHttpClient *client = nullptr;
+	std::shared_ptr<RaCallbackLifetime> lifetime;
 	uint64_t request_id = 0;
 };
 std::unordered_map<uint64_t, AndroidRequestOwner> g_requests;
 
 class RaAndroidHttpClient final : public RaHttpClient {
 public:
-	explicit RaAndroidHttpClient(const std::string& user_agent) : user_agent_(user_agent)
+	explicit RaAndroidHttpClient(const std::string& user_agent) :
+		user_agent_(user_agent), lifetime_(new RaCallbackLifetime(this))
 	{
 	}
 
 	~RaAndroidHttpClient() override
 	{
 		CancelAll();
-		std::lock_guard<std::mutex> lock(g_client_mutex);
-		for (auto it = g_requests.begin(); it != g_requests.end();) {
-			it = it->second.client == this ? g_requests.erase(it) : std::next(it);
+		{
+			std::lock_guard<std::mutex> lock(g_client_mutex);
+			for (auto it = g_requests.begin(); it != g_requests.end();) {
+				it = it->second.lifetime == lifetime_ ?
+					g_requests.erase(it) : std::next(it);
+			}
 		}
+		lifetime_->CloseAndWait();
 	}
 
 	void Send(const RaHttpRequest& request) override
@@ -59,7 +67,7 @@ public:
 		const uint64_t transport_id = g_next_transport_id.fetch_add(1);
 		{
 			std::lock_guard<std::mutex> lock(g_client_mutex);
-			g_requests[transport_id] = { this, request.request_id };
+			g_requests[transport_id] = { lifetime_, request.request_id };
 		}
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
@@ -115,7 +123,8 @@ public:
 		}
 		std::lock_guard<std::mutex> client_lock(g_client_mutex);
 		for (auto it = g_requests.begin(); it != g_requests.end();) {
-			it = it->second.client == this && it->second.request_id == request_id ?
+			it = it->second.lifetime == lifetime_ &&
+				it->second.request_id == request_id ?
 				g_requests.erase(it) : std::next(it);
 		}
 	}
@@ -138,6 +147,7 @@ private:
 	}
 
 	std::string user_agent_;
+	std::shared_ptr<RaCallbackLifetime> lifetime_;
 	std::mutex mutex_;
 	std::unordered_set<uint64_t> known_;
 	std::unordered_map<uint64_t, uint64_t> transport_by_request_;
@@ -165,7 +175,10 @@ extern "C" JNIEXPORT void JNICALL Java_net_retropc_pi_XM8_nativeRaHttpComplete(
 		owner = found->second;
 		Xm8Ra::g_requests.erase(found);
 	}
-	Xm8Ra::RaAndroidHttpClient *client = owner.client;
+	if (!owner.lifetime) return;
+	Xm8Ra::RaCallbackLifetime::Lease lease = owner.lifetime->TryAcquire();
+	Xm8Ra::RaAndroidHttpClient *client =
+		lease.Owner<Xm8Ra::RaAndroidHttpClient>();
 	if (client == nullptr) return;
 	std::string type;
 	std::string message;

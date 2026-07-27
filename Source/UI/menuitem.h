@@ -89,9 +89,9 @@ public:
 										// get name
 	void SetName(const char *name);
 										// set name
-	Uint32 GetUser();
+	Uint64 GetUser();
 										// get user data
-	void SetUser(Uint32 user);
+	void SetUser(Uint64 user);
 										// set user data
 	bool GetRadio();
 										// get radio state
@@ -151,7 +151,7 @@ private:
 										// item unit
 	int item_cur;
 										// item current
-	Uint32 item_user;
+	Uint64 item_user;
 										// item user data
 	Uint32 tick_focus;
 										// tick at SetFocus()

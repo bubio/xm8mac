@@ -12,6 +12,33 @@
 
 namespace Xm8Ra {
 
+size_t FindRaLibraryItemIndex(const RaOverlayLibraryListSnapshot& snapshot,
+	int64_t game_id)
+{
+	for (size_t index = 0; index < snapshot.games.size(); ++index) {
+		if (snapshot.games[index].game_id == game_id) return index;
+	}
+	return 0;
+}
+
+size_t FindRaAchievementItemIndex(
+	const RaOverlayAchievementListSnapshot& snapshot, uint32_t achievement_id)
+{
+	for (size_t index = 0; index < snapshot.achievements.size(); ++index) {
+		if (snapshot.achievements[index].id == achievement_id) return index;
+	}
+	return 0;
+}
+
+size_t FindRaLeaderboardItemIndex(
+	const RaOverlayLeaderboardListSnapshot& snapshot, uint32_t leaderboard_id)
+{
+	for (size_t index = 0; index < snapshot.leaderboards.size(); ++index) {
+		if (snapshot.leaderboards[index].id == leaderboard_id) return index;
+	}
+	return 0;
+}
+
 namespace {
 
 const size_t kMaxUsernameBytes = 256;

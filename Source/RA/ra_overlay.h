@@ -215,6 +215,13 @@ struct RaOverlayLeaderboardListSnapshot {
 	std::vector<RaOverlayLeaderboardItem> leaderboards;
 };
 
+size_t FindRaLibraryItemIndex(const RaOverlayLibraryListSnapshot& snapshot,
+	int64_t game_id);
+size_t FindRaAchievementItemIndex(
+	const RaOverlayAchievementListSnapshot& snapshot, uint32_t achievement_id);
+size_t FindRaLeaderboardItemIndex(
+	const RaOverlayLeaderboardListSnapshot& snapshot, uint32_t leaderboard_id);
+
 class RaOverlay {
 public:
 	void Clear();

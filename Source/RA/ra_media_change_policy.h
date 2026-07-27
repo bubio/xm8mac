@@ -13,6 +13,36 @@ enum class RaMediaChangeAction {
 	RejectDifferentGame,
 };
 
+enum class RaDrive2MountAction {
+	Unchanged,
+	Close,
+	OpenBank1,
+};
+
+struct RaMediaMountPlan {
+	bool wait_for_ra_approval = false;
+	RaDrive2MountAction drive2_action_after_approval =
+		RaDrive2MountAction::Unchanged;
+};
+
+inline RaMediaMountPlan PlanRaMediaMount(bool same_game_change,
+	bool open_pair, int target_banks)
+{
+	RaMediaMountPlan plan;
+	plan.wait_for_ra_approval = same_game_change;
+	if (open_pair) {
+		plan.drive2_action_after_approval = target_banks > 1 ?
+			RaDrive2MountAction::OpenBank1 : RaDrive2MountAction::Close;
+	}
+	return plan;
+}
+
+inline bool RaMediaRollbackRestoredAllDrives(bool open_pair,
+	bool drive1_restored, bool drive2_restored)
+{
+	return drive1_restored && (!open_pair || drive2_restored);
+}
+
 inline RaMediaChangeAction ClassifyMediaChange(int drive,
 	bool game_loaded, bool change_pending, bool same_working_media,
 	int64_t active_library_game_id,

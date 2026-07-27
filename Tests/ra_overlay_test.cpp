@@ -1,6 +1,8 @@
 #include "ra_overlay.h"
 
+#include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <string>
 
 int main()
@@ -218,6 +220,11 @@ int main()
 		extra.description = "Extra description";
 		achievements.achievements.push_back(extra);
 	}
+	Xm8Ra::RaOverlayAchievementListSnapshot reordered_achievements =
+		achievements;
+	std::swap(reordered_achievements.achievements[1],
+		reordered_achievements.achievements[7]);
+	assert(Xm8Ra::FindRaAchievementItemIndex(reordered_achievements, 100) == 7);
 	overlay.OpenAchievements(achievements);
 	assert(overlay.IsBlocking());
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Achievements);
@@ -337,6 +344,11 @@ int main()
 		game.core_unlocked = 4;
 		library.games.push_back(game);
 	}
+	library.games[8].game_id = INT64_C(0x100000008);
+	Xm8Ra::RaOverlayLibraryListSnapshot reordered_library = library;
+	std::swap(reordered_library.games[2], reordered_library.games[8]);
+	assert(Xm8Ra::FindRaLibraryItemIndex(reordered_library,
+		INT64_C(0x100000008)) == 2);
 	overlay.OpenLibrary(library);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Library);
 	assert(overlay.LibraryListSnapshot().games.size() == 9);
@@ -446,6 +458,11 @@ int main()
 		leaderboard.bucket_label = i == 0 ? "Active" : "Inactive";
 		leaderboards.leaderboards.push_back(leaderboard);
 	}
+	Xm8Ra::RaOverlayLeaderboardListSnapshot reordered_leaderboards =
+		leaderboards;
+	std::swap(reordered_leaderboards.leaderboards[1],
+		reordered_leaderboards.leaderboards[6]);
+	assert(Xm8Ra::FindRaLeaderboardItemIndex(reordered_leaderboards, 201) == 6);
 	overlay.OpenLeaderboards(leaderboards);
 	assert(overlay.Screen() == Xm8Ra::RaOverlayScreen::Leaderboards);
 	assert(overlay.LeaderboardListSnapshot().active);

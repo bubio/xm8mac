@@ -120,6 +120,9 @@ public:
 										// remember user-selected disk directory
 	bool OpenDiskFromMenu(const DiskSpec& spec, std::string *error);
 										// open disk from menu
+	bool OpenDiskPairFromMenu(const std::string& path, bool *drive2_open,
+		std::string *error);
+										// open bank 0/1 as one transaction
 	const char* GetTapeDir();
 										// get tape dir
 	void Reset();
@@ -158,6 +161,7 @@ public:
 	Xm8Ra::RaOverlayLibraryListSnapshot GetRaLibraryMenuSnapshot() const;
 	void ShowRaLibraryMenu();
 	void SelectRaLibraryMenuItem(size_t index);
+	void SelectRaLibraryMenuItemById(int64_t game_id);
 	bool OpenRaLibraryMenuDetail();
 	bool ActivateRaLibraryMenuDetail();
 	void OpenRaAchievementsOverlay();
@@ -165,6 +169,7 @@ public:
 	Xm8Ra::RaOverlayAchievementListSnapshot GetRaAchievementsMenuSnapshot() const;
 	void ShowRaAchievementsMenu();
 	void SelectRaAchievementMenuItem(size_t index);
+	void SelectRaAchievementMenuItemById(uint32_t achievement_id);
 	bool OpenRaAchievementMenuDetail();
 	void ScrollRaAchievementMenuDetail(int delta);
 	void SetRaAchievementMenuDetailScroll(int offset);
@@ -173,6 +178,7 @@ public:
 	Xm8Ra::RaOverlayLeaderboardListSnapshot GetRaLeaderboardsMenuSnapshot() const;
 	void ShowRaLeaderboardsMenu();
 	void SelectRaLeaderboardMenuItem(size_t index);
+	void SelectRaLeaderboardMenuItemById(uint32_t leaderboard_id);
 	void SetRaMenuFirstVisibleItem(size_t index);
 	void OpenRaWebsite();
 										// open RetroAchievements in the default browser
@@ -233,7 +239,8 @@ private:
 										// restore persistent settings
 	bool ProbeDisk(const DiskSpec& spec, int *banks, std::string *error);
 										// validate disk specification
-	bool OpenDiskFromUser(const DiskSpec& spec, std::string *error);
+	bool OpenDiskFromUser(const DiskSpec& spec, std::string *error,
+		bool open_pair = false);
 										// open one disk
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
@@ -241,7 +248,7 @@ private:
 		bool *ra_media_change, std::string *error);
 										// resolve disk to RA working copy
 	bool BeginRaMediaChange(const DiskSpec& target, const std::string& hash,
-		std::string *error);
+		bool open_pair, int target_banks, std::string *error);
 										// begin same-game Drive 1 media change
 	void ProcessRaMediaChange();
 										// commit or roll back pending media change
@@ -261,6 +268,8 @@ private:
 										// remember source dir for mounted RA media
 	bool RememberRaLaunchDriveForMountedDisk(int drive, std::string *error);
 										// persist a mounted disk in its RA launch profile
+	bool RememberRaLaunchPairForMountedDisks(std::string *error);
+										// persist both drives in one launch-profile transaction
 	bool EnsureRaService(std::string *error);
 										// create RA service if needed
 	bool SaveRaModeSetting(bool enabled, std::string *error);
@@ -578,6 +587,16 @@ private:
 										// rollback VM path
 	int ra_media_change_old_bank;
 										// rollback VM bank
+	bool ra_media_change_open_pair;
+										// change Drive 1 and Drive 2 atomically
+	bool ra_media_change_old_drive2_open;
+										// rollback Drive 2 open state
+	std::string ra_media_change_old_drive2_path;
+										// rollback Drive 2 path
+	int ra_media_change_old_drive2_bank;
+										// rollback Drive 2 bank
+	int ra_media_change_target_banks;
+										// target D88 bank count
 #endif
 
 	// flags

@@ -389,6 +389,7 @@ if(BUILD_TESTING)
   endif()
 
   if(XM8_ENABLE_RETROACHIEVEMENTS)
+	find_package(Threads REQUIRED)
     set(RA_PATHRESOLVER_SOURCES
       Source/UI/pathresolver.cpp
     )
@@ -434,6 +435,20 @@ if(BUILD_TESTING)
     )
     target_include_directories(ra_media_change_policy_test PRIVATE Source/RA)
     add_test(NAME ra_media_change_policy_test COMMAND ra_media_change_policy_test)
+
+	add_executable(ra_callback_lifetime_test
+	  Tests/ra_callback_lifetime_test.cpp
+	)
+	target_include_directories(ra_callback_lifetime_test PRIVATE Source/RA)
+	target_link_libraries(ra_callback_lifetime_test PRIVATE Threads::Threads)
+	add_test(NAME ra_callback_lifetime_test COMMAND ra_callback_lifetime_test)
+
+	add_executable(ra_leaderboard_fetch_policy_test
+	  Tests/ra_leaderboard_fetch_policy_test.cpp
+	)
+	target_include_directories(ra_leaderboard_fetch_policy_test PRIVATE Source/RA)
+	add_test(NAME ra_leaderboard_fetch_policy_test
+	  COMMAND ra_leaderboard_fetch_policy_test)
 
     add_executable(ra_session_state_test
       Tests/ra_session_state_test.cpp

@@ -404,6 +404,22 @@ int main()
 		saved_profile.drives[0].is_ra_anchor = false;
 		Check(!library.SaveLaunchProfile(saved_profile, &error),
 			"reject launch profile without RA anchor");
+		Xm8Ra::LaunchProfile preserved_profile;
+		Check(library.LoadLaunchProfile(playlist.game_id, &preserved_profile,
+			&error), "reload profile after rejected replacement");
+		Check(preserved_profile.drives[0].is_ra_anchor &&
+			preserved_profile.drives[1].assigned,
+			"rejected replacement preserves both previous drives");
+		preserved_profile.drives[1] = Xm8Ra::LaunchDrive();
+		Check(library.SaveLaunchProfile(preserved_profile, &error),
+			"atomically clear Drive 2 from launch profile");
+		Xm8Ra::LaunchProfile single_drive_profile;
+		Check(library.LoadLaunchProfile(playlist.game_id,
+			&single_drive_profile, &error),
+			"reload single-drive launch profile");
+		Check(single_drive_profile.drives[0].is_ra_anchor &&
+			!single_drive_profile.drives[1].assigned,
+			"single-drive replacement keeps anchor and clears Drive 2");
 	}
 
 	Xm8Ra::ImportedMedia standalone_multi;
