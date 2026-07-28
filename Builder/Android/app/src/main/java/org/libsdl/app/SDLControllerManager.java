@@ -648,6 +648,24 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
                         SDLActivity.onNativeMouse(0, action, x, y, false);
                         return true;
 
+                    // ACTION_BUTTON_PRESS/RELEASE are API 23 constants, but
+                    // older emulator images can still emit their stable
+                    // numeric actions (11/12) through generic motion events.
+                    // SDL expects the corresponding DOWN/UP actions.
+                    case 11:
+                        x = event.getX(0);
+                        y = event.getY(0);
+                        int buttonState = event.getButtonState();
+                        SDLActivity.onNativeMouse(buttonState == 0 ? 1 : buttonState,
+                                MotionEvent.ACTION_DOWN, x, y, false);
+                        return true;
+
+                    case 12:
+                        x = event.getX(0);
+                        y = event.getY(0);
+                        SDLActivity.onNativeMouse(0, MotionEvent.ACTION_UP, x, y, false);
+                        return true;
+
                     default:
                         break;
                 }

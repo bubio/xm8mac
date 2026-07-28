@@ -6,26 +6,27 @@
 
 ## 対応範囲
 
-- 最低動作環境: Android 4.4 / API 19
+- 最低動作環境: Android 4.4 / API 19（RA利用時はAndroid 6.0 / API 23以上）
 - compile SDK: Android 16 / API 36
-- target SDK: API 35
+- target SDK: API 36
 - ABI: `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`
 - SDL: 2.32.10
 
-Android 17 / API 37は、2026年6月14日時点ではPlatform Stability到達前のBetaです。
-正式版になるまでは互換テストにのみ使用し、compile SDKには採用しません。
+Android 17 / API 37はSDKにインストールしていても、このプロジェクトでは採用しません。
+API 37をtargetにすると大画面での画面固定・リサイズに追加の挙動変更が入るため、
+compile SDKとtarget SDKはAPI 36に固定します。
 
 ## 必要な環境
 
-- JDK 17
+- JDK 21（Android Studio同梱のJetBrains Runtimeを推奨）
 - Android SDK Platform 36
-- Android SDK Build-Tools 36.0.0
+- Android SDK Build-Tools 36.0.0以上
 - Android NDK 23.2.8568313
 
 GradleとAndroid Gradle PluginはWrapperから取得されます。
 
-- Gradle 9.4.1
-- Android Gradle Plugin 9.2.1
+- Gradle 9.5.0
+- Android Gradle Plugin 9.3.0
 
 NDK r28以降は最低対応APIが21であるため、Android 4.4対応を維持するこのプロジェクト
 では使用できません。NDKは必ず23.2.8568313をインストールしてください。
@@ -50,7 +51,8 @@ Javaソースを所定の場所へ配置します。
 
 ## コマンドラインビルド
 
-`JAVA_HOME` がJDK 17を指していることを確認してください。
+Android Studioからの実行では同梱JBR 21が使われます。コマンドラインでは、同じJDK 21を
+`JAVA_HOME` に設定してください。
 
 ```shell
 cd Builder/Android
@@ -59,9 +61,9 @@ cd Builder/Android
 ./gradlew lintDebug
 ```
 
-RetroAchievementsを有効にする場合は、同じコマンドへ
-`-PXM8_ENABLE_RETROACHIEVEMENTS=1`を付ける。RA有効版はAndroid 6.0 / API 23以上、
-通常版は従来どおりAndroid 4.4 / API 19以上を対象とする。
+RetroAchievementsは既定で同梱されます。単一APKはAndroid 4.4 / API 19以上で起動し、
+Android 6.0 / API 23未満ではRAのUI・通信・資格情報保存を無効化します。RAなし版を作る
+場合は、同じコマンドへ`-PXM8_ENABLE_RETROACHIEVEMENTS=0`を付けてください。
 
 debug APKは以下へ生成されます。
 
@@ -94,8 +96,12 @@ app/build/outputs/aar/net.retropc.pi.aar
 
 ## 互換性上の注意
 
-- Javaコンパイル互換レベルはJava 8です。JDK 17はGradle/AGPの実行に使用します。
-- native側の最低APIは通常版が`android-19`、RA有効版が`android-23`です。
+- Gradle/AGPはJDK 21で実行しますが、Javaコンパイル互換レベルはJava 8のままです。
+  JDK 21の`javac`はJava 8のsource/target指定を将来廃止予定として警告しますが、現在の
+  最低API互換性を保つための意図した設定です。警告だけを消す目的でJava 17へ上げたり、
+  抑制設定を追加したりしないでください。
+- native側の最低APIはRA同梱・RAなし版ともに`android-19`です。RA同梱版は実行時に
+  API 23以上を確認してからKeystoreを使うRAサービスを初期化します。
 - C++ランタイムはstatic linkし、NDK r23の4KB alignment版
   `libc++_shared.so` をAPKへ同梱しません。
 - 64bit nativeライブラリは16KBページサイズ対応のELF alignmentでリンクします。

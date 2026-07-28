@@ -470,6 +470,7 @@ App::App()
 	ra_image_cache_limit_bytes = 128LL * 1024 * 1024;
 	ra_notification_duration_ms = 5000;
 	ra_mode_enabled = false;
+	ra_runtime_supported = true;
 	ra_play_mode = Xm8Ra::RaPlayMode::Hardcore;
 	ra_fast_disk_override_active = false;
 	ra_saved_fast_disk = false;
@@ -620,26 +621,31 @@ bool App::Init(const CliOptions& options)
 	}
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	ra_overlay = new Xm8Ra::RaOverlay;
-	ra_library = new Xm8Ra::RaLibrary;
-	{
-		std::string ra_error;
-		const std::string ra_root =
-			Xm8Ra::RootFromSettingDir(setting->GetSettingDir());
-		if (!ra_root.empty() && ra_library->Open(ra_root, &ra_error)) {
-			Xm8Ra::RaSettings ra_settings;
-			if (ra_library->LoadSettings(&ra_settings, &ra_error)) {
-				ra_mode_enabled = ra_settings.enabled;
-				ra_play_mode = ra_settings.last_mode == Xm8Ra::kRaModeHardcore ?
-					Xm8Ra::RaPlayMode::Hardcore : Xm8Ra::RaPlayMode::Casual;
+	#ifdef __ANDROID__
+	ra_runtime_supported = Android_GetSdkVersion() >= 23;
+	#endif
+	if (ra_runtime_supported) {
+		ra_overlay = new Xm8Ra::RaOverlay;
+		ra_library = new Xm8Ra::RaLibrary;
+		{
+			std::string ra_error;
+			const std::string ra_root =
+				Xm8Ra::RootFromSettingDir(setting->GetSettingDir());
+			if (!ra_root.empty() && ra_library->Open(ra_root, &ra_error)) {
+				Xm8Ra::RaSettings ra_settings;
+				if (ra_library->LoadSettings(&ra_settings, &ra_error)) {
+					ra_mode_enabled = ra_settings.enabled;
+					ra_play_mode = ra_settings.last_mode == Xm8Ra::kRaModeHardcore ?
+						Xm8Ra::RaPlayMode::Hardcore : Xm8Ra::RaPlayMode::Casual;
+				}
+				ra_media_store = new Xm8Ra::RaMediaStore(ra_library);
 			}
-			ra_media_store = new Xm8Ra::RaMediaStore(ra_library);
-		}
-		else {
-			delete ra_library;
-			ra_library = NULL;
-			ra_mode_enabled = false;
-		}
+			else {
+				delete ra_library;
+				ra_library = NULL;
+				ra_mode_enabled = false;
+			}
+	}
 	}
 	ra_menu_status.Set(ra_library == NULL ?
 		Xm8Ra::RaMenuStatusState::Unavailable : (ra_mode_enabled ?
@@ -1695,6 +1701,12 @@ bool App::RememberRaLaunchPairForMountedDisks(std::string *error)
 //
 bool App::EnsureRaService(std::string *error)
 {
+	if (!ra_runtime_supported) {
+		if (error != NULL) {
+			*error = "RetroAchievements requires Android 6.0 or later";
+		}
+		return false;
+	}
 	if (ra_service != NULL) {
 		return true;
 	}
@@ -6575,6 +6587,11 @@ bool App::IsRaModeEnabled() const
 	return ra_mode_enabled;
 }
 
+bool App::IsRaRuntimeSupported() const
+{
+	return ra_runtime_supported;
+}
+
 //
 // CheckRaStateAvailability()
 // validate RA state menu access and notify on failure
@@ -6605,6 +6622,10 @@ bool App::CheckRaStateAvailability()
 //
 bool App::ToggleRaMode()
 {
+	if (!ra_runtime_supported) {
+		AddRaNotice("RA: Android 6.0 or later is required");
+		return false;
+	}
 	const bool enable = !ra_mode_enabled;
 	std::string error;
 
@@ -7619,6 +7640,10 @@ void App::CloseRaMenuContent()
 //
 bool App::OpenRaLoginOverlay()
 {
+	if (!ra_runtime_supported) {
+		AddRaNotice("RA: Android 6.0 or later is required");
+		return false;
+	}
 	if (ra_overlay == NULL) {
 		AddRaNotice("RA: overlay unavailable");
 		return false;
@@ -7703,45 +7728,50 @@ void App::GetRaMenuStatus(char *buffer, size_t capacity) const
 	}
 
 	std::string text;
-	switch (ra_menu_status.State()) {
-	case Xm8Ra::RaMenuStatusState::Unavailable:
-		text = "RA: unavailable";
-		break;
-	case Xm8Ra::RaMenuStatusState::Disabled:
-		text = "RA: disabled";
-		break;
-	case Xm8Ra::RaMenuStatusState::Enabled:
-		text = "RA: enabled";
-		break;
-	case Xm8Ra::RaMenuStatusState::LoginPending:
-		text = "RA: login pending";
-		break;
-	case Xm8Ra::RaMenuStatusState::PendingGame:
-		text = "RA: pending " + ra_menu_status.Detail();
-		break;
-	case Xm8Ra::RaMenuStatusState::ActiveGame:
-		text = ra_menu_status.Detail().empty() ?
-			"RA: game loaded" : "RA: " + ra_menu_status.Detail();
-		break;
-	case Xm8Ra::RaMenuStatusState::UnknownGame:
-		text = "RA: Unknown game";
-		break;
-	case Xm8Ra::RaMenuStatusState::OfflineSession:
-		text = "RA: offline for session";
-		break;
-	case Xm8Ra::RaMenuStatusState::Disconnected:
-		text = "RA: disconnected";
-		break;
-	case Xm8Ra::RaMenuStatusState::LoggedIn:
-		text = ra_menu_status.Detail().empty() ?
-			"RA: logged in" : "RA: logged in " + ra_menu_status.Detail();
-		break;
-	case Xm8Ra::RaMenuStatusState::LoginFailed:
-		text = "RA: login failed";
-		break;
-	case Xm8Ra::RaMenuStatusState::SubmissionError:
-		text = ra_menu_status.Detail();
-		break;
+	if (!ra_runtime_supported) {
+		text = "RA: Android 6.0+ required";
+	}
+	else {
+		switch (ra_menu_status.State()) {
+		case Xm8Ra::RaMenuStatusState::Unavailable:
+			text = "RA: unavailable";
+			break;
+		case Xm8Ra::RaMenuStatusState::Disabled:
+			text = "RA: disabled";
+			break;
+		case Xm8Ra::RaMenuStatusState::Enabled:
+			text = "RA: enabled";
+			break;
+		case Xm8Ra::RaMenuStatusState::LoginPending:
+			text = "RA: login pending";
+			break;
+		case Xm8Ra::RaMenuStatusState::PendingGame:
+			text = "RA: pending " + ra_menu_status.Detail();
+			break;
+		case Xm8Ra::RaMenuStatusState::ActiveGame:
+			text = ra_menu_status.Detail().empty() ?
+				"RA: game loaded" : "RA: " + ra_menu_status.Detail();
+			break;
+		case Xm8Ra::RaMenuStatusState::UnknownGame:
+			text = "RA: Unknown game";
+			break;
+		case Xm8Ra::RaMenuStatusState::OfflineSession:
+			text = "RA: offline for session";
+			break;
+		case Xm8Ra::RaMenuStatusState::Disconnected:
+			text = "RA: disconnected";
+			break;
+		case Xm8Ra::RaMenuStatusState::LoggedIn:
+			text = ra_menu_status.Detail().empty() ?
+				"RA: logged in" : "RA: logged in " + ra_menu_status.Detail();
+			break;
+		case Xm8Ra::RaMenuStatusState::LoginFailed:
+			text = "RA: login failed";
+			break;
+		case Xm8Ra::RaMenuStatusState::SubmissionError:
+			text = ra_menu_status.Detail();
+			break;
+		}
 	}
 
 	const std::string sjis = ToSjisMenuText(converter, text);

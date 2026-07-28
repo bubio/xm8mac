@@ -111,6 +111,10 @@ public class XM8 extends SDLActivity {
     private static final int RA_HTTP_TIMEOUT = 4;
     private static final int RA_HTTP_OVERSIZE = 5;
 
+    private boolean isRaRuntimeSupported() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M;
+    }
+
     private static final class RaResponseTooLargeException extends IOException {
         RaResponseTooLargeException() { super("response too large"); }
     }
@@ -303,11 +307,11 @@ public class XM8 extends SDLActivity {
         super.onDestroy();
     }
 
-    // Called from native only in an RA-enabled (minSdk 23) build.
+    // Called from native only when the runtime supports RetroAchievements.
     public void raSendHttp(final long requestId, final String url, final byte[] postData,
             final String contentType, final int connectTimeoutMs, final int totalTimeoutMs,
             final int maxResponseBytes) {
-        if (url == null || !url.startsWith("https://") || maxResponseBytes < 0) {
+        if (!isRaRuntimeSupported() || url == null || !url.startsWith("https://") || maxResponseBytes < 0) {
             nativeRaHttpComplete(requestId, RA_HTTP_CLIENT_ERROR, 0, "", null,
                     "HTTPS URL required");
             return;
@@ -337,7 +341,9 @@ public class XM8 extends SDLActivity {
                     }
                     status = connection.getResponseCode();
                     responseType = connection.getContentType();
-                    long length = connection.getContentLengthLong();
+                    // getContentLengthLong() was added in API 24. The response cap is
+                    // already an int, so the API 19-compatible variant is sufficient.
+                    long length = connection.getContentLength();
                     if (length > maxResponseBytes) {
                         result = RA_HTTP_OVERSIZE;
                         error = "HTTP response exceeds limit";
@@ -401,6 +407,7 @@ public class XM8 extends SDLActivity {
     // Android owns the password UI. The scroll container remains usable when
     // the landscape IME reduces the available height.
     public void raShowLogin(final String initialUsername) {
+        if (!isRaRuntimeSupported()) return;
         runOnUiThread(new Runnable() {
             @Override public void run() {
                 if (isFinishing() || isDestroyed()) return;
@@ -545,6 +552,7 @@ public class XM8 extends SDLActivity {
     }
 
     public boolean raHasNetwork() {
+        if (!isRaRuntimeSupported()) return false;
         ConnectivityManager manager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         if (manager == null) return false;
         NetworkInfo network = manager.getActiveNetworkInfo();
@@ -574,7 +582,7 @@ public class XM8 extends SDLActivity {
     }
 
     public boolean raSaveCredential(String username, byte[] token) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || username == null || token == null || token.length == 0) return false;
+        if (!isRaRuntimeSupported() || username == null || token == null || token.length == 0) return false;
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, raCredentialKey());
@@ -590,7 +598,7 @@ public class XM8 extends SDLActivity {
     }
 
     public byte[] raLoadCredential(String username) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || username == null) return null;
+        if (!isRaRuntimeSupported() || username == null) return null;
         try {
             String text = getSharedPreferences(RA_CREDENTIALS, MODE_PRIVATE)
                     .getString(raCredentialName(username), null);
@@ -604,6 +612,7 @@ public class XM8 extends SDLActivity {
     }
 
     public boolean raDeleteCredential(String username) {
+        if (!isRaRuntimeSupported()) return false;
         if (username == null) return true;
         return getSharedPreferences(RA_CREDENTIALS, MODE_PRIVATE).edit()
                 .remove(raCredentialName(username)).commit();

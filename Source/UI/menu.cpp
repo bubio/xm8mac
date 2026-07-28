@@ -302,7 +302,9 @@ void Menu::EnterMain(int id)
 	list->AddButton("Audio Output Device", MENU_MAIN_AUDIO_OUT);
 	list->AddButton("Input Options", MENU_MAIN_INPUT);
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-	list->AddButton("RetroAchievements", MENU_MAIN_RA);
+	if (app->IsRaRuntimeSupported()) {
+		list->AddButton("RetroAchievements", MENU_MAIN_RA);
+	}
 #endif
 
 #ifndef __ANDROID__
@@ -768,6 +770,13 @@ void Menu::EnterRa(int id)
 {
 	app->CloseRaMenuContent();
 	list->SetTitle("<< RetroAchievements >>", MENU_RA);
+	if (!app->IsRaRuntimeSupported()) {
+		list->AddButton("Android 6.0 or later required", MENU_RA_STATUS);
+		list->AddButton("Go to RetroAchievements Site", MENU_RA_WEBSITE);
+		if (id == MENU_BACK) id = MENU_RA_STATUS;
+		list->SetFocus(id);
+		return;
+	}
 
 	list->AddButton("Login", MENU_RA_LOGIN);
 	list->AddButton("RA: disabled", MENU_RA_STATUS);
@@ -902,6 +911,7 @@ void Menu::UpdateRaStatus()
 	char ra_status[96];
 	app->GetRaMenuStatus(ra_status, sizeof(ra_status));
 	list->SetText(MENU_RA_STATUS, ra_status);
+	if (!app->IsRaRuntimeSupported()) return;
 	char ra_presence[256];
 	app->GetRaMenuPresence(ra_presence, sizeof(ra_presence));
 	list->SetText(MENU_RA_PRESENCE, ra_presence);

@@ -138,6 +138,8 @@ public:
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	bool IsRaModeEnabled() const;
 										// get RA mode setting
+	bool IsRaRuntimeSupported() const;
+										// true when the current OS can securely run RA
 	bool CheckRaStateAvailability();
 										// validate RA state menu access and notify on failure
 	bool ToggleRaMode();
@@ -480,6 +482,8 @@ private:
 										// configured RA toast lifetime
 	bool ra_mode_enabled;
 										// RA mode setting
+	bool ra_runtime_supported;
+										// current platform supports RA runtime requirements
 	Xm8Ra::RaPlayMode ra_play_mode;
 										// selected Casual/Hardcore setting
 	bool ra_fast_disk_override_active;
