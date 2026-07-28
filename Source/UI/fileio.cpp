@@ -25,6 +25,7 @@ FILEIO::FILEIO()
 {
 	fp = NULL;
 	readonly = false;
+	error = false;
 }
 
 //
@@ -63,6 +64,7 @@ bool FILEIO::Fopen(_TCHAR *filename, int mode)
 	// initialize
 	ops = NULL;
 	readonly = false;
+	error = false;
 
 	switch (mode) {
 	// read binary
@@ -128,7 +130,9 @@ bool FILEIO::Fopen(_TCHAR *filename, int mode)
 void FILEIO::Fclose()
 {
 	if (fp != NULL) {
-		SDL_RWclose((SDL_RWops*)fp);
+		if (SDL_RWclose((SDL_RWops*)fp) != 0) {
+			error = true;
+		}
 		fp = NULL;
 	}
 }
@@ -147,6 +151,15 @@ bool FILEIO::IsOpened()
 }
 
 //
+// HasError()
+// check whether an I/O operation failed
+//
+bool FILEIO::HasError() const
+{
+	return error;
+}
+
+//
 // FgetBool()
 // read one bool
 //
@@ -156,12 +169,14 @@ bool FILEIO::FgetBool()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return false;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &b, sizeof(b), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return false;
 	}
@@ -178,12 +193,14 @@ void FILEIO::FputBool(bool b)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &b, sizeof(b), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -199,12 +216,14 @@ uint8 FILEIO::FgetUint8()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
@@ -221,12 +240,14 @@ void FILEIO::FputUint8(uint8 val)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -242,12 +263,14 @@ uint16 FILEIO::FgetUint16()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
@@ -264,12 +287,14 @@ void FILEIO::FputUint16(uint16 val)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -285,12 +310,14 @@ uint32 FILEIO::FgetUint32()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
@@ -307,12 +334,14 @@ void FILEIO::FputUint32(uint32 val)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -328,12 +357,14 @@ uint64 FILEIO::FgetUint64()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
@@ -350,12 +381,14 @@ void FILEIO::FputUint64(uint64 val)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -371,12 +404,14 @@ double FILEIO::FgetDouble()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
@@ -393,12 +428,14 @@ void FILEIO::FputDouble(double val)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -414,12 +451,14 @@ int8 FILEIO::FgetInt8()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
@@ -436,12 +475,14 @@ void FILEIO::FputInt8(int8 val)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -457,12 +498,14 @@ int32 FILEIO::FgetInt32()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
@@ -479,12 +522,14 @@ void FILEIO::FputInt32(int32 val)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		SDL_assert(false);
 		return;
 	}
@@ -499,13 +544,16 @@ uint32 FILEIO::FgetUint32_LE()
 	uint32 val;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
-	val = SDL_ReadLE32((SDL_RWops*)fp);
+	if (Fread(&val, sizeof(val), 1) != 1) {
+		return 0;
+	}
 
-	return val;
+	return SDL_SwapLE32(val);
 }
 
 //
@@ -518,11 +566,13 @@ int FILEIO::Fgetc()
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		return EOF;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, &val, sizeof(val), 1);
 	if (s != 1) {
+		error = true;
 		return EOF;
 	}
 
@@ -538,11 +588,15 @@ uint32 FILEIO::Fread(void* buffer, uint32 size, uint32 count)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWread((SDL_RWops*)fp, buffer, (size_t)size, (size_t)count);
+	if (s != count) {
+		error = true;
+	}
 
 	return (uint32)s;
 }
@@ -556,11 +610,15 @@ uint32 FILEIO::Fwrite(void* buffer, uint32 size, uint32 count)
 	size_t s;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	s = SDL_RWwrite((SDL_RWops*)fp, buffer, (size_t)size, (size_t)count);
+	if (s != count) {
+		error = true;
+	}
 
 	return (uint32)s;
 }
@@ -576,6 +634,7 @@ uint32 FILEIO::Fseek(long offset, int origin)
 	current = 0;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0xffffffff;
 	}
@@ -612,6 +671,7 @@ uint32 FILEIO::Fseek(long offset, int origin)
 	}
 
 	// error
+	error = true;
 	return 0xffffffff;
 }
 
@@ -624,11 +684,16 @@ uint32 FILEIO::Ftell()
 	Sint64 current;
 
 	if (IsOpened() == false) {
+		error = true;
 		SDL_assert(false);
 		return 0;
 	}
 
 	current = SDL_RWtell((SDL_RWops*)fp);
+	if (current < 0) {
+		error = true;
+		return 0;
+	}
 
 	return (uint32)current;
 }

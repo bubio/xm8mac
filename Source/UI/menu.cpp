@@ -30,6 +30,14 @@
 #endif // __ANDROID__
 #include "menu.h"
 
+#include <string>
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+static_assert(MENU_RA_MIN > MENU_SCALEFILTER_MAX &&
+	MENU_RA_MAX < MENU_FILE_MIN,
+	"RetroAchievements menu IDs must not overlap another menu range");
+#endif
+
 //
 // Menu()
 // constructor
@@ -64,6 +72,9 @@ Menu::Menu(App *a)
 
 	// joystick to keyboard
 	joymap_id = MENU_JOYMAP_DPAD_UP;
+
+	// state menu parent
+	ra_state_menu = false;
 }
 
 //
@@ -206,6 +217,47 @@ void Menu::ProcessMenu()
 		// normal
 		list->ProcessMenu(true);
 	}
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	const int focus = list->GetFocusID();
+	switch (list->GetID()) {
+	case MENU_RA_LIBRARY_VIEW:
+		if (focus >= MENU_RA_LIBRARY_ITEM_MIN &&
+			focus < MENU_RA_ACHIEVEMENT_ITEM_MIN) {
+			app->SelectRaLibraryMenuItemById(
+				static_cast<int64_t>(list->GetUser(focus)));
+			app->SetRaMenuFirstVisibleItem(
+				static_cast<size_t>(list->GetTop()));
+		}
+		break;
+	case MENU_RA_ACHIEVEMENTS_VIEW:
+		if (focus >= MENU_RA_ACHIEVEMENT_ITEM_MIN &&
+			focus < MENU_RA_LEADERBOARD_ITEM_MIN) {
+			app->SelectRaAchievementMenuItemById(
+				static_cast<uint32_t>(list->GetUser(focus)));
+			app->SetRaMenuFirstVisibleItem(
+				static_cast<size_t>(list->GetTop()));
+		}
+		break;
+	case MENU_RA_LEADERBOARDS_VIEW:
+		if (focus >= MENU_RA_LEADERBOARD_ITEM_MIN &&
+			focus < MENU_RA_DETAIL_LINE_MIN) {
+			app->SelectRaLeaderboardMenuItemById(
+				static_cast<uint32_t>(list->GetUser(focus)));
+			app->SetRaMenuFirstVisibleItem(
+				static_cast<size_t>(list->GetTop()));
+		}
+		break;
+	case MENU_RA_ACHIEVEMENT_DETAIL:
+		if (focus >= MENU_RA_DETAIL_LINE_MIN) {
+			app->SetRaAchievementMenuDetailScroll(
+				focus - MENU_RA_DETAIL_LINE_MIN);
+		}
+		break;
+	default:
+		break;
+	}
+#endif
 }
 
 //
@@ -215,26 +267,45 @@ void Menu::ProcessMenu()
 void Menu::EnterMain(int id)
 {
 	char title[80];
+	const char *ra_status = "RA OFF";
 	Uint32 ver;
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (app->IsRaModeEnabled()) {
+		ra_status = app->IsRaHardcoreSelected() ? "RA HARD" : "RA SOFT";
+	}
+#endif
 
 	// get version
 	ver = app->GetAppVersion();
-	sprintf(title, "<< XM8 Ver.%1d.%1d%1d User Interface >>",
+	snprintf(title, sizeof(title), "<< XM8 Ver %1d.%1d%1d :  [%s] >>",
 		((ver >> 8) & 0x0f),
 		((ver >> 4) & 0x0f),
-		ver & 0x0f);
+		ver & 0x0f,
+		ra_status);
 
 	list->SetTitle(title, MENU_MAIN);
 	list->AddButton("Drive 1", MENU_MAIN_DRIVE1);
 	list->AddButton("Drive 2", MENU_MAIN_DRIVE2);
 	list->AddButton("CMT", MENU_MAIN_CMT);
-	list->AddButton("Load State", MENU_MAIN_LOAD);
-	list->AddButton("Save State", MENU_MAIN_SAVE);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (!app->IsRaModeEnabled()) {
+#endif
+		list->AddButton("Load State", MENU_MAIN_LOAD);
+		list->AddButton("Save State", MENU_MAIN_SAVE);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	}
+#endif
 	list->AddButton("System Options", MENU_MAIN_SYSTEM);
 	list->AddButton("Video Options", MENU_MAIN_VIDEO);
 	list->AddButton("Audio Options", MENU_MAIN_AUDIO);
 	list->AddButton("Audio Output Device", MENU_MAIN_AUDIO_OUT);
 	list->AddButton("Input Options", MENU_MAIN_INPUT);
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (app->IsRaRuntimeSupported()) {
+		list->AddButton("RetroAchievements", MENU_MAIN_RA);
+	}
+#endif
 
 #ifndef __ANDROID__
 	// screen
@@ -423,7 +494,7 @@ void Menu::EnterCmt(int id)
 // EnterLoad()
 // enter load menu
 //
-void Menu::EnterLoad()
+void Menu::EnterLoad(bool ra_state)
 {
 	int id;
 	int last;
@@ -432,14 +503,16 @@ void Menu::EnterLoad()
 	char textbuf[64];
 	char timebuf[64];
 
-	list->SetTitle("<< Load State >>", MENU_LOAD);
+	ra_state_menu = ra_state;
+	list->SetTitle(ra_state ? "<< RA Load State >>" : "<< Load State >>",
+		MENU_LOAD);
 
 	// default focus
 	id = MENU_LOAD_0;
 
 	for (slot=0; slot<10; slot++) {
 		if (slot == 0) {
-			strcpy(textbuf, "Slot 0 (AUTO)");
+			strcpy(textbuf, ra_state ? "Slot 0       " : "Slot 0 (AUTO)");
 		}
 		else {
 			sprintf(textbuf, "Slot %d       ", slot);
@@ -469,7 +542,7 @@ void Menu::EnterLoad()
 // EnterSave()
 // enter save menu
 //
-void Menu::EnterSave()
+void Menu::EnterSave(bool ra_state)
 {
 	int id;
 	int last;
@@ -478,14 +551,16 @@ void Menu::EnterSave()
 	char textbuf[64];
 	char timebuf[64];
 
-	list->SetTitle("<< Save State >>", MENU_SAVE);
+	ra_state_menu = ra_state;
+	list->SetTitle(ra_state ? "<< RA Save State >>" : "<< Save State >>",
+		MENU_SAVE);
 
 	// default focus
 	id = MENU_SAVE_0;
 
 	for (slot=0; slot<10; slot++) {
 		if (slot == 0) {
-			strcpy(textbuf, "Slot 0 (AUTO)");
+			strcpy(textbuf, ra_state ? "Slot 0       " : "Slot 0 (AUTO)");
 		}
 		else {
 			sprintf(textbuf, "Slot %d       ", slot);
@@ -685,6 +760,188 @@ void Menu::EnterSystem(int id)
 	// set focus
 	list->SetFocus(id);
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+//
+// EnterRa()
+// enter RetroAchievements menu
+//
+void Menu::EnterRa(int id)
+{
+	app->CloseRaMenuContent();
+	list->SetTitle("<< RetroAchievements >>", MENU_RA);
+	if (!app->IsRaRuntimeSupported()) {
+		list->AddButton("Android 6.0 or later required", MENU_RA_STATUS);
+		list->AddButton("Go to RetroAchievements Site", MENU_RA_WEBSITE);
+		if (id == MENU_BACK) id = MENU_RA_STATUS;
+		list->SetFocus(id);
+		return;
+	}
+
+	list->AddButton("Login", MENU_RA_LOGIN);
+	list->AddButton("RA: disabled", MENU_RA_STATUS);
+	list->AddButton("Now: -", MENU_RA_PRESENCE);
+	list->AddCheckButton("RA mode", MENU_RA_MODE);
+	list->AddCheckButton("Hardcore", MENU_RA_HARDCORE);
+	list->AddButton("Library", MENU_RA_LIBRARY);
+	list->AddButton("Achievements", MENU_RA_ACHIEVEMENTS);
+	list->AddButton("Leaderboards", MENU_RA_LEADERBOARDS);
+	if (app->IsRaModeEnabled() && !app->IsRaHardcoreActive()) {
+		list->AddButton("Load State", MENU_RA_LOAD);
+		list->AddButton("Save State", MENU_RA_SAVE);
+	}
+	list->AddButton("Go to RetroAchievements Site", MENU_RA_WEBSITE);
+
+	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+	list->SetCheck(MENU_RA_HARDCORE, app->IsRaHardcoreSelected());
+	UpdateRaStatus();
+
+	if (id == MENU_BACK) {
+		id = MENU_RA_LOGIN;
+	}
+	list->SetFocus(id);
+}
+
+void Menu::EnterRaLibrary(int focus)
+{
+	app->ShowRaLibraryMenu();
+	const Xm8Ra::RaOverlayLibraryListSnapshot snapshot =
+		app->GetRaLibraryMenuSnapshot();
+	list->SetTitle("<< RA Library >>", MENU_RA_LIBRARY_VIEW);
+	for (size_t index = 0; index < snapshot.games.size() &&
+		index < static_cast<size_t>(MENU_RA_ACHIEVEMENT_ITEM_MIN -
+			MENU_RA_LIBRARY_ITEM_MIN); ++index) {
+		const int id = MENU_RA_LIBRARY_ITEM_MIN + static_cast<int>(index);
+		list->AddButton(snapshot.games[index].title.c_str(), id);
+		list->SetUser(id, static_cast<Uint64>(snapshot.games[index].game_id));
+	}
+	if (snapshot.games.empty()) list->AddButton("No library games", MENU_RA_LIBRARY_ITEM_MIN);
+	list->SetFocus(MENU_RA_LIBRARY_ITEM_MIN + focus);
+}
+
+void Menu::EnterRaGameDetail()
+{
+	list->SetTitle("<< RA Game Detail >>", MENU_RA_GAME_DETAIL);
+	list->AddButton("START", MENU_RA_GAME_START);
+	list->SetFocus(MENU_RA_GAME_START);
+}
+
+void Menu::EnterRaAchievements(int focus)
+{
+	app->ShowRaAchievementsMenu();
+	const Xm8Ra::RaOverlayAchievementListSnapshot snapshot =
+		app->GetRaAchievementsMenuSnapshot();
+	list->SetTitle("<< RA Achievements >>", MENU_RA_ACHIEVEMENTS_VIEW);
+	for (size_t index = 0; index < snapshot.achievements.size() &&
+		index < static_cast<size_t>(MENU_RA_LEADERBOARD_ITEM_MIN -
+			MENU_RA_ACHIEVEMENT_ITEM_MIN); ++index) {
+		const int id = MENU_RA_ACHIEVEMENT_ITEM_MIN + static_cast<int>(index);
+		list->AddButton(snapshot.achievements[index].title.c_str(), id);
+		list->SetUser(id, static_cast<Uint64>(snapshot.achievements[index].id));
+	}
+	if (snapshot.achievements.empty()) list->AddButton("No achievements", MENU_RA_ACHIEVEMENT_ITEM_MIN);
+	list->SetFocus(MENU_RA_ACHIEVEMENT_ITEM_MIN + focus);
+}
+
+void Menu::EnterRaAchievementDetail()
+{
+	list->SetTitle("<< RA Achievement Detail >>", MENU_RA_ACHIEVEMENT_DETAIL);
+	// MenuList owns scrolling; the rows are intentionally inert content lines.
+	for (int index = 0; index < 24; ++index) {
+		char line[32];
+		std::snprintf(line, sizeof(line), "Detail %d", index + 1);
+		list->AddButton(line, MENU_RA_DETAIL_LINE_MIN + index);
+	}
+	list->SetFocus(MENU_RA_DETAIL_LINE_MIN);
+}
+
+void Menu::EnterRaLeaderboards(int focus)
+{
+	app->ShowRaLeaderboardsMenu();
+	const Xm8Ra::RaOverlayLeaderboardListSnapshot snapshot =
+		app->GetRaLeaderboardsMenuSnapshot();
+	list->SetTitle("<< RA Leaderboards >>", MENU_RA_LEADERBOARDS_VIEW);
+	for (size_t index = 0; index < snapshot.leaderboards.size() &&
+		index < static_cast<size_t>(MENU_RA_DETAIL_LINE_MIN -
+			MENU_RA_LEADERBOARD_ITEM_MIN); ++index) {
+		const int id = MENU_RA_LEADERBOARD_ITEM_MIN + static_cast<int>(index);
+		list->AddButton(snapshot.leaderboards[index].title.c_str(), id);
+		list->SetUser(id, static_cast<Uint64>(snapshot.leaderboards[index].id));
+	}
+	if (snapshot.leaderboards.empty()) list->AddButton("No leaderboards", MENU_RA_LEADERBOARD_ITEM_MIN);
+	list->SetFocus(MENU_RA_LEADERBOARD_ITEM_MIN + focus);
+}
+
+bool Menu::IsRaContentMenu() const
+{
+	const int id = list == NULL ? -1 : list->GetID();
+	return id == MENU_RA_LIBRARY_VIEW || id == MENU_RA_GAME_DETAIL ||
+		id == MENU_RA_ACHIEVEMENTS_VIEW || id == MENU_RA_ACHIEVEMENT_DETAIL ||
+		id == MENU_RA_LEADERBOARDS_VIEW;
+}
+
+bool Menu::IsRaGameDetailMenu() const
+{
+	return list != NULL && list->GetID() == MENU_RA_GAME_DETAIL;
+}
+
+int Menu::GetRaContentSelection() const
+{
+	return list == NULL ? MENU_BACK : list->GetFocusID();
+}
+
+void Menu::EnterRaHardcoreConfirmation()
+{
+	list->SetTitle("<< End Hardcore Session? >>", MENU_RA);
+	list->AddButton("Yes (Switch to Casual)", MENU_RA_HARDCORE_YES);
+	list->AddButton("No", MENU_RA_HARDCORE_NO);
+	list->SetFocus(MENU_RA_HARDCORE_NO);
+}
+
+//
+// UpdateRaStatus()
+// update RetroAchievements status rows
+//
+void Menu::UpdateRaStatus()
+{
+	if (list->GetID() != MENU_RA) {
+		return;
+	}
+
+	char ra_status[96];
+	app->GetRaMenuStatus(ra_status, sizeof(ra_status));
+	list->SetText(MENU_RA_STATUS, ra_status);
+	if (!app->IsRaRuntimeSupported()) return;
+	char ra_presence[256];
+	app->GetRaMenuPresence(ra_presence, sizeof(ra_presence));
+	list->SetText(MENU_RA_PRESENCE, ra_presence);
+	list->SetCheck(MENU_RA_MODE, app->IsRaModeEnabled());
+	list->SetCheck(MENU_RA_HARDCORE, app->IsRaHardcoreSelected());
+	list->SetText(MENU_RA_LOGIN,
+		app->IsRaLoggedIn() ? "Logout" : "Login");
+}
+
+//
+// IsRaRichPresenceFocused()
+// check whether the RA menu Rich Presence row has focus
+//
+bool Menu::IsRaRichPresenceFocused()
+{
+	return list != NULL && list->GetID() == MENU_RA &&
+		list->GetFocusID() == MENU_RA_PRESENCE;
+}
+
+//
+// IsRaStatusFocused()
+// check whether the RA status row has focus
+//
+bool Menu::IsRaStatusFocused()
+{
+	return list != NULL && list->GetID() == MENU_RA &&
+		list->GetFocusID() == MENU_RA_STATUS;
+}
+
+#endif
 
 //
 // EnterVideo()
@@ -981,7 +1238,7 @@ void Menu::EnterInput(int id)
 	list->AddSlider("Mouse timeout", MENU_INPUT_MOUSETIME, 400, 20000, 200);
 #endif // !__ANDROID__
 
-	list->AddCheckButton("Coursor Key to Num Pad", MENU_INPUT_CURSOR_NUM);
+	list->AddCheckButton("Cursor Key to Num Pad", MENU_INPUT_CURSOR_NUM);
 	list->AddCheckButton("Num Key to Num Pad", MENU_INPUT_NUM_PAD);
 
 	// softkey
@@ -1526,6 +1783,16 @@ void Menu::Command(bool down, int id)
 		return;
 	}
 
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	// RetroAchievements menu
+	if ((id >= MENU_RA_MIN) && (id <= MENU_RA_MAX)) {
+		if (down == false) {
+			CmdRa(id);
+		}
+		return;
+	}
+#endif
+
 	// video menu
 	if ((id >= MENU_VIDEO_MIN) && (id <= MENU_VIDEO_MAX)) {
 		if (down == false) {
@@ -1651,18 +1918,64 @@ void Menu::CmdBack()
 
 	// load menu
 	case MENU_LOAD:
-		EnterMain(MENU_MAIN_LOAD);
+		if (ra_state_menu) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			EnterRa(MENU_RA_LOAD);
+#else
+			EnterMain(MENU_MAIN_LOAD);
+#endif
+		}
+		else {
+			EnterMain(MENU_MAIN_LOAD);
+		}
 		break;
 
 	// save menu
 	case MENU_SAVE:
-		EnterMain(MENU_MAIN_SAVE);
+		if (ra_state_menu) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+			EnterRa(MENU_RA_SAVE);
+#else
+			EnterMain(MENU_MAIN_SAVE);
+#endif
+		}
+		else {
+			EnterMain(MENU_MAIN_SAVE);
+		}
 		break;
 
 	// system menu
 	case MENU_SYSTEM:
 		EnterMain(MENU_MAIN_SYSTEM);
 		break;
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	// RetroAchievements menu
+	case MENU_RA:
+		EnterMain(MENU_MAIN_RA);
+		break;
+	case MENU_RA_LIBRARY_VIEW:
+		EnterRa(MENU_RA_LIBRARY);
+		break;
+	case MENU_RA_ACHIEVEMENTS_VIEW:
+		EnterRa(MENU_RA_ACHIEVEMENTS);
+		break;
+	case MENU_RA_LEADERBOARDS_VIEW:
+		EnterRa(MENU_RA_LEADERBOARDS);
+		break;
+	case MENU_RA_GAME_DETAIL: {
+		const Xm8Ra::RaOverlayLibraryListSnapshot snapshot =
+			app->GetRaLibraryMenuSnapshot();
+		EnterRaLibrary(static_cast<int>(snapshot.selected_index));
+		break;
+	}
+	case MENU_RA_ACHIEVEMENT_DETAIL: {
+		const Xm8Ra::RaOverlayAchievementListSnapshot snapshot =
+			app->GetRaAchievementsMenuSnapshot();
+		EnterRaAchievements(static_cast<int>(snapshot.selected_index));
+		break;
+	}
+#endif
 
 	// video menu
 	case MENU_VIDEO:
@@ -1830,6 +2143,13 @@ void Menu::CmdMain(int id)
 	case MENU_MAIN_INPUT:
 		EnterInput(MENU_INPUT_SOFTKEY1);
 		break;
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	// RetroAchievements
+	case MENU_MAIN_RA:
+		EnterRa(MENU_RA_LOGIN);
+		break;
+#endif
 
 #ifndef __ANDROID__
 	// screen
@@ -2130,14 +2450,12 @@ void Menu::CmdSystem(int id)
 
 	// pseudo fast disk mode
 	case MENU_SYSTEM_FASTDISK:
-		if (list->GetCheck(MENU_SYSTEM_FASTDISK) == true) {
-			list->SetCheck(MENU_SYSTEM_FASTDISK, false);
-			setting->SetFastDisk(false);
-		}
-		else {
-			list->SetCheck(MENU_SYSTEM_FASTDISK, true);
-			setting->SetFastDisk(true);
-		}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		app->ToggleFastDisk();
+#else
+		setting->SetFastDisk(!setting->IsFastDisk());
+#endif
+		list->SetCheck(MENU_SYSTEM_FASTDISK, setting->IsFastDisk());
 		break;
 
 	// watch battery
@@ -2183,6 +2501,123 @@ void Menu::CmdSystem(int id)
 		break;
 	}
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+//
+// CmdRa()
+// command (RetroAchievements)
+//
+void Menu::CmdRa(int id)
+{
+	auto update_status = [this]() {
+		UpdateRaStatus();
+	};
+
+	if (id >= MENU_RA_LIBRARY_ITEM_MIN &&
+		id < MENU_RA_ACHIEVEMENT_ITEM_MIN) {
+		app->SelectRaLibraryMenuItemById(
+			static_cast<int64_t>(list->GetUser(id)));
+		if (app->OpenRaLibraryMenuDetail()) EnterRaGameDetail();
+		return;
+	}
+	if (id >= MENU_RA_ACHIEVEMENT_ITEM_MIN &&
+		id < MENU_RA_LEADERBOARD_ITEM_MIN) {
+		app->SelectRaAchievementMenuItemById(
+			static_cast<uint32_t>(list->GetUser(id)));
+		if (app->OpenRaAchievementMenuDetail()) EnterRaAchievementDetail();
+		return;
+	}
+	if (id >= MENU_RA_LEADERBOARD_ITEM_MIN &&
+		id < MENU_RA_DETAIL_LINE_MIN) {
+		app->SelectRaLeaderboardMenuItemById(
+			static_cast<uint32_t>(list->GetUser(id)));
+		return;
+	}
+	if (id >= MENU_RA_DETAIL_LINE_MIN) {
+		return;
+	}
+
+	switch (id) {
+	case MENU_RA_MODE:
+		app->ToggleRaMode();
+		EnterRa(MENU_RA_MODE);
+		break;
+
+	case MENU_RA_HARDCORE:
+		if (app->IsRaHardcoreActive()) {
+			EnterRaHardcoreConfirmation();
+		}
+		else {
+			app->ToggleRaPlayMode();
+			EnterRa(MENU_RA_HARDCORE);
+		}
+		break;
+
+	case MENU_RA_HARDCORE_YES:
+		app->ToggleRaPlayMode();
+		EnterRa(MENU_RA_HARDCORE);
+		break;
+
+	case MENU_RA_HARDCORE_NO:
+		EnterRa(MENU_RA_HARDCORE);
+		break;
+
+	case MENU_RA_STATUS:
+		update_status();
+		break;
+
+	case MENU_RA_PRESENCE:
+		update_status();
+		break;
+
+	case MENU_RA_LOGIN:
+		if (app->IsRaLoggedIn()) {
+			app->LogoutRa();
+			list->SetText(MENU_RA_LOGIN, "Login");
+		}
+		else {
+			app->OpenRaLoginOverlay();
+		}
+		update_status();
+		break;
+
+	case MENU_RA_LIBRARY:
+		app->OpenRaLibraryOverlay();
+		break;
+
+	case MENU_RA_ACHIEVEMENTS:
+		app->OpenRaAchievementsOverlay();
+		break;
+
+	case MENU_RA_LEADERBOARDS:
+		app->OpenRaLeaderboardsOverlay();
+		break;
+
+	case MENU_RA_GAME_START:
+		app->ActivateRaLibraryMenuDetail();
+		break;
+
+	case MENU_RA_LOAD:
+		if (app->CheckRaStateAvailability()) {
+			EnterLoad(true);
+		}
+		break;
+
+	case MENU_RA_SAVE:
+		if (app->CheckRaStateAvailability()) {
+			EnterSave(true);
+		}
+		break;
+
+	case MENU_RA_WEBSITE:
+		app->OpenRaWebsite();
+		break;
+
+	default:
+		break;
+	}
+}
+#endif
 
 //
 // CmdVideo()
@@ -3073,7 +3508,7 @@ void Menu::CmdFile(int id)
 	strcpy(file_target, file_dir);
 
 	// directory ?
-	if (platform->IsDir(list->GetUser(id)) == true) {
+	if (platform->IsDir(static_cast<Uint32>(list->GetUser(id))) == true) {
 #ifdef __ANDROID__
 		if (Android_ChDir(file_target, name) != 0) {
 			MakeExpect(name);
@@ -3125,20 +3560,12 @@ void Menu::CmdFile(int id)
 	case MENU_DRIVE1_OPEN:
 	case MENU_DRIVE1_BOTH:
 	case MENU_DRIVE2_BOTH:
-		// drive 1
-		diskmgr[0]->Close();
-		ret = diskmgr[0]->Open(file_target, 0);
+	{
+		std::string error;
 		drive2 = false;
-
-		// drive 2
-		if (file_id != MENU_DRIVE1_OPEN) {
-			diskmgr[1]->Close();
-			if (ret == true) {
-				if (diskmgr[0]->GetBanks() > 1) {
-					drive2 = diskmgr[1]->Open(file_target, 1);
-				}
-			}
-		}
+		ret = file_id == MENU_DRIVE1_OPEN ?
+			app->OpenDiskFromMenu({file_target, 0, 0}, &error) :
+			app->OpenDiskPairFromMenu(file_target, &drive2, &error);
 
 		if (ret == true) {
 			if (file_id == MENU_DRIVE2_BOTH) {
@@ -3154,16 +3581,19 @@ void Menu::CmdFile(int id)
 			}
 		}
 		break;
+	}
 
 	case MENU_DRIVE2_OPEN:
+	{
+		std::string error;
 		// drive 2
-		diskmgr[1]->Close();
-		ret = diskmgr[1]->Open(file_target, 0);
+		ret = app->OpenDiskFromMenu({file_target, 1, 0}, &error);
 
 		if (ret == true) {
 			EnterDrive2(MENU_DRIVE2_BANK0);
 		}
 		break;
+	}
 
 	default:
 		break;

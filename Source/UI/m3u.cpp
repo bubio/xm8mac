@@ -1,6 +1,9 @@
 #include "m3u.h"
 
 #include <fstream>
+#ifdef _WIN32
+#include <filesystem>
+#endif
 #include <string>
 #include <cctype>
 
@@ -54,7 +57,11 @@ M3UResult LoadM3U(const std::string& path)
     M3UResult result;
     result.success = false;
 
+#ifdef _WIN32
+    std::ifstream file(std::filesystem::u8path(path));
+#else
     std::ifstream file(path);
+#endif
     if (!file.is_open()) {
         result.error = "unable to open m3u: " + path;
         return result;

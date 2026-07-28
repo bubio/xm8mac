@@ -243,6 +243,10 @@ void MenuItem::SetName(const char *name)
 
 		// set current
 		item_name = ptr;
+		if (item_name_sjis != NULL) {
+			SDL_free(item_name_sjis);
+			item_name_sjis = NULL;
+		}
 	}
 }
 
@@ -250,7 +254,7 @@ void MenuItem::SetName(const char *name)
 // GetUser()
 // get user data
 //
-Uint32 MenuItem::GetUser()
+Uint64 MenuItem::GetUser()
 {
 	return item_user;
 }
@@ -259,7 +263,7 @@ Uint32 MenuItem::GetUser()
 // SetUser()
 // set user data
 //
-void MenuItem::SetUser(Uint32 user)
+void MenuItem::SetUser(Uint64 user)
 {
 	item_user = user;
 }

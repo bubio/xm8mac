@@ -1,5 +1,8 @@
 def buildAsLibrary = project.hasProperty('BUILD_AS_LIBRARY')
 def buildAsApplication = !buildAsLibrary
+def retroAchievementsEnabled = !project.hasProperty('XM8_ENABLE_RETROACHIEVEMENTS') ||
+        (!project.property('XM8_ENABLE_RETROACHIEVEMENTS').toString().equalsIgnoreCase('false') &&
+        project.property('XM8_ENABLE_RETROACHIEVEMENTS').toString() != '0')
 if (buildAsApplication) {
     apply plugin: 'com.android.application'
 }
@@ -16,14 +19,19 @@ android {
         if (buildAsApplication) {
             applicationId = "net.retropc.pi"
         }
+        // One APK supports API 19+. RetroAchievements is enabled at runtime
+        // only on API 23+, where Android Keystore AES-GCM is available.
         minSdk = 19
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 4
         versionName = "1.78"
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         externalNativeBuild {
             ndkBuild {
                 arguments "APP_PLATFORM=android-19"
+                if (retroAchievementsEnabled) {
+                    arguments "XM8_ENABLE_RETROACHIEVEMENTS=1"
+                }
                 abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             }
         }
@@ -73,6 +81,16 @@ dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation 'androidx.core:core:1.13.1'
     implementation 'androidx.documentfile:documentfile:1.0.1'
+}
+
+// Android.mk compiles sources outside Builder/Android. Register them as task
+// inputs so Android Studio does not reuse an old native library after a C++
+// source edit.
+def xm8SourceDirectory = rootProject.file('../../Source')
+tasks.configureEach {
+    if (name.startsWith('configureNdkBuild') || name.startsWith('buildNdkBuild')) {
+        inputs.dir(xm8SourceDirectory)
+    }
 }
 
 if (buildAsLibrary) {

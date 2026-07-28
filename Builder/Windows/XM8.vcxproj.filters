@@ -49,8 +49,26 @@
     <Filter Include="ソース ファイル\Filter">
       <UniqueIdentifier>{66dee534-0edd-489e-977f-554704204b5c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\RetroAchievements">
+      <UniqueIdentifier>{74575DF0-4314-48AB-9238-C839D9954B4C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\RetroAchievements\ThirdParty">
+      <UniqueIdentifier>{7113C065-A46C-42E8-9EAC-6E900DB6A564}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\RetroAchievements">
+      <UniqueIdentifier>{4513512C-D38F-40C3-906B-B98AA65EB166}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Source\RA\*.cpp">
+      <Filter>ソース ファイル\RetroAchievements</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\rcheevos\src\**\*.c">
+      <Filter>ソース ファイル\RetroAchievements\ThirdParty</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\sqlite\sqlite3.c">
+      <Filter>ソース ファイル\RetroAchievements\ThirdParty</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\UI\main.cpp">
       <Filter>ソース ファイル\UI</Filter>
     </ClCompile>
@@ -185,6 +203,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Source\RA\*.h">
+      <Filter>ヘッダー ファイル\RetroAchievements</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\ePC-8801MA\vm\z80.h">
       <Filter>ヘッダー ファイル\ePC-8801MA\vm</Filter>
     </ClInclude>

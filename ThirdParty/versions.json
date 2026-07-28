@@ -1,0 +1,79 @@
+{
+  "rcheevos": {
+    "version": "12.3.0",
+    "tag": "v12.3.0",
+    "commit": "e9ca3694c862b61235595176dac4b22677848c93",
+    "archive_sha256": "75ebe331c5ae0f80d736b11e76a46ad6c59e942c2c9a8c4f41236f3b41a741a5",
+    "license": "MIT",
+    "compile_definitions": [
+      "RC_DISABLE_LUA",
+      "RC_CLIENT_SUPPORTS_HASH"
+    ],
+    "sources": [
+      "src/rc_client.c",
+      "src/rc_client_raintegration.c",
+      "src/rc_compat.c",
+      "src/rc_util.c",
+      "src/rc_version.c",
+      "src/rcheevos/alloc.c",
+      "src/rcheevos/condition.c",
+      "src/rcheevos/condset.c",
+      "src/rcheevos/consoleinfo.c",
+      "src/rcheevos/format.c",
+      "src/rcheevos/lboard.c",
+      "src/rcheevos/memref.c",
+      "src/rcheevos/operand.c",
+      "src/rcheevos/rc_validate.c",
+      "src/rcheevos/richpresence.c",
+      "src/rcheevos/runtime.c",
+      "src/rcheevos/runtime_progress.c",
+      "src/rcheevos/trigger.c",
+      "src/rcheevos/value.c",
+      "src/rapi/rc_api_common.c",
+      "src/rapi/rc_api_editor.c",
+      "src/rapi/rc_api_info.c",
+      "src/rapi/rc_api_runtime.c",
+      "src/rapi/rc_api_user.c",
+      "src/rhash/aes.c",
+      "src/rhash/cdreader.c",
+      "src/rhash/hash.c",
+      "src/rhash/hash_disc.c",
+      "src/rhash/hash_encrypted.c",
+      "src/rhash/hash_rom.c",
+      "src/rhash/hash_zip.c",
+      "src/rhash/md5.c"
+    ],
+    "excluded_sources": [
+      "src/rc_client_external.c",
+      "src/rc_libretro.c"
+    ]
+  },
+  "sqlite": {
+    "version": "3.53.0",
+    "version_number": 3053000,
+    "mirror_commit": "4ebc7fdcf459e8d88eb5b019c2949bda86565528",
+    "source_id": "2026-04-09 11:41:38 4525003a53a7fc63ca75c59b22c79608659ca12f0131f52c18637f829977f20b",
+    "archive_sha256": "bf3733d7c71b3ab0f6fd8a9ea0052ad87fa037d94333e14ce09878ba3492c3b0",
+    "license": "Public Domain",
+    "compile_definitions": [
+      "SQLITE_THREADSAFE=1",
+      "SQLITE_DEFAULT_FOREIGN_KEYS=1",
+      "SQLITE_OMIT_LOAD_EXTENSION",
+      "SQLITE_DQS=0"
+    ]
+  },
+  "stb": {
+    "version": "stb_image 2.30",
+    "commit": "31c1ad37456438565541f4919958214b6e762fb4",
+    "file_sha256": "594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3",
+    "license": "MIT OR Public Domain",
+    "compile_definitions": [
+      "STBI_ONLY_PNG",
+      "STBI_ONLY_JPEG",
+      "STBI_NO_STDIO",
+      "STBI_NO_HDR",
+      "STBI_NO_LINEAR",
+      "STBI_MAX_DIMENSIONS=2048"
+    ]
+  }
+}

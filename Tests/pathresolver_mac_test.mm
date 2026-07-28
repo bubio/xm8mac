@@ -43,8 +43,11 @@ int main()
 {
 	@autoreleasepool {
 		NSFileManager *manager = [NSFileManager defaultManager];
+		NSString *root_name = [NSString stringWithFormat:
+			@"xm8-pathresolver-mac-test-%@", [[NSUUID UUID] UUIDString]];
 		NSURL *root = [NSURL fileURLWithPath:
-			@"/tmp/xm8-pathresolver-mac-test" isDirectory:YES];
+			[NSTemporaryDirectory() stringByAppendingPathComponent:root_name]
+			isDirectory:YES];
 		[manager removeItemAtURL:root error:nil];
 		Check([manager createDirectoryAtURL:root
 			withIntermediateDirectories:YES attributes:nil error:nil],

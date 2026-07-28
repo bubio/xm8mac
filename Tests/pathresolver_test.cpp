@@ -58,7 +58,7 @@ int main()
 		"classify regular file");
 	Check(InspectPath(file_link, resolved, sizeof(resolved)) == PATH_KIND_FILE,
 		"classify file symlink");
-	char canonical[1024];
+	char canonical[4096];
 	Check(realpath(file_path, canonical) != nullptr &&
 		std::strcmp(resolved, canonical) == 0, "resolve file symlink");
 	Check(InspectPath(dir_link, resolved, sizeof(resolved)) ==

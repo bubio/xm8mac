@@ -1,0 +1,10 @@
+SQLite is in the public domain.
+
+The SQLite authors have dedicated the code to the public domain and provide a
+blessing instead of a software license. The authoritative statement is:
+
+https://www.sqlite.org/copyright.html
+
+Bundled version: 3.53.0
+Fossil source ID:
+2026-04-09 11:41:38 4525003a53a7fc63ca75c59b22c79608659ca12f0131f52c18637f829977f20b

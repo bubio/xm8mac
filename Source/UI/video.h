@@ -39,6 +39,18 @@ public:
 	// virtual machine
 	uint32* GetFrameBuf(uint32 y);
 										// get frame buffer for ePC-8801MA
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	uint32* GetStatusFrame();
+										// get status frame buffer for RA
+	int GetStatusFrameHeight() const;
+										// get status frame height
+	int GetStatusContentTop() const;
+										// get status text top
+	void SetRaStatusActive(bool active);
+										// replace normal status with RA status
+	bool IsDedicatedStatusPoint(int x, int y) const;
+										// point is in non-overlay status area
+#endif
 
 	// menu
 	void SetMenuMode(bool mode);
@@ -159,6 +171,10 @@ private:
 										// draw from line
 	bool softkey_ctrl;
 										// softkey control
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	bool ra_status_active;
+										// RA owns complete status line
+#endif
 
 	// drive status
 	drive_info drive_status[MAX_DRIVE];

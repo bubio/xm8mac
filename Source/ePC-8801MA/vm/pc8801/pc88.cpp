@@ -10,6 +10,7 @@
 */
 
 #include "pc88.h"
+#include "pc88_ra_memory.h"
 #include "../event.h"
 #include "../i8251.h"
 #include "../pcm1bit.h"
@@ -2903,6 +2904,12 @@ bool PC88::check_data_carrier()
 		return true;
 	}
 	return false;
+}
+
+size_t PC88::read_ra_inspection_memory(uint32 addr, uint8 *buffer,
+	size_t count) const
+{
+	return ReadPc88RaInspectionMemory(ram, tvram, addr, buffer, count);
 }
 
 void PC88::draw_screen()

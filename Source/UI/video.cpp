@@ -98,6 +98,9 @@ Video::Video(App *a)
 	draw_ctrl = true;
 	draw_line = 0;
 	softkey_ctrl = false;
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	ra_status_active = false;
+#endif
 
 	// rect
 	SDL_zero(draw_rect);
@@ -705,21 +708,29 @@ void Video::Draw()
 
 	// status line
 	status = draw_ctrl;
-	if (DrawAccess() == true) {
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (ra_status_active) {
 		status = true;
-		draw_ctrl = true;
 	}
-	if (DrawFrameRate() == true) {
-		status = true;
-		draw_ctrl = true;
-	}
-	if (DrawFullSpeed() == true) {
-		status = true;
-		draw_ctrl = true;
-	}
-	if (DrawSystemInfo() == true) {
-		status = true;
-		draw_ctrl = true;
+	else
+#endif
+	{
+		if (DrawAccess() == true) {
+			status = true;
+			draw_ctrl = true;
+		}
+		if (DrawFrameRate() == true) {
+			status = true;
+			draw_ctrl = true;
+		}
+		if (DrawFullSpeed() == true) {
+			status = true;
+			draw_ctrl = true;
+		}
+		if (DrawSystemInfo() == true) {
+			status = true;
+			draw_ctrl = true;
+		}
 	}
 
 	// warning message
@@ -1278,6 +1289,54 @@ uint32* Video::GetFrameBuf(uint32 y)
 
 	return &frame_buf[SCREEN_WIDTH * y];
 }
+
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+uint32* Video::GetStatusFrame()
+{
+	return &frame_buf[SCREEN_WIDTH * SCREEN_HEIGHT];
+}
+
+int Video::GetStatusFrameHeight() const
+{
+	return setting->HasStatusLine() ? MINIMUM_HEIGHT + STATUS_HEIGHT :
+		STATUS_HEIGHT;
+}
+
+int Video::GetStatusContentTop() const
+{
+	return setting->HasStatusLine() ? 1 : 0;
+}
+
+void Video::SetRaStatusActive(bool active)
+{
+	if (ra_status_active == active) {
+		return;
+	}
+	if (ra_status_active && !active && frame_buf != NULL) {
+		// Normal status widgets intentionally leave one-pixel separators
+		// between the drive panels. Clear the complete status frame before
+		// forcing them to redraw so pixels from a full-width RA row cannot
+		// survive in those separators.
+		uint32 *status_frame =
+			&frame_buf[SCREEN_WIDTH * SCREEN_HEIGHT];
+		const int pixel_count = SCREEN_WIDTH * GetStatusFrameHeight();
+		const uint32 background = COLOR_BLACK | status_alpha;
+		for (int index = 0; index < pixel_count; ++index) {
+			status_frame[index] = background;
+		}
+	}
+	ra_status_active = active;
+	ResetStatus();
+	DrawCtrl();
+}
+
+bool Video::IsDedicatedStatusPoint(int x, int y) const
+{
+	return setting->HasStatusLine() && x >= 0 && x < SCREEN_WIDTH &&
+		y >= SCREEN_HEIGHT && y < SCREEN_HEIGHT + MINIMUM_HEIGHT +
+		STATUS_HEIGHT;
+}
+#endif
 
 //
 // SetMenuMode()

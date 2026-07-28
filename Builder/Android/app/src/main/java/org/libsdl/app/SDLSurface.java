@@ -218,6 +218,15 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         // 12290 = 0x3002 = 0x2002 | 0x1002 = SOURCE_MOUSE | SOURCE_TOUCHSCREEN
         // 0x2   = SOURCE_CLASS_POINTER
         if (event.getSource() == InputDevice.SOURCE_MOUSE || event.getSource() == (InputDevice.SOURCE_MOUSE | InputDevice.SOURCE_TOUCHSCREEN)) {
+            int mouseAction = action;
+            // ACTION_BUTTON_PRESS/RELEASE were added after this project's
+            // minimum Android API. Use their stable numeric values so old
+            // emulator images can deliver mouse clicks to SDL as DOWN/UP.
+            if (action == 11) {
+                mouseAction = MotionEvent.ACTION_DOWN;
+            } else if (action == 12) {
+                mouseAction = MotionEvent.ACTION_UP;
+            }
             int mouseButton = 1;
             try {
                 Object object = event.getClass().getMethod("getButtonState").invoke(event);
@@ -227,13 +236,23 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             } catch(Exception ignored) {
             }
 
+            // Older Android emulator images can report a mouse/touchscreen
+            // press with a zero button state. SDL needs BUTTON_PRIMARY for
+            // the press; the subsequent ACTION_UP correctly reports zero.
+            if (mouseAction == MotionEvent.ACTION_DOWN && mouseButton == 0) {
+                mouseButton = 1;
+            }
+            if (mouseAction == MotionEvent.ACTION_UP) {
+                mouseButton = 0;
+            }
+
             // We need to check if we're in relative mouse mode and get the axis offset rather than the x/y values
             // if we are.  We'll leverage our existing mouse motion listener
             SDLGenericMotionListener_API12 motionListener = SDLActivity.getMotionListener();
             x = motionListener.getEventX(event);
             y = motionListener.getEventY(event);
 
-            SDLActivity.onNativeMouse(mouseButton, action, x, y, motionListener.inRelativeMode());
+            SDLActivity.onNativeMouse(mouseButton, mouseAction, x, y, motionListener.inRelativeMode());
         } else {
             switch(action) {
                 case MotionEvent.ACTION_MOVE:

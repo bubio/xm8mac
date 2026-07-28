@@ -33,11 +33,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install dependency
-        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libcurl4-openssl-dev libsecret-1-dev
     
       - name: Build XM8 Linux app
         run: |
-          cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
+          cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr -DXM8_ENABLE_RETROACHIEVEMENTS=ON
+          cmake --build build -j 2
+          ctest --test-dir build --output-on-failure
           cmake --build build -j 2 --target package
           rpm_file=$(ls build/xm8*.rpm)
           deb_file=$(ls build/xm8*amd64.deb)

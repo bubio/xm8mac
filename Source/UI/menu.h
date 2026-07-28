@@ -43,12 +43,30 @@ public:
 										// enter drive2 menu
 	void EnterCmt(int id);
 										// enter cmt menu
-	void EnterLoad();
+	void EnterLoad(bool ra_state = false);
 										// enter load menu
-	void EnterSave();
+	void EnterSave(bool ra_state = false);
 										// enter save menu
 	void EnterSystem(int id);
 										// enter system menu
+	void EnterRa(int id);
+										// enter RetroAchievements menu
+	void EnterRaLibrary(int focus = 0);
+	void EnterRaGameDetail();
+	void EnterRaAchievements(int focus = 0);
+	void EnterRaAchievementDetail();
+	void EnterRaLeaderboards(int focus = 0);
+	bool IsRaContentMenu() const;
+	bool IsRaGameDetailMenu() const;
+	int GetRaContentSelection() const;
+	void EnterRaHardcoreConfirmation();
+										// confirm ending an active Hardcore session
+	void UpdateRaStatus();
+										// update RetroAchievements status rows
+	bool IsRaRichPresenceFocused();
+										// Rich Presence row has focus
+	bool IsRaStatusFocused();
+										// RA status row has focus
 	void EnterVideo(int id);
 										// enter video menu
 	void EnterAudio();
@@ -95,6 +113,8 @@ public:
 										// command (save)
 	void CmdSystem(int id);
 										// command (system)
+	void CmdRa(int id);
+										// command (RetroAchievements)
 	void CmdVideo(bool down, int id);
 										// command (video)
 	void CmdAudio(bool down, int id);
@@ -181,6 +201,8 @@ private:
 										// parent softkey type id
 	int joymap_id;
 										// parent joymap id
+	bool ra_state_menu;
+										// state menu was opened from RetroAchievements
 	static const int vmkey_table[62 * 2];
 										// MENU_VMKEY table
 	static const Uint32 joytest_table[15 * 2];

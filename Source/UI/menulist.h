@@ -63,12 +63,16 @@ public:
 										// get slider state
 	void SetSlider(int id, int current);
 										// set slider state
-	Uint32 GetUser(int id);
+	Uint64 GetUser(int id);
 										// get user info
-	void SetUser(int id, Uint32 user);
+	void SetUser(int id, Uint64 user);
 										// set user info
 	int GetID();
 										// get menu id
+	int GetFocusID();
+										// get focused item id
+	int GetTop() const;
+										// get first visible item index
 	const char* GetName(int id);
 										// get menu name
 	void SetFocus(int id);
@@ -153,6 +157,10 @@ private:
 										// finger y on down
 	Uint32 finger_tick;
 										// finger tick on down
+	Uint64 finger_counter;
+										// monotonic finger counter on down
+	bool finger_tap_valid;
+										// no scroll or slider drag since finger down
 	int finger_focus;
 										// menu index with focus on finger down
 	bool finger_slider;

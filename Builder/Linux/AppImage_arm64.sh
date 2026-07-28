@@ -10,7 +10,7 @@ cd ../..
 rm -rf build
 
 # Build Exe
-cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCPACK=ON -DCMAKE_INSTALL_PREFIX=/usr -DXM8_ENABLE_RETROACHIEVEMENTS=ON
 cmake --build build -j 2
 
 BUILD_DIR="${1-build}"

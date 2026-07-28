@@ -43,6 +43,8 @@ endif()
 
 include(CTest)
 
+option(XM8_ENABLE_RETROACHIEVEMENTS "Enable RetroAchievements support" OFF)
+
 # Packaging options
 option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
 
@@ -66,8 +68,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 
 # Dependencies must be included after Platforms.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13")
-if(APPLE)
-  # macOS: Build as bundle and use bundled SDL2 source by default
+if(APPLE OR WIN32)
+  # macOS/Windows: Build bundled SDL2 source by default.
   set(XM8_SYSTEM_SDL2 OFF CACHE BOOL "Use system-installed SDL2" FORCE)
   set(XM8_STATIC_SDL2 OFF CACHE BOOL "Link SDL2 statically" FORCE)
   message(STATUS "📦 SDL2: using bundled source")
@@ -82,15 +84,23 @@ include(Dependencies)
 # xBRZ
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Source/Filter/xBRZ)
 
+if(XM8_ENABLE_RETROACHIEVEMENTS)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty)
+endif()
+
 # Set compile options
-add_compile_options(-Wall)
-add_compile_options(
-  -Wno-macro-redefined
-  -Wno-non-c-typedef-for-linkage
-  -Wno-deprecated-declarations
-  -Wno-overloaded-virtual
-  -Wno-c++11-compat-deprecated-writable-strings
-  -Wno-narrowing)
+if(MSVC)
+  add_compile_options(/W4)
+else()
+  add_compile_options(-Wall)
+  add_compile_options(
+    -Wno-macro-redefined
+    -Wno-non-c-typedef-for-linkage
+    -Wno-deprecated-declarations
+    -Wno-overloaded-virtual
+    -Wno-c++11-compat-deprecated-writable-strings
+    -Wno-narrowing)
+endif()
 
 # Include directories
 include_directories(
@@ -159,6 +169,31 @@ endif()
 set(BIN_TARGET "xm8")
 add_executable(${BIN_TARGET} MACOSX_BUNDLE ${SRCS} Builder/macOS/AppIcon.icns)
 target_compile_definitions(${BIN_TARGET} PRIVATE SDL _PC8801MA) 
+if(WIN32)
+  # Match Builder/Windows/XM8.vcxproj's Unicode character set. platform.cpp's
+  # Win32 file browser implementation uses the wide Win32 API behind UNICODE.
+  target_compile_definitions(${BIN_TARGET} PRIVATE UNICODE _UNICODE)
+  target_link_libraries(${BIN_TARGET} PRIVATE imm32)
+endif()
+
+if(XM8_ENABLE_RETROACHIEVEMENTS)
+  xm8_enable_ra_for_target(${BIN_TARGET})
+
+  set(RA_LICENSE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/XM8-GPL-2.0.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/xBRZ-GPL-3.0.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/rcheevos-MIT.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/stb-MIT-or-Public-Domain.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/SQLite-Public-Domain.txt
+  )
+  set_source_files_properties(${RA_LICENSE_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources/Licenses")
+  set(RA_NOTICE_FILE
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/THIRD_PARTY_NOTICES.md)
+  set_source_files_properties(${RA_NOTICE_FILE} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources")
+  target_sources(${BIN_TARGET} PRIVATE ${RA_LICENSE_FILES} ${RA_NOTICE_FILE})
+endif()
 
 if(CMAKE_STRIP)
   add_custom_command(
@@ -225,6 +260,46 @@ if(BUILD_TESTING)
   target_link_libraries(d88probe_test PRIVATE XM8::SDL)
   add_test(NAME d88probe_test COMMAND d88probe_test)
 
+  add_executable(generate_d88_fixtures
+    Tests/generate_d88_fixtures.cpp
+    Tests/Fixtures/d88_fixture.cpp
+  )
+  target_include_directories(generate_d88_fixtures PRIVATE Tests)
+
+  add_executable(d88fixture_test
+    Tests/d88fixture_test.cpp
+    Tests/Fixtures/d88_fixture.cpp
+    Source/UI/d88probe.cpp
+    Source/UI/fileio.cpp
+    Source/UI/m3u.cpp
+  )
+  target_include_directories(d88fixture_test PRIVATE
+    Tests
+    Source/UI
+    Source/ePC-8801MA
+  )
+  target_compile_definitions(d88fixture_test PRIVATE SDL _PC8801MA)
+  target_link_libraries(d88fixture_test PRIVATE XM8::SDL)
+  add_test(NAME d88fixture_test COMMAND d88fixture_test)
+
+  add_executable(d88write_test
+    Tests/d88write_test.cpp
+    Tests/Fixtures/d88_fixture.cpp
+    Source/UI/fileio.cpp
+    Source/ePC-8801MA/common.cpp
+    Source/ePC-8801MA/config.cpp
+    Source/ePC-8801MA/vm/disk.cpp
+  )
+  target_include_directories(d88write_test PRIVATE
+    Tests
+    Source/UI
+    Source/ePC-8801MA
+    Source/ePC-8801MA/vm
+  )
+  target_compile_definitions(d88write_test PRIVATE SDL _PC8801MA)
+  target_link_libraries(d88write_test PRIVATE XM8::SDL)
+  add_test(NAME d88write_test COMMAND d88write_test)
+
   add_executable(pathresolver_test
     Tests/pathresolver_test.cpp
     Source/UI/pathresolver.cpp
@@ -235,6 +310,64 @@ if(BUILD_TESTING)
   endif()
   target_include_directories(pathresolver_test PRIVATE Source/UI)
   add_test(NAME pathresolver_test COMMAND pathresolver_test)
+
+  add_executable(host_frame_callback_test
+    Tests/host_frame_callback_test.cpp
+  )
+  target_include_directories(host_frame_callback_test PRIVATE
+    Source/ePC-8801MA/vm
+  )
+  add_test(NAME host_frame_callback_test COMMAND host_frame_callback_test)
+
+  add_executable(event_host_frame_integration_test
+    Tests/event_host_frame_integration_test.cpp
+    Source/UI/file.cpp
+    Source/UI/fileio.cpp
+    Source/ePC-8801MA/common.cpp
+    Source/ePC-8801MA/config.cpp
+    Source/ePC-8801MA/fifo.cpp
+    Source/ePC-8801MA/vm/disk.cpp
+    Source/ePC-8801MA/vm/event.cpp
+    Source/ePC-8801MA/vm/i8251.cpp
+    Source/ePC-8801MA/vm/i8253.cpp
+    Source/ePC-8801MA/vm/i8255.cpp
+    Source/ePC-8801MA/vm/disksub.cpp
+    Source/ePC-8801MA/vm/pcm1bit.cpp
+    Source/ePC-8801MA/vm/upd765a.cpp
+    Source/ePC-8801MA/vm/upd1990a.cpp
+    Source/ePC-8801MA/vm/fmsound.cpp
+    Source/ePC-8801MA/vm/z80.cpp
+    Source/ePC-8801MA/vm/fmgen/opna.cpp
+    Source/ePC-8801MA/vm/fmgen/psg.cpp
+    Source/ePC-8801MA/vm/fmgen/fmgen.cpp
+    Source/ePC-8801MA/vm/fmgen/fmtimer.cpp
+    Source/ePC-8801MA/vm/pc8801/pc88.cpp
+    Source/ePC-8801MA/vm/pc8801/pc8801.cpp
+  )
+  target_include_directories(event_host_frame_integration_test PRIVATE
+    Source/UI
+    Source/ePC-8801MA
+    Source/ePC-8801MA/vm
+    Source/ePC-8801MA/vm/pc8801
+    Source/ePC-8801MA/vm/fmgen
+  )
+  target_compile_definitions(event_host_frame_integration_test PRIVATE
+    SDL _PC8801MA)
+  target_link_libraries(event_host_frame_integration_test PRIVATE XM8::SDL)
+  add_test(NAME event_host_frame_integration_test
+    COMMAND event_host_frame_integration_test)
+
+  add_executable(fileio_error_test
+    Tests/fileio_error_test.cpp
+    Source/UI/fileio.cpp
+  )
+  target_include_directories(fileio_error_test PRIVATE
+    Source/UI
+    Source/ePC-8801MA
+  )
+  target_compile_definitions(fileio_error_test PRIVATE SDL)
+  target_link_libraries(fileio_error_test PRIVATE XM8::SDL)
+  add_test(NAME fileio_error_test COMMAND fileio_error_test)
 
   if(APPLE)
     add_executable(converter_mac_test
@@ -253,6 +386,293 @@ if(BUILD_TESTING)
     target_include_directories(pathresolver_mac_test PRIVATE Source/UI)
     target_link_libraries(pathresolver_mac_test PRIVATE "-framework Foundation")
     add_test(NAME pathresolver_mac_test COMMAND pathresolver_mac_test)
+  endif()
+
+  if(XM8_ENABLE_RETROACHIEVEMENTS)
+	find_package(Threads REQUIRED)
+    set(RA_PATHRESOLVER_SOURCES
+      Source/UI/pathresolver.cpp
+    )
+    if(APPLE)
+      list(APPEND RA_PATHRESOLVER_SOURCES Source/UI/pathresolver_mac.mm)
+    endif()
+
+    add_executable(ra_dependency_test
+      Tests/ra_dependency_test.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_dependency_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_dependency_test PRIVATE Source/RA Source/UI)
+    target_compile_definitions(ra_dependency_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_dependency_test COMMAND ra_dependency_test)
+
+    add_executable(ra_media_probe_test
+      Tests/ra_media_probe_test.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_media_probe_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_media_probe_test PRIVATE
+      Tests
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_media_probe_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_media_probe_test COMMAND ra_media_probe_test)
+
+    add_executable(ra_media_change_policy_test
+      Tests/ra_media_change_policy_test.cpp
+    )
+    target_include_directories(ra_media_change_policy_test PRIVATE Source/RA)
+    add_test(NAME ra_media_change_policy_test COMMAND ra_media_change_policy_test)
+
+	add_executable(ra_callback_lifetime_test
+	  Tests/ra_callback_lifetime_test.cpp
+	)
+	target_include_directories(ra_callback_lifetime_test PRIVATE Source/RA)
+	target_link_libraries(ra_callback_lifetime_test PRIVATE Threads::Threads)
+	add_test(NAME ra_callback_lifetime_test COMMAND ra_callback_lifetime_test)
+
+	add_executable(ra_leaderboard_fetch_policy_test
+	  Tests/ra_leaderboard_fetch_policy_test.cpp
+	)
+	target_include_directories(ra_leaderboard_fetch_policy_test PRIVATE Source/RA)
+	add_test(NAME ra_leaderboard_fetch_policy_test
+	  COMMAND ra_leaderboard_fetch_policy_test)
+
+    add_executable(ra_session_state_test
+      Tests/ra_session_state_test.cpp
+    )
+    target_include_directories(ra_session_state_test PRIVATE Source/RA)
+    add_test(NAME ra_session_state_test COMMAND ra_session_state_test)
+
+    add_executable(ra_menu_status_test
+      Tests/ra_menu_status_test.cpp
+    )
+    target_include_directories(ra_menu_status_test PRIVATE Source/RA)
+    add_test(NAME ra_menu_status_test COMMAND ra_menu_status_test)
+
+    add_executable(ra_session_policy_test
+      Tests/ra_session_policy_test.cpp
+    )
+    target_include_directories(ra_session_policy_test PRIVATE Source/RA)
+    add_test(NAME ra_session_policy_test COMMAND ra_session_policy_test)
+
+    add_executable(ra_state_store_test
+      Tests/ra_state_store_test.cpp
+      Source/RA/ra_file_util.cpp
+      Source/RA/ra_state_store.cpp
+    )
+    target_include_directories(ra_state_store_test PRIVATE Source/RA)
+    add_test(NAME ra_state_store_test COMMAND ra_state_store_test)
+
+    add_executable(ra_file_util_test
+      Tests/ra_file_util_test.cpp
+      Source/RA/ra_file_util.cpp
+    )
+    target_include_directories(ra_file_util_test PRIVATE Source/RA)
+    add_test(NAME ra_file_util_test COMMAND ra_file_util_test)
+
+    add_executable(ra_inspect_media
+      Tests/ra_inspect_media.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_inspect_media PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_inspect_media PRIVATE
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_inspect_media PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+
+    add_executable(ra_memory_map_test
+      Tests/ra_memory_map_test.cpp
+    )
+    target_include_directories(ra_memory_map_test PRIVATE
+      Source/ePC-8801MA
+      Source/ePC-8801MA/vm
+      Source/ePC-8801MA/vm/pc8801
+    )
+    target_compile_definitions(ra_memory_map_test PRIVATE
+      SDL _PC8801MA XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_memory_map_test COMMAND ra_memory_map_test)
+
+    add_executable(ra_library_store_test
+      Tests/ra_library_store_test.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_library_store_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_library_store_test PRIVATE
+      Tests
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_library_store_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_library_store_test COMMAND ra_library_store_test)
+
+    add_executable(ra_seed_library_fixture
+      Tests/ra_seed_library_fixture.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      Tests/Fixtures/ra_library_fixture_seed.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_seed_library_fixture PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_seed_library_fixture PRIVATE
+      Tests
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_seed_library_fixture PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+
+    add_executable(ra_seed_library_fixture_test
+      Tests/ra_seed_library_fixture_test.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      Tests/Fixtures/ra_library_fixture_seed.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_seed_library_fixture_test PRIVATE
+      xm8_ra_dependencies)
+    target_include_directories(ra_seed_library_fixture_test PRIVATE
+      Tests
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_seed_library_fixture_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_seed_library_fixture_test
+      COMMAND ra_seed_library_fixture_test)
+
+    add_executable(ra_credentials_http_test
+      Tests/ra_credentials_http_test.cpp
+      Source/RA/ra_http_fake.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_credentials_http_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_credentials_http_test PRIVATE
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_credentials_http_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_credentials_http_test COMMAND ra_credentials_http_test)
+    set_tests_properties(ra_credentials_http_test PROPERTIES
+      ENVIRONMENT "XM8_RA_CREDENTIALS_TEST_MEMORY=1")
+
+    if(WIN32)
+      add_executable(ra_credentials_win_test
+        Tests/ra_credentials_win_test.cpp
+        $<TARGET_OBJECTS:xm8_ra_core>
+        $<TARGET_OBJECTS:xm8_ra_platform>
+      )
+      target_link_libraries(ra_credentials_win_test PRIVATE
+        xm8_ra_dependencies)
+      target_include_directories(ra_credentials_win_test PRIVATE Source/RA)
+      target_compile_definitions(ra_credentials_win_test PRIVATE
+        XM8_ENABLE_RETROACHIEVEMENTS=1)
+      add_test(NAME ra_credentials_win_test COMMAND ra_credentials_win_test)
+
+      add_executable(ra_http_win_test Tests/ra_http_win_test.cpp
+        $<TARGET_OBJECTS:xm8_ra_core>
+        $<TARGET_OBJECTS:xm8_ra_platform>)
+      target_link_libraries(ra_http_win_test PRIVATE
+        xm8_ra_dependencies ws2_32)
+      target_include_directories(ra_http_win_test PRIVATE Source/RA)
+      target_compile_definitions(ra_http_win_test PRIVATE
+        XM8_ENABLE_RETROACHIEVEMENTS=1)
+      add_test(NAME ra_http_win_test COMMAND ra_http_win_test)
+    elseif(UNIX AND NOT APPLE AND NOT ANDROID)
+      add_executable(ra_http_linux_test Tests/ra_http_linux_test.cpp
+        $<TARGET_OBJECTS:xm8_ra_core>
+        $<TARGET_OBJECTS:xm8_ra_platform>)
+      target_link_libraries(ra_http_linux_test PRIVATE xm8_ra_dependencies)
+      target_include_directories(ra_http_linux_test PRIVATE Source/RA)
+      target_compile_definitions(ra_http_linux_test PRIVATE
+        XM8_ENABLE_RETROACHIEVEMENTS=1)
+      add_test(NAME ra_http_linux_test COMMAND ra_http_linux_test)
+    endif()
+
+    add_executable(ra_service_test
+      Tests/ra_service_test.cpp
+      Source/RA/ra_http_fake.cpp
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+    )
+    target_link_libraries(ra_service_test PRIVATE xm8_ra_dependencies)
+    target_include_directories(ra_service_test PRIVATE
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_service_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_service_test COMMAND ra_service_test)
+    set_tests_properties(ra_service_test PROPERTIES
+      ENVIRONMENT "XM8_RA_CREDENTIALS_TEST_MEMORY=1")
+
+    add_executable(ra_overlay_test
+      Tests/ra_overlay_test.cpp
+      Source/RA/ra_overlay.cpp
+    )
+    target_include_directories(ra_overlay_test PRIVATE Source/RA)
+    target_compile_definitions(ra_overlay_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_overlay_test COMMAND ra_overlay_test)
+
+    add_executable(ra_text_converter_test
+      Tests/ra_text_converter_test.cpp
+      Source/RA/ra_text_converter.cpp
+    )
+    target_include_directories(ra_text_converter_test PRIVATE Source/RA)
+    target_compile_definitions(ra_text_converter_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_text_converter_test COMMAND ra_text_converter_test)
+  endif()
+
+  if(WIN32 AND TARGET SDL2::SDL2)
+    foreach(SDL_TEST_TARGET
+        d88probe_test
+        d88fixture_test
+        d88write_test
+        event_host_frame_integration_test
+        fileio_error_test)
+      add_custom_command(TARGET ${SDL_TEST_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:SDL2::SDL2>
+          $<TARGET_FILE_DIR:${SDL_TEST_TARGET}>
+      )
+    endforeach()
   endif()
 endif()
 
@@ -284,12 +704,21 @@ if(ENABLE_PACKAGING)
     # -G DEB
     set(CPACK_PACKAGE_CONTACT "bubio")
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "PC-8801MA Emulator\neXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
+    if(XM8_ENABLE_RETROACHIEVEMENTS)
+      set(CPACK_DEBIAN_PACKAGE_DEPENDS
+        "libsdl2-2.0-0, libcurl4, libsecret-1-0")
+    else()
+      set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsdl2-2.0-0")
+    endif()
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
     # -G RPM
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
-    set(CPACK_RPM_PACKAGE_REQUIRES "SDL2")
+    if(XM8_ENABLE_RETROACHIEVEMENTS)
+      set(CPACK_RPM_PACKAGE_REQUIRES "SDL2, libcurl, libsecret")
+    else()
+      set(CPACK_RPM_PACKAGE_REQUIRES "SDL2")
+    endif()
 
     find_program(RPMBUILD rpmbuild)
     if(RPMBUILD)

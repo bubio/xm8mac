@@ -74,6 +74,8 @@ MenuList::MenuList(App *a)
 	finger_x = -1;
 	finger_y = -1;
 	finger_tick = 0;
+	finger_counter = 0;
+	finger_tap_valid = false;
 	finger_focus = -1;
 	finger_slider = false;
 
@@ -134,6 +136,8 @@ void MenuList::EnterMenu()
 	finger_x = -1;
 	finger_y = -1;
 	finger_tick = 0;
+	finger_counter = 0;
+	finger_tap_valid = false;
 
 	// mouse
 	mouse_down = false;
@@ -626,7 +630,7 @@ void MenuList::SetSlider(int id, int current)
 // GetUser()
 // get user info
 //
-Uint32 MenuList::GetUser(int id)
+Uint64 MenuList::GetUser(int id)
 {
 	MenuItem *item;
 
@@ -640,7 +644,7 @@ Uint32 MenuList::GetUser(int id)
 // SetUser()
 // set user info
 //
-void MenuList::SetUser(int id, Uint32 user)
+void MenuList::SetUser(int id, Uint64 user)
 {
 	MenuItem *item;
 
@@ -657,6 +661,25 @@ void MenuList::SetUser(int id, Uint32 user)
 int MenuList::GetID()
 {
 	return menu_id;
+}
+
+//
+// GetFocusID()
+// get focused item id
+//
+int MenuList::GetFocusID()
+{
+	MenuItem *item = GetItem(menu_focus);
+	return item != NULL ? item->GetID() : MENU_BACK;
+}
+
+//
+// GetTop()
+// get first visible item index
+//
+int MenuList::GetTop() const
+{
+	return menu_top;
 }
 
 //
@@ -1352,6 +1375,8 @@ void MenuList::OnFingerDown(SDL_Event *e)
 
 	// save tick
 	finger_tick = SDL_GetTicks();
+	finger_counter = SDL_GetPerformanceCounter();
+	finger_tap_valid = true;
 	finger_focus = -1;
 
 	// finger position to item
@@ -1392,11 +1417,18 @@ void MenuList::OnFingerUp(SDL_Event *e)
 	y = 0;
 	result = FingerToItem(e->tfinger.x, e->tfinger.y, &x, &y);
 
-	// check finger_tick
-	if ((Uint32)(SDL_GetTicks() - finger_tick) > FINGER_TIME_THRES) {
+	bool cancel_tap = !finger_tap_valid || finger_counter == 0;
+#ifndef __ANDROID__
+	const Uint64 frequency = SDL_GetPerformanceFrequency();
+	const Uint64 elapsed = SDL_GetPerformanceCounter() - finger_counter;
+	const Uint64 maximum = (frequency * FINGER_TIME_THRES) / 1000;
+	cancel_tap = cancel_tap || (frequency != 0 && elapsed > maximum);
+#endif
+	if (cancel_tap) {
 		// version 1.70
 		finger_focus = -1;
 		finger_slider = false;
+		finger_tap_valid = false;
 		return;
 	}
 
@@ -1417,6 +1449,7 @@ void MenuList::OnFingerUp(SDL_Event *e)
 	// clear finger_focus
 	finger_focus = -1;
 	finger_slider = false;
+	finger_tap_valid = false;
 }
 
 //
@@ -1445,6 +1478,7 @@ void MenuList::OnFingerMotion(SDL_Event *e)
 			if (IsLow(x, y) == true) {
 				if (menu_top > 0) {
 					menu_top--;
+					finger_tap_valid = false;
 
 					// dec tick to avoid command (version 1.70)
 					finger_tick = (Uint32)(SDL_GetTicks() - FINGER_TIME_THRES - 1);
@@ -1461,6 +1495,7 @@ void MenuList::OnFingerMotion(SDL_Event *e)
 	if (finger_slider == false) {
 		// dec tick to avoid command (version 1.70)
 		if (menu_top != (menu_focus - y)) {
+			finger_tap_valid = false;
 			finger_tick = (Uint32)(SDL_GetTicks() - FINGER_TIME_THRES - 1);
 		}
 
@@ -1484,6 +1519,7 @@ void MenuList::OnFingerMotion(SDL_Event *e)
 					if ((fx < (finger_x - FINGER_POS_THRES)) || (fx >(finger_x + FINGER_POS_THRES))) {
 						// move over FINGER_POS_THRES
 						finger_slider = true;
+						finger_tap_valid = false;
 					}
 				}
 			}

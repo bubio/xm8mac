@@ -102,6 +102,12 @@ bool Input::Init()
 	font = app->GetFont();
 	emu = app->GetEmu();
 
+	// Apply persisted keyboard remapping independently of auto-state loading.
+	// RA mode intentionally skips the normal startup state, so relying on the
+	// state-load path leaves these settings visible in the menu but inactive.
+	ChangeCursorToNumPad(setting->IsCursorToNumPad());
+	ChangeNumToNumPad(setting->IsNumToNumPad());
+
 	// initialize joystick
 	AddJoystick();
 
