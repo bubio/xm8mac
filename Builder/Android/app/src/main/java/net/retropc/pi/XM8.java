@@ -510,9 +510,21 @@ public class XM8 extends SDLActivity {
                     EditText first = mRaLoginUsername.getText().length() == 0 ?
                             mRaLoginUsername : mRaLoginPassword;
                     first.requestFocus();
-                    mRaLoginDialog.getWindow().setSoftInputMode(
+                    final android.view.Window window = loginDialog.getWindow();
+                    if (window == null) return;
+                    window.setSoftInputMode(
                             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE |
                             WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+
+                    // Keep the platform dialog styling, but give the login fields
+                    // about 1.5 times the normal dialog width. Do not let it occupy
+                    // almost all of a narrow landscape display.
+                    final int currentWidth = window.getDecorView().getWidth();
+                    final int maximumWidth = (int)(getResources().getDisplayMetrics().widthPixels * 0.85f);
+                    final int widerWidth = Math.min((int)(currentWidth * 1.5f), maximumWidth);
+                    if (widerWidth > currentWidth) {
+                        window.setLayout(widerWidth, WindowManager.LayoutParams.WRAP_CONTENT);
+                    }
                 });
                 mRaLoginDialog.show();
             }
