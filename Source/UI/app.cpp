@@ -43,8 +43,8 @@
 #include "diskmgr.h"
 #include "tapemgr.h"
 #include "clidisk.h"
-#include "ra_media_change_policy.h"
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+#include "ra_media_change_policy.h"
 #include "ra_build_info.h"
 #include "ra_leaderboard_fetch_policy.h"
 #include "ra_media_probe.h"
@@ -989,9 +989,6 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
 		return BeginRaMediaChange(open_spec, ra_hash_to_identify,
 			open_pair, banks, error);
 	}
-#else
-	const Xm8Ra::RaMediaMountPlan mount_plan = Xm8Ra::PlanRaMediaMount(
-		false, open_pair, banks);
 #endif
 	struct DiskSnapshot {
 		bool open = false;
@@ -1037,18 +1034,22 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
 			if (!restore()) *error += "; previous disks could not be restored";
 			return false;
 		}
-		if (mount_plan.drive2_action_after_approval ==
-			Xm8Ra::RaDrive2MountAction::OpenBank1) {
+		bool open_drive2_bank1 = true;
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		open_drive2_bank1 = mount_plan.drive2_action_after_approval ==
+			Xm8Ra::RaDrive2MountAction::OpenBank1;
+		if (!open_drive2_bank1 && mount_plan.drive2_action_after_approval ==
+			Xm8Ra::RaDrive2MountAction::Close) {
+			diskmgr[1]->Close();
+		}
+#endif
+		if (open_drive2_bank1) {
 			if (!diskmgr[1]->Open(open_spec.path.c_str(), 1)) {
 				*error = "drive 1: failed to insert D88 bank 1";
 				if (!restore())
 					*error += "; previous disks could not be restored";
 				return false;
 			}
-		}
-		else if (mount_plan.drive2_action_after_approval ==
-			Xm8Ra::RaDrive2MountAction::Close) {
-			diskmgr[1]->Close();
 		}
 	}
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
