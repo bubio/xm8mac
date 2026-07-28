@@ -16,6 +16,20 @@
 #include "classes.h"
 #include "clidisk.h"
 
+// common.h defines min/max macros for the legacy emulator code. Keep them
+// away from C++ standard and RetroAchievements headers, which use min()/max()
+// member functions (notably <chrono> on GCC).
+#ifdef min
+#pragma push_macro("min")
+#undef min
+#define APP_RESTORE_MIN_MACRO
+#endif
+#ifdef max
+#pragma push_macro("max")
+#undef max
+#define APP_RESTORE_MAX_MACRO
+#endif
+
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -34,6 +48,15 @@
 #include "ra_session_policy.h"
 #include "ra_session_state.h"
 #include "ra_state_store.h"
+#endif
+
+#ifdef APP_RESTORE_MAX_MACRO
+#pragma pop_macro("max")
+#undef APP_RESTORE_MAX_MACRO
+#endif
+#ifdef APP_RESTORE_MIN_MACRO
+#pragma pop_macro("min")
+#undef APP_RESTORE_MIN_MACRO
 #endif
 
 const char* GetAppVersionString();
