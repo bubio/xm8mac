@@ -9,8 +9,13 @@
 #endif
 #include <string>
 #include <cctype>
-#if defined(__APPLE__) || defined(__linux__)
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
 #include <iconv.h>
+#endif
+#ifdef __ANDROID__
+#include "os.h"
+#include "common.h"
+#include "converter.h"
 #endif
 
 namespace {
@@ -99,6 +104,16 @@ bool DecodeShiftJis(const std::string& bytes, std::string *out)
     out->resize(utf8_length);
     return WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
         wide_length, &(*out)[0], utf8_length, NULL, NULL) != 0;
+#elif defined(__ANDROID__)
+    // Android's NDK does not provide iconv. Reuse XM8's CP932 table, which
+    // is already used for the application's Japanese file-name conversion.
+    std::string terminated = bytes;
+    terminated.push_back('\0');
+    std::vector<char> converted(bytes.size() * 3 + 1);
+    Converter converter;
+    converter.SjisToUtf(terminated.c_str(), converted.data());
+    *out = converted.data();
+    return true;
 #elif defined(__APPLE__) || defined(__linux__)
     iconv_t converter = iconv_open("UTF-8", "CP932");
     if (converter == reinterpret_cast<iconv_t>(-1)) return false;
