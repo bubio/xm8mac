@@ -43,6 +43,7 @@
 #include "diskmgr.h"
 #include "tapemgr.h"
 #include "clidisk.h"
+#include "m3u.h"
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_media_change_policy.h"
 #include "ra_build_info.h"
@@ -1107,6 +1108,38 @@ bool App::OpenDiskPairFromMenu(const std::string& path, bool *drive2_open,
 	}
 	if (drive2_open != NULL) *drive2_open = banks > 1;
 	RememberDiskOpenDir(path.c_str());
+	return true;
+}
+
+bool App::OpenDiskSpecsFromMenu(const std::vector<DiskSpec>& specs,
+	std::string *error, bool close_drive2)
+{
+	struct Snapshot { bool open; std::string path; int bank; } snapshots[MAX_DRIVE];
+	int banks;
+	if (specs.empty() || specs.size() > MAX_DRIVE) {
+		*error = "invalid disk selection";
+		return false;
+	}
+	for (const DiskSpec& spec : specs)
+		if (!ProbeDisk(spec, &banks, error)) return false;
+	for (int drive = 0; drive < MAX_DRIVE; ++drive) {
+		snapshots[drive].open = diskmgr[drive]->IsOpen();
+		if (snapshots[drive].open) {
+			snapshots[drive].path = diskmgr[drive]->GetPath();
+			snapshots[drive].bank = diskmgr[drive]->GetBank();
+		}
+	}
+	auto restore = [this, &snapshots]() {
+		for (int drive = 0; drive < MAX_DRIVE; ++drive) {
+			if (snapshots[drive].open) diskmgr[drive]->Open(snapshots[drive].path.c_str(), snapshots[drive].bank);
+			else diskmgr[drive]->Close();
+		}
+	};
+	for (const DiskSpec& spec : specs) {
+		if (!OpenDiskFromUser(spec, error)) { restore(); return false; }
+	}
+	if (close_drive2) diskmgr[1]->Close();
+	RememberDiskOpenDir(specs.front().path.c_str());
 	return true;
 }
 
@@ -4207,11 +4240,19 @@ bool App::OpenDroppedDisk(const char *path, std::string *error)
 		int bank;
 	};
 	Snapshot snapshots[MAX_DRIVE];
-	DiskSpec first = {path, 0, 0};
+	std::vector<DiskSpec> playlist_specs;
+	if (IsM3UPath(path) && !LoadPlaylistDiskSpecs(path, 0, MAX_DRIVE,
+		&playlist_specs, error)) return false;
+	DiskSpec first = playlist_specs.empty() ? DiskSpec{path, 0, 0} : playlist_specs[0];
 	int banks;
 
 	if (ProbeDisk(first, &banks, error) == false) {
 		return false;
+	}
+	if (!playlist_specs.empty()) {
+		for (const DiskSpec& spec : playlist_specs) {
+			if (ProbeDisk(spec, &banks, error) == false) return false;
+		}
 	}
 	for (int drive=0; drive<MAX_DRIVE; drive++) {
 		snapshots[drive].open = diskmgr[drive]->IsOpen();
@@ -4235,6 +4276,15 @@ bool App::OpenDroppedDisk(const char *path, std::string *error)
 	if (OpenDiskFromUser(first, error) == false) {
 		restore();
 		return false;
+	}
+	if (!playlist_specs.empty()) {
+		if (playlist_specs.size() > 1 &&
+			!OpenDiskFromUser(playlist_specs[1], error)) {
+			restore();
+			return false;
+		}
+		if (playlist_specs.size() == 1) diskmgr[1]->Close();
+		return true;
 	}
 	if (banks > 1) {
 		DiskSpec second = {path, 1, 1};

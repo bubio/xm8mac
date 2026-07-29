@@ -1,4 +1,5 @@
 #include "clidisk.h"
+#include "m3u.h"
 
 #include <climits>
 #include <cstdio>
@@ -46,6 +47,14 @@ bool WriteTextFile(const std::string& path, const std::string& content)
 		return false;
 	}
 	file << content;
+	return file.good();
+}
+
+bool WriteBinaryFile(const std::string& path, const std::string& content)
+{
+	std::ofstream file(path, std::ios::binary);
+	if (!file.is_open()) return false;
+	file.write(content.data(), static_cast<std::streamsize>(content.size()));
 	return file.good();
 }
 
@@ -129,6 +138,38 @@ int main()
 		std::remove(playlist.c_str());
 	}
 	CheckError({"xm8", "./clidisk_test_missing.m3u"}, "missing m3u");
+	{
+		const std::string m3u8 = "./clidisk_test_playlist.m3u8";
+		Check(WriteBinaryFile(m3u8, "\xef\xbb\xbfutf8.d88\n"), "write UTF-8 BOM m3u8");
+		CliOptions options = Parse({"xm8", m3u8.c_str()});
+		Check(options.action == CliAction::Run && options.disks.size() == 1 &&
+			options.disks[0].path == "./utf8.d88", "m3u8 UTF-8 BOM");
+		std::remove(m3u8.c_str());
+	}
+	{
+		const std::string utf16 = "./clidisk_test_utf16.m3u";
+		const char utf16_bytes[] = "\xff\xfe" "u\0t\0f\0" "1\0" ".\0d\0" "8\0" "8\0\n\0";
+		Check(WriteBinaryFile(utf16, std::string(utf16_bytes, sizeof(utf16_bytes) - 1)),
+			"write UTF-16 m3u");
+		M3UResult playlist = LoadM3U(utf16);
+		Check(playlist.success && playlist.entries.size() == 1 &&
+			playlist.entries[0] == "./utf1.d88", "m3u UTF-16 LE");
+		std::remove(utf16.c_str());
+	}
+	{
+		const std::string sjis = "./clidisk_test_sjis.m3u";
+		Check(WriteBinaryFile(sjis, "\x82\xa0.d88\n"), "write Shift-JIS m3u");
+		M3UResult playlist = LoadM3U(sjis);
+		Check(playlist.success && playlist.entries.size() == 1 &&
+			playlist.entries[0] == "./\xe3\x81\x82.d88", "m3u Shift-JIS fallback");
+		std::remove(sjis.c_str());
+	}
+	{
+		const std::string invalid = "./clidisk_test_invalid.m3u8";
+		Check(WriteBinaryFile(invalid, "\x82\xa0.d88\n"), "write invalid m3u8");
+		Check(!LoadM3U(invalid).success, "m3u8 rejects Shift-JIS fallback");
+		std::remove(invalid.c_str());
+	}
 	for (const char *value : {"V1S", "v1h", "V2", "n"}) {
 		Check(Parse({"xm8", "--system", value}).action == CliAction::Run,
 			"valid system");

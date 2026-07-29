@@ -30,6 +30,9 @@
 #endif // __ANDROID__
 #include "menu.h"
 
+#include "clidisk.h"
+#include "m3u.h"
+
 #include <string>
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
@@ -1709,6 +1712,30 @@ void Menu::EnterFile()
 	file_expect[0] = '\0';
 }
 
+void Menu::EnterPlaylist(const char *path)
+{
+	std::string error;
+	playlist_entries.clear();
+	if (!LoadPlaylistDiskSpecs(path, 0,
+		MENU_PLAYLIST_ENTRY_MAX - MENU_PLAYLIST_ENTRY_MIN + 1,
+		&playlist_entries, &error)) {
+		platform->MsgBox(NULL, error.c_str());
+		EnterFile();
+		return;
+	}
+	playlist_drive = file_id == MENU_DRIVE2_OPEN ? 1 : 0;
+	playlist_first = -1;
+	const bool pair = file_id == MENU_DRIVE1_BOTH || file_id == MENU_DRIVE2_BOTH;
+	list->SetTitle(pair ? "<< Playlist: select Drive 1 >>" : "<< Playlist >>",
+		MENU_PLAYLIST);
+	for (size_t i = 0; i < playlist_entries.size(); ++i) {
+		const std::string& entry = playlist_entries[i].path;
+		const size_t slash = entry.find_last_of("/\\");
+		list->AddButton(entry.substr(slash == std::string::npos ? 0 : slash + 1).c_str(),
+			MENU_PLAYLIST_ENTRY_MIN + static_cast<int>(i));
+	}
+}
+
 //
 // EnterJoyTest()
 // enter joytest menu
@@ -1731,6 +1758,10 @@ void Menu::EnterJoyTest()
 //
 void Menu::Command(bool down, int id)
 {
+	if (id >= MENU_PLAYLIST_ENTRY_MIN && id <= MENU_PLAYLIST_ENTRY_MAX) {
+		if (down == false) CmdPlaylist(id);
+		return;
+	}
 	// back
 	if (id == MENU_BACK) {
 		if (down == false) {
@@ -2623,6 +2654,10 @@ void Menu::CmdRa(int id)
 
 	case MENU_RA_WEBSITE:
 		app->OpenRaWebsite();
+		break;
+
+	case MENU_PLAYLIST:
+		EnterFile();
 		break;
 
 	default:
@@ -3542,6 +3577,23 @@ void Menu::CmdFile(int id)
 	if (platform->MakePath(file_target, name, false) == false) {
 		return;
 	}
+	if (IsM3UPath(file_target)) {
+		if (file_id == MENU_DRIVE1_BOTH || file_id == MENU_DRIVE2_BOTH) {
+			std::vector<DiskSpec> specs;
+			std::string error;
+			if (!LoadPlaylistDiskSpecs(file_target, 0, MAX_DRIVE, &specs, &error) ||
+				!app->OpenDiskSpecsFromMenu(specs, &error, specs.size() == 1)) {
+				platform->MsgBox(NULL, error.c_str());
+				return;
+			}
+			EnterDrive1(MENU_DRIVE1_BANK0);
+			return;
+		}
+		if (file_id == MENU_DRIVE1_OPEN || file_id == MENU_DRIVE2_OPEN) {
+			EnterPlaylist(file_target);
+			return;
+		}
+	}
 
 	// tape ?
 	if ((file_id == MENU_CMT_PLAY) || (file_id == MENU_CMT_REC)) {
@@ -3610,6 +3662,46 @@ void Menu::CmdFile(int id)
 	default:
 		break;
 	}
+}
+
+void Menu::CmdPlaylist(int id)
+{
+	const size_t index = static_cast<size_t>(id - MENU_PLAYLIST_ENTRY_MIN);
+	if (index >= playlist_entries.size()) return;
+	const bool pair = file_id == MENU_DRIVE1_BOTH || file_id == MENU_DRIVE2_BOTH;
+	if (!pair) {
+		DiskSpec spec = playlist_entries[index];
+		spec.drive = playlist_drive;
+		std::string error;
+		if (!app->OpenDiskFromMenu(spec, &error)) {
+			platform->MsgBox(NULL, error.c_str());
+			return;
+		}
+		if (playlist_drive == 0) EnterDrive1(MENU_DRIVE1_BANK0);
+		else EnterDrive2(MENU_DRIVE2_BANK0);
+		return;
+	}
+	if (playlist_first < 0) {
+		playlist_first = static_cast<int>(index);
+		list->SetTitle("<< Playlist: select Drive 2 >>", MENU_PLAYLIST);
+		for (size_t entry_index = 0; entry_index < playlist_entries.size(); ++entry_index) {
+			const std::string& entry = playlist_entries[entry_index].path;
+			const size_t slash = entry.find_last_of("/\\");
+			list->AddButton(entry.substr(slash == std::string::npos ? 0 : slash + 1).c_str(),
+				MENU_PLAYLIST_ENTRY_MIN + static_cast<int>(entry_index));
+		}
+		return;
+	}
+	DiskSpec first = playlist_entries[playlist_first];
+	DiskSpec second = playlist_entries[index];
+	first.drive = 0;
+	second.drive = 1;
+	std::string error;
+	if (!app->OpenDiskSpecsFromMenu({first, second}, &error)) {
+		platform->MsgBox(NULL, error.c_str());
+		return;
+	}
+	EnterDrive1(MENU_DRIVE1_BANK0);
 }
 
 //

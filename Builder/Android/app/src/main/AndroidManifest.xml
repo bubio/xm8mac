@@ -104,6 +104,17 @@
                 <data android:pathPattern=".*\\.D88" />
                 <data android:host="*" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.m3u" />
+                <data android:pathPattern=".*\\.M3U" />
+                <data android:pathPattern=".*\\.m3u8" />
+                <data android:pathPattern=".*\\.M3U8" />
+                <data android:host="*" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

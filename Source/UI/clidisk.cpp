@@ -44,7 +44,7 @@ bool ParseBank(const std::string& value, int *bank)
 	return true;
 }
 
-bool ParseDiskSpec(const std::string& argument, int drive, DiskSpec *spec,
+bool ParseDiskSpecInternal(const std::string& argument, int drive, DiskSpec *spec,
 	std::string *error)
 {
 	const std::string::size_type slash = argument.find_last_of("/\\");
@@ -120,17 +120,31 @@ bool ParseClock(const std::string& value, CliClockMode *clock)
 	return true;
 }
 
-bool IsM3U(const std::string& path)
-{
-    if (path.length() < 4) {
-        return false;
-    }
+} // namespace
 
-    std::string ext = ToUpper(path.substr(path.length() - 4));
-    return ext == ".M3U";
+bool ParseDiskSpec(const std::string& argument, int drive, DiskSpec *spec,
+	std::string *error)
+{
+	return ParseDiskSpecInternal(argument, drive, spec, error);
 }
 
-} // namespace
+bool LoadPlaylistDiskSpecs(const std::string& path, int first_drive,
+	size_t maximum, std::vector<DiskSpec> *specs, std::string *error)
+{
+	if (specs == nullptr || error == nullptr) return false;
+	M3UResult playlist = LoadM3U(path);
+	if (!playlist.success) { *error = playlist.error; return false; }
+	specs->clear();
+	for (const std::string& entry : playlist.entries) {
+		if (specs->size() >= maximum) break;
+		DiskSpec spec;
+		if (!ParseDiskSpec(entry, first_drive + static_cast<int>(specs->size()),
+			&spec, error)) return false;
+		specs->push_back(spec);
+	}
+	if (specs->empty()) { *error = "playlist contains no disk images: " + path; return false; }
+	return true;
+}
 
 CliOptions ParseCommandLine(int argc, char *argv[])
 {
@@ -198,33 +212,12 @@ CliOptions ParseCommandLine(int argc, char *argv[])
 			return Error("too many disk images; maximum is 2");
 		}
 
-		if (IsM3U(argument)) {
-
-    		M3UResult playlist = LoadM3U(argument);
-
-    		if (!playlist.success) {
-        	return Error(playlist.error);
-    		}
-
-			for (const auto& entry : playlist.entries) {
-                
-                if (options.disks.size() >=2) {
-                    break;
-                }
-
-	        DiskSpec spec;
-	        std::string error;
-	
-	        if (!ParseDiskSpec(entry,
-	            static_cast<int>(options.disks.size()),
-	            &spec,
-	            &error)) {
-	            return Error(error);
-	        }
-	
-	        options.disks.push_back(spec);
-	    }
-	
+		if (IsM3UPath(argument)) {
+			std::vector<DiskSpec> specs;
+			std::string error;
+			if (!LoadPlaylistDiskSpecs(argument, static_cast<int>(options.disks.size()),
+				2 - options.disks.size(), &specs, &error)) return Error(error);
+			options.disks.insert(options.disks.end(), specs.begin(), specs.end());
 		} else {
 	
 	    DiskSpec spec;
