@@ -15,6 +15,30 @@ NEC PC-8801のエミュレーターです。マルチプラットフォームで
   <a href="https://github.com/bubio/xm8mac/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/bubio/xm8mac" alt="License">
   </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/Windows_x86_x64_arm64.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/Windows_x86_x64_arm64.yml/badge.svg" alt="Windows">
+  </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/macOS_Universal.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/macOS_Universal.yml/badge.svg" alt="Windows">
+  </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64.yml/badge.svg" alt="Windows">
+  </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64_AppImage.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64_AppImage.yml/badge.svg" alt="Windows">
+  </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64.yml/badge.svg" alt="Windows">
+  </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64_AppImage.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64_AppImage.yml/badge.svg" alt="Windows">
+  </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/RaspberryPiOS_armhf.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/RaspberryPiOS_armhf.yml/badge.svg" alt="Windows">
+  </a>
+  <a href="https://github.com/bubio/xm8mac/actions/workflows/Android.yml">
+    <img src="https://github.com/bubio/xm8mac/actions/workflows/Android.yml/badge.svg" alt="Windows">
+  </a>
   <a href="https://github.com/bubio/xm8mac/releases/latest">
     <img src="https://img.shields.io/github/downloads/bubio/xm8mac/total.svg" alt="Downloads">
   </a>
