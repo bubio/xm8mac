@@ -71,5 +71,9 @@ struct CliOptions {
 
 CliOptions ParseCommandLine(int argc, char *argv[]);
 const char* GetCommandLineHelp();
+bool ParseDiskSpec(const std::string& argument, int drive, DiskSpec *spec,
+	std::string *error);
+bool LoadPlaylistDiskSpecs(const std::string& path, int first_drive,
+	size_t maximum, std::vector<DiskSpec> *specs, std::string *error);
 
 #endif

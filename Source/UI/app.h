@@ -146,6 +146,8 @@ public:
 	bool OpenDiskPairFromMenu(const std::string& path, bool *drive2_open,
 		std::string *error);
 										// open bank 0/1 as one transaction
+	bool OpenDiskSpecsFromMenu(const std::vector<DiskSpec>& specs,
+		std::string *error, bool close_drive2 = false);
 	const char* GetTapeDir();
 										// get tape dir
 	void Reset();

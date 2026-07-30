@@ -58,11 +58,15 @@
 static bool IsSupportedFile(char *path)
 {
 	char d88[] = ".d88";
+	char m3u[] = ".m3u";
+	char m3u8[] = ".m3u8";
 	char cmt[] = ".cmt";
 	char t88[] = ".t88";
 	char n80[] = ".n80";
 
 	return check_file_extension(path, d88) ||
+		check_file_extension(path, m3u) ||
+		check_file_extension(path, m3u8) ||
 		check_file_extension(path, cmt) ||
 		check_file_extension(path, t88) ||
 		check_file_extension(path, n80);
@@ -396,6 +400,8 @@ const char* Platform::FindNext(Uint32 *info)
 
 					// supported ?
 					if (check_file_extension(find_name, _T(".d88")) == false &&
+						check_file_extension(find_name, _T(".m3u")) == false &&
+						check_file_extension(find_name, _T(".m3u8")) == false &&
 						check_file_extension(find_name, _T(".cmt")) == false &&
 						check_file_extension(find_name, _T(".t88")) == false &&
 						check_file_extension(find_name, _T(".n80")) == false) {

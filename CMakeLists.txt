@@ -236,6 +236,8 @@ option(ENABLE_PACKAGING "Enable CPack packaging" ON)
 target_link_libraries(${BIN_TARGET} PRIVATE XM8::SDL xbrz)
 if(APPLE)
   target_link_libraries(${BIN_TARGET} PRIVATE "-framework Foundation")
+  find_library(XM8_ICONV_LIBRARY iconv REQUIRED)
+  target_link_libraries(${BIN_TARGET} PRIVATE ${XM8_ICONV_LIBRARY})
 endif()
 
 if(BUILD_TESTING)
@@ -245,6 +247,9 @@ if(BUILD_TESTING)
     Source/UI/m3u.cpp
   )
   target_include_directories(clidisk_test PRIVATE Source/UI)
+  if(APPLE)
+    target_link_libraries(clidisk_test PRIVATE ${XM8_ICONV_LIBRARY})
+  endif()
   add_test(NAME clidisk_test COMMAND clidisk_test)
 
   add_executable(d88probe_test
@@ -406,6 +411,9 @@ if(BUILD_TESTING)
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
     )
     target_link_libraries(ra_dependency_test PRIVATE xm8_ra_dependencies)
+    if(APPLE)
+      target_link_libraries(ra_dependency_test PRIVATE ${XM8_ICONV_LIBRARY})
+    endif()
     target_include_directories(ra_dependency_test PRIVATE Source/RA Source/UI)
     target_compile_definitions(ra_dependency_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)

@@ -10,6 +10,9 @@
 
 #ifdef SDL
 
+#include <vector>
+#include "clidisk.h"
+
 #ifndef MENU_H
 #define MENU_H
 
@@ -93,6 +96,8 @@ public:
 										// enter scaling filter menu
 	void EnterFile();
 										// enter file menu
+	void EnterPlaylist(const char *path);
+	void CmdPlaylist(int id);
 	void EnterJoyTest();
 										// enter joytest menu
 	void Command(bool down, int id);
@@ -203,6 +208,9 @@ private:
 										// parent joymap id
 	bool ra_state_menu;
 										// state menu was opened from RetroAchievements
+	std::vector<DiskSpec> playlist_entries;
+	int playlist_drive;
+	int playlist_first;
 	static const int vmkey_table[62 * 2];
 										// MENU_VMKEY table
 	static const Uint32 joytest_table[15 * 2];

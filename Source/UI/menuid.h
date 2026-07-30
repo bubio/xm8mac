@@ -80,6 +80,7 @@
 										// RetroAchievements achievement detail menu
 #define MENU_RA_LEADERBOARDS_VIEW       29
 										// RetroAchievements leaderboards menu
+#define MENU_PLAYLIST                   30
 //
 // main menu
 //
@@ -814,6 +815,8 @@
 //
 #define MENU_FILE_MIN                   10000
 										// minimum
+#define MENU_PLAYLIST_ENTRY_MIN          11000
+#define MENU_PLAYLIST_ENTRY_MAX          11999
 
 #endif // MENUID_H
 

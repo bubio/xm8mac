@@ -9,4 +9,5 @@ struct M3UResult {
     std::vector<std::string> entries;
 };
 
+bool IsM3UPath(const std::string& path);
 M3UResult LoadM3U(const std::string& path);
