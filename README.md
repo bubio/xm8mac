@@ -87,7 +87,7 @@ ROMファイルの配置場所は、設定ファイルと同じ以下になり�
 
 ### コマンドライン起動
 
-Windows、macOS、Linux では、最大2個の D88 イメージをコマンドラインで指定できます。指定順にドライブ1、ドライブ2へ挿入されます。また、m3uファイルにも対応しています。
+Windows、macOS、Linux では、最大2個の D88 イメージをコマンドラインで指定できます。指定順にドライブ1、ドライブ2へ挿入されます。プレイリストは`.m3u`と`.m3u8`に対応しています。
 
 ```shell
 xm8 [options] [--] [disk-spec ...]
@@ -96,6 +96,7 @@ xm8 game.d88
 xm8 game.d88#1
 xm8 system.d88#0 data.d88#1
 xm8 game.m3u
+xm8 game.m3u8
 xm8 --system V1H --clock 4MHz game.d88
 ```
 
@@ -111,6 +112,14 @@ xm8 --system V1H --clock 4MHz game.d88
 ```
 
 `--system` と `--clock` はその起動中だけ有効で、通常の設定や自動保存 state には残りません。ファイル名の最後の要素に `#` または `:` を含むパスは bank 指定と曖昧になるため、コマンドラインでは指定できません。
+
+### RetroAchievements
+
+RetroAchievements対応を含むbuildでは、メインメニューの`RetroAchievements`からログインとRAモードの切り替えができます。対応ゲームの実績、リーダーボード、Rich Presence、Hardcoreモードを利用できます。
+
+RAモードでは、選択したD88をライブラリへ登録し、原本を変更しないアプリ専用の作業コピーを使用します。認証やネットワーク接続に失敗した場合でもゲームは起動できますが、そのセッションでは実績の評価・送信は行われません。
+
+Android版はAPI 19以上で起動しますが、RetroAchievementsのUI・通信・資格情報保存はAndroid 6.0（API 23）以上でのみ有効です。
 
 
 <br />
@@ -273,8 +282,14 @@ Android 11以上の場合、端末内のファイルに自由にアクセスす�
 
 ## 使用しているOSSのライセンス
 
-- xBRZ
-  
-  https://sourceforge.net/projects/xbrz/
+| Component | Version | License |
+| --- | --- | --- |
+| [xBRZ](https://sourceforge.net/projects/xbrz/) | bundled | GPLv3 |
+| [rcheevos](https://github.com/RetroAchievements/rcheevos) | 12.3.0 | MIT |
+| [SQLite](https://www.sqlite.org/) | 3.53.0 | Public Domain |
+| [stb_image](https://github.com/nothings/stb) | 2.30 | MIT OR Public Domain |
 
-  GNU General Public License version 3.0 (GPLv3)
+rcheevos、SQLite、stb_imageはRetroAchievements対応buildで使用します。依存関係の
+バージョン、来歴、ライセンス本文は[ThirdParty/README.md](ThirdParty/README.md)、
+[ThirdParty/THIRD_PARTY_NOTICES.md](ThirdParty/THIRD_PARTY_NOTICES.md)、
+`ThirdParty/licenses/`を参照してください。
