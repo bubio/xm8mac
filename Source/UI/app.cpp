@@ -112,7 +112,7 @@ extern "C" void Android_MouseBackRequested(void)
 //
 #define APP_NAME				"XM8 (based on ePC-8801MA)";
 										// application name
-#define APP_VER					0x0179
+#define APP_VER					0x0200
 										// version (BCD)
 #define APP_WIDTH				SCREEN_WIDTH
 										// window width

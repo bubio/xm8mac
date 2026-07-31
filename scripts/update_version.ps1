@@ -24,8 +24,9 @@ $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $VerDot = "$Major.$Minor.$Patch"
 $VerBCD = '0x{0:X2}{1:X}{2:X}' -f $Major, $Minor, $Patch
 $VerAndroid = "$Major.$Minor$Patch"
+$VerAndroidCode = ([int]$Major * 100) + ([int]$Minor * 10) + [int]$Patch
 
-Write-Host "Updating version to $VerDot (BCD: $VerBCD, Android: $VerAndroid)"
+Write-Host "Updating version to $VerDot (BCD: $VerBCD, Android: $VerAndroid, versionCode: $VerAndroidCode)"
 
 # Helper: read file, replace, write back (preserving encoding)
 function Replace-InFile {
@@ -64,10 +65,13 @@ Replace-InFile "$RootDir\Builder\Windows\XM8.rc" `
     '(VALUE "ProductVersion",\s+")\d+\.\d+\.\d+\.\d+' `
     "`${1}$VerDot.0"
 
-# 4. build.gradle
+# 4. build.gradle — Android Gradle Plugin uses: versionName = "X.Y"
 Replace-InFile "$RootDir\Builder\Android\app\build.gradle" `
-    '(versionName ")\d+\.\d+"' `
+    '(versionName\s*=\s*")\d+\.\d+"' `
     "`${1}$VerAndroid`""
+Replace-InFile "$RootDir\Builder\Android\app\build.gradle" `
+    '(versionCode\s*=\s*)\d+' `
+    "`${1}$VerAndroidCode"
 
 # 5. AndroidManifest.xml
 Replace-InFile "$RootDir\Builder\Android\app\src\main\AndroidManifest.xml" `

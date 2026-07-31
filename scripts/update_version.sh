@@ -30,8 +30,9 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VER_DOT="${MAJOR}.${MINOR}.${PATCH}"
 VER_BCD=$(printf "0x%02X%X%X" "$MAJOR" "$MINOR" "$PATCH")
 VER_ANDROID="${MAJOR}.${MINOR}${PATCH}"
+VER_ANDROID_CODE=$((MAJOR * 100 + MINOR * 10 + PATCH))
 
-echo "Updating version to ${VER_DOT} (BCD: ${VER_BCD}, Android: ${VER_ANDROID})"
+echo "Updating version to ${VER_DOT} (BCD: ${VER_BCD}, Android: ${VER_ANDROID}, versionCode: ${VER_ANDROID_CODE})"
 
 # 1. CMakeLists.txt — set(PROJECT_VERSION X.Y.Z)
 sed -i.bak -E "s/^(set\(PROJECT_VERSION )[0-9]+\.[0-9]+\.[0-9]+\)/\1${VER_DOT})/" \
@@ -54,7 +55,10 @@ sed -i.bak -E "s/(VALUE \"ProductVersion\",[[:space:]]+\")[0-9]+\.[0-9]+\.[0-9]+
     "$ROOT_DIR/Builder/Windows/XM8.rc"
 
 # 4. Builder/Android/app/build.gradle — versionName
-sed -i.bak -E "s/(versionName \")[0-9]+\.[0-9]+\"/\1${VER_ANDROID}\"/" \
+# Android Gradle Plugin's current assignment syntax is: versionName = "X.Y".
+sed -i.bak -E "s/(versionName[[:space:]]*=[[:space:]]*\")[0-9]+\.[0-9]+\"/\1${VER_ANDROID}\"/" \
+    "$ROOT_DIR/Builder/Android/app/build.gradle"
+sed -i.bak -E "s/(versionCode[[:space:]]*=[[:space:]]*)[0-9]+/\1${VER_ANDROID_CODE}/" \
     "$ROOT_DIR/Builder/Android/app/build.gradle"
 
 # 5. Builder/Android/app/src/main/AndroidManifest.xml — android:versionName
@@ -65,8 +69,14 @@ sed -i.bak -E "s/(android:versionName=\")[0-9]+\.[0-9]+\"/\1${VER_ANDROID}\"/" \
 sed -i.bak -E "s|(releases/download/)[0-9]+\.[0-9]+\.[0-9]+/|\1${VER_DOT}/|g" \
     "$ROOT_DIR/README.md"
 
-# Clean up .bak files
-find "$ROOT_DIR" -name "*.bak" -newer "$0" -delete 2>/dev/null || true
+# Clean up backup files created by the BSD sed commands above.
+rm -f \
+    "$ROOT_DIR/CMakeLists.txt.bak" \
+    "$ROOT_DIR/Source/UI/app.cpp.bak" \
+    "$ROOT_DIR/Builder/Windows/XM8.rc.bak" \
+    "$ROOT_DIR/Builder/Android/app/build.gradle.bak" \
+    "$ROOT_DIR/Builder/Android/app/src/main/AndroidManifest.xml.bak" \
+    "$ROOT_DIR/README.md.bak"
 
 echo "Done. Updated files:"
 echo "  CMakeLists.txt"
