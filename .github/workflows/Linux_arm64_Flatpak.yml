@@ -29,7 +29,11 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install Flatpak builder
-        run: sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists --system flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
