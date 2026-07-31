@@ -92,14 +92,16 @@ int main(int argc, char *argv[])
 	);
 
 	if (ret != 0) {
-		fprintf(stderr, "XM8: SDL_Init() failed\n");
+		fprintf(stderr, "XM8: SDL_Init() failed: %s\n", SDL_GetError());
 		return 1;
 	}
 
 	// initialize joystick subsystem
 	ret = SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) ;
 	if (ret != 0) {
-		fprintf(stderr, "XM8: SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) failed\n");
+		fprintf(stderr,
+			"XM8: SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) failed: %s\n",
+			SDL_GetError());
 		SDL_Quit();
 		return 1;
 	}

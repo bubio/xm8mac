@@ -8,6 +8,7 @@ finish-args:
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
+  - --socket=pulseaudio
   - --device=all
   # XM8M uses its own SDL file picker, so it needs direct access to ROM,
   # disk-image, and cassette files selected by the user.
