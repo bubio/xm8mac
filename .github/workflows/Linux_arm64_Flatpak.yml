@@ -24,23 +24,21 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-22.04-arm
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Install Flatpak builder
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-          sudo flatpak remote-add --if-not-exists --system flathub \
-            https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: XM8_Linux_arm64.flatpak
           manifest-path: com.github.bubio.xm8m.yml
+          arch: aarch64
           cache-key: flatpak-arm64-${{ github.sha }}
+          upload-artifact: false
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
