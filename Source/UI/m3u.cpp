@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iterator>
 #include <vector>
+#include <cstdint>
 #ifdef _WIN32
 #include <filesystem>
 #include <windows.h>
