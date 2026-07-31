@@ -68,12 +68,16 @@ For macOS, move `XM8.app` to the `Applications` folder or another suitable locat
 
 ### System Requirements
 
-| CPU | Minimum macOS version | Download |
-| --- | --- | --- |
-| x86_64 | macOS 10.13 High Sierra | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
-| Apple Silicon | macOS 11 Big Sur | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| Platform | CPU | Minimum OS version | Download |
+| --- | --- | --- | --- |
+| macOS | x86_64 | macOS 10.13 High Sierra | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| macOS | Apple Silicon | macOS 11 Big Sur | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| Windows | x86_64 / x86_32 / ARM64 | Windows 10 | [x86_64 build](https://github.com/bubio/xm8m/releases/latest/download/XM8_Windows_x86_64.zip) / [x86_32 build](https://github.com/bubio/xm8m/releases/latest/download/XM8_Windows_x86_32.zip) / [ARM64 build](https://github.com/bubio/xm8m/releases/latest/download/XM8_Windows_ARM64.zip) |
+| Linux | x86_64 / arm64 | Ubuntu 22.04 or later (.deb) / Fedora 36 or later (.rpm) | [x86_64 build](https://github.com/bubio/xm8m/releases/latest/download/XM8_Linux_x86_64.deb) / [arm64 build](https://github.com/bubio/xm8m/releases/latest/download/XM8_Linux_arm64.deb) |
+| Raspberry Pi OS | armhf | Bookworm or later | [armhf build](https://github.com/bubio/xm8m/releases/latest/download/XM8_Linux_armhf.deb) |
+| Android | arm64-v8a / armeabi-v7a / x86_64 | Android 4.4 (API level 19) or later | [APK](https://github.com/bubio/xm8m/releases/latest/download/XM8_Android.apk) |
 
-For other operating systems, see the releases page.
+On Linux, install the required dependency libraries for your distribution with its package manager. RetroAchievements in the Android build requires Android 6.0 (API level 23) or later.
 
 ## ROM Files
 

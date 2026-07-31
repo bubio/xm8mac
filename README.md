@@ -77,14 +77,18 @@ http://retropc.net/pi/xm8/index.html
 
 ### 動作環境
 
-| CPU           | 最小OSバージョン    | 実行ファイル                                                 |
-| ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | macOS 10.13 High Sierra | [Universal版](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
-| Apple Silicon | macOS 11 Big Sur    | [Universal版](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| プラットフォーム | CPU | 最小OSバージョン | 実行ファイル |
+| --- | --- | --- | --- |
+| macOS | x86_64 | macOS 10.13 High Sierra | [Universal版](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| macOS | Apple Silicon | macOS 11 Big Sur | [Universal版](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| Windows | x86_64 / x86_32 / ARM64 | Windows 10 | [x86_64版](https://github.com/bubio/xm8m/releases/latest/download/XM8_Windows_x86_64.zip) / [x86_32版](https://github.com/bubio/xm8m/releases/latest/download/XM8_Windows_x86_32.zip) / [ARM64版](https://github.com/bubio/xm8m/releases/latest/download/XM8_Windows_ARM64.zip) |
+| Linux | x86_64 / arm64 | Ubuntu 22.04以降（.deb） / Fedora 36以降（.rpm） | [x86_64版](https://github.com/bubio/xm8m/releases/latest/download/XM8_Linux_x86_64.deb) / [arm64版](https://github.com/bubio/xm8m/releases/latest/download/XM8_Linux_arm64.deb) |
+| Raspberry Pi OS | armhf | Bookworm以降 | [armhf版](https://github.com/bubio/xm8m/releases/latest/download/XM8_Linux_armhf.deb) |
+| Android | arm64-v8a / armeabi-v7a / x86_64 | Android 4.4（API 19）以降 | [APK](https://github.com/bubio/xm8m/releases/latest/download/XM8_Android.apk) |
 
 <br />
 
-その他のOSはリリースを見てください。
+Linux版は、各ディストリビューション用の依存ライブラリをパッケージマネージャーで導入してください。Android版のRetroAchievements機能はAndroid 6.0（API 23）以降で利用できます。
 
 <br />
 
