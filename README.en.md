@@ -70,8 +70,8 @@ For macOS, move `XM8M.app` to the `Applications` folder or another suitable loca
 
 | CPU | Minimum macOS version | Download |
 | --- | --- | --- |
-| x86_64 | macOS 10.13 High Sierra | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8M_macOS_Universal.dmg) |
-| Apple Silicon | macOS 11 Big Sur | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8M_macOS_Universal.dmg) |
+| x86_64 | macOS 10.13 High Sierra | [Universal build](https://github.com/bubio/xm8m/releases/latest) |
+| Apple Silicon | macOS 11 Big Sur | [Universal build](https://github.com/bubio/xm8m/releases/latest) |
 
 For other operating systems, see the releases page.
 

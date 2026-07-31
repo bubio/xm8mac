@@ -79,8 +79,8 @@ http://retropc.net/pi/xm8/index.html
 
 | CPU           | 最小OSバージョン    | 実行ファイル                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | macOS 10.13 High Sierra | [x86_64版](https://github.com/bubio/xm8m/releases/latest/download/XM8M_macOS_Universal.dmg) |
-| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8m/releases/latest/download/XM8M_macOS_Universal.dmg) |
+| x86_64        | macOS 10.13 High Sierra | [Universal版](https://github.com/bubio/xm8m/releases/latest) |
+| Apple Silicon | macOS 11 Big Sur    | [Universal版](https://github.com/bubio/xm8m/releases/latest) |
 
 <br />
 
