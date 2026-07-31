@@ -1,0 +1,49 @@
+name: Linux x86_64 Flatpak
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  pull_request:
+    types: [opened, synchronize]
+    paths-ignore:
+      - '*.md'
+      - 'Documents/**'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: XM8_Linux_x86_64.flatpak
+          manifest-path: com.github.bubio.xm8m.yml
+          cache-key: flatpak-x86_64-${{ github.sha }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: XM8_Linux_x86_64.flatpak
+          path: XM8_Linux_x86_64.flatpak
+
+      - name: Update Release
+        if: ${{ github.event_name == 'release' && !env.ACT }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: XM8_Linux_x86_64.flatpak
+          overwrite: true

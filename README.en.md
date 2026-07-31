@@ -212,6 +212,21 @@ cd Builder/Linux
 
 This creates an AppImage file in `Builder/Linux`.
 
+#### Flatpak (RetroAchievements enabled)
+
+The same manifest natively builds x86_64 and arm64 Flatpak packages. The Freedesktop 25.08 runtime is required:
+
+```shell
+flatpak install flathub org.freedesktop.Sdk//25.08 org.freedesktop.Platform//25.08
+flatpak-builder --user --install --force-clean flatpak-build com.github.bubio.xm8m.yml
+```
+
+The package grants network and Secret Service access for RetroAchievements, and home-directory access because XM8M uses SDL's file picker for ROM and media files. Place BIOS ROM files in the Flatpak data directory:
+
+```shell
+~/.var/app/com.github.bubio.xm8m/data/retro_pc_pi/xm8/
+```
+
 Place BIOS ROM files in:
 
 ```shell

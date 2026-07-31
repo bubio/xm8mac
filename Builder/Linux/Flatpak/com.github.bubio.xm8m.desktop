@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=XM8M
+GenericName=PC-8801MA Emulator
+Comment=PC-8801MA Emulator
+Comment[ja]=PC-8801MA エミュレーター
+Exec=xm8
+MimeType=application/x-m3u;audio/x-mpegurl;application/vnd.apple.mpegurl;
+Icon=com.github.bubio.xm8m
+Terminal=false
+Type=Application
+Categories=Game;Emulator;
+StartupNotify=true

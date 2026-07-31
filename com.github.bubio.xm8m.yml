@@ -1,0 +1,29 @@
+app-id: com.github.bubio.xm8m
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: xm8
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=all
+  # XM8M uses its own SDL file picker, so it needs direct access to ROM,
+  # disk-image, and cassette files selected by the user.
+  - --filesystem=home
+  # Persist RetroAchievements credentials in the user's Secret Service.
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: xm8m
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DENABLE_PACKAGING=OFF
+      - -DXM8_ENABLE_RETROACHIEVEMENTS=ON
+      - -DXM8_DESKTOP_FILE=/run/build/xm8m/Builder/Linux/Flatpak/com.github.bubio.xm8m.desktop
+      - -DXM8_DESKTOP_FILE_NAME=com.github.bubio.xm8m.desktop
+      - -DXM8_ICON_FILE_NAME=com.github.bubio.xm8m.png
+    sources:
+      - type: dir
+        path: .

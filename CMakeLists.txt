@@ -232,6 +232,30 @@ endif()
 
 option(ENABLE_PACKAGING "Enable CPack packaging" ON)
 
+# Linux desktop integration.  Flatpak passes its reverse-DNS application ID
+# here so that the installed desktop file and icon have the names it expects.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  string(TOLOWER ${PROJECT_NAME} project_name)
+  set(XM8_DESKTOP_FILE
+    "${PROJECT_SOURCE_DIR}/Builder/Linux/${project_name}.desktop"
+    CACHE FILEPATH "Desktop entry to install")
+  set(XM8_DESKTOP_FILE_NAME "${project_name}.desktop"
+    CACHE STRING "Installed desktop entry file name")
+  set(XM8_ICON_FILE_NAME "${project_name}.png"
+    CACHE STRING "Installed application icon file name")
+
+  install(TARGETS ${BIN_TARGET} DESTINATION bin)
+  install(FILES "${XM8_DESKTOP_FILE}"
+    DESTINATION "share/applications"
+    RENAME "${XM8_DESKTOP_FILE_NAME}")
+  install(FILES "${PROJECT_SOURCE_DIR}/Builder/Linux/icon.png"
+    DESTINATION "share/icons/hicolor/512x512/apps"
+    RENAME "${XM8_ICON_FILE_NAME}")
+  install(FILES
+    "${PROJECT_SOURCE_DIR}/Builder/Linux/Flatpak/com.github.bubio.xm8m.metainfo.xml"
+    DESTINATION "share/metainfo")
+endif()
+
 # Link SDL2 and xBRZ to xm8 target using interface target from Dependencies.cmake
 target_link_libraries(${BIN_TARGET} PRIVATE XM8::SDL xbrz)
 if(APPLE)
@@ -687,28 +711,10 @@ endif()
 # Packaging                      
 if(ENABLE_PACKAGING)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    string(TOLOWER ${PROJECT_NAME} project_name)
     set(CPACK_PACKAGE_NAME ${project_name})
     set(CPACK_GENERATOR "7Z")
     # Common *nix files
     set(CPACK_STRIP_FILES TRUE)
-    install(TARGETS ${BIN_TARGET} DESTINATION bin)
-    set(desktop_file "${PROJECT_SOURCE_DIR}/Builder/Linux/${project_name}.desktop")
-
-    find_program(DFI desktop-file-install)
-    if(DFI)
-      execute_process(COMMAND ${DFI} --dir=${CMAKE_BINARY_DIR} ${desktop_file})
-      set(desktop_file "${CMAKE_BINARY_DIR}/${project_name}.desktop")
-    endif()
-
-    install(FILES "${desktop_file}"
-      DESTINATION "share/applications"
-    )
-    install(FILES "${PROJECT_SOURCE_DIR}/Builder/Linux/icon.png"
-      DESTINATION "share/icons/hicolor/512x512/apps"
-      RENAME "${project_name}.png"
-    )
-
     # -G DEB
     set(CPACK_PACKAGE_CONTACT "bubio")
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "PC-8801MA Emulator\neXellent Multi-platform emulator type 8 - 'XM8' based on ePC-8801MA")

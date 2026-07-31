@@ -266,6 +266,23 @@ cd Builder/Linux
 
 <br />
 
+### Flatpak（RetroAchievements 有効版）
+
+Flatpak パッケージは x86_64 と arm64 の両方を同じ manifest からネイティブにビルドします。ビルドには Freedesktop 25.08 runtime が必要です。
+
+```shell
+flatpak install flathub org.freedesktop.Sdk//25.08 org.freedesktop.Platform//25.08
+flatpak-builder --user --install --force-clean flatpak-build com.github.bubio.xm8m.yml
+```
+
+RA の通信と認証情報の保存、SDL による ROM／ディスクイメージ選択のため、ネットワーク、Secret Service、およびホームディレクトリへのアクセスを許可します。BIOS ROM は Flatpak の設定ディレクトリに配置してください。
+
+```shell
+~/.var/app/com.github.bubio.xm8m/data/retro_pc_pi/xm8/
+```
+
+<br />
+
 BIOS ROMファイルの置き場所は以下になります。
 
 ```shell
