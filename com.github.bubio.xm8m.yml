@@ -17,6 +17,7 @@ finish-args:
 modules:
   - name: xm8m
     buildsystem: cmake-ninja
+    builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
       - -DENABLE_PACKAGING=OFF
