@@ -64,14 +64,14 @@ http://retropc.net/pi/xm8/index.html
 
 Download the executable for your platform from the [Releases](https://github.com/bubio/xm8m/releases) page.
 
-For macOS, move `XM8M.app` to the `Applications` folder or another suitable location, then run it.
+For macOS, move `XM8.app` to the `Applications` folder or another suitable location, then run it.
 
 ### System Requirements
 
 | CPU | Minimum macOS version | Download |
 | --- | --- | --- |
-| x86_64 | macOS 10.13 High Sierra | [Universal build](https://github.com/bubio/xm8m/releases/latest) |
-| Apple Silicon | macOS 11 Big Sur | [Universal build](https://github.com/bubio/xm8m/releases/latest) |
+| x86_64 | macOS 10.13 High Sierra | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| Apple Silicon | macOS 11 Big Sur | [Universal build](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
 
 For other operating systems, see the releases page.
 

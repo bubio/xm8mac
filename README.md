@@ -71,7 +71,7 @@ http://retropc.net/pi/xm8/index.html
 
 [リリース](https://github.com/bubio/xm8m/releases)からお手持ちの環境にあった実行ファイルをダウンロードしてください。
 
-`XM8M.app`を`アプリケーション`フォルダに移動するなどして実行してください。
+`XM8.app`を`アプリケーション`フォルダに移動するなどして実行してください。
 
 <br />
 
@@ -79,8 +79,8 @@ http://retropc.net/pi/xm8/index.html
 
 | CPU           | 最小OSバージョン    | 実行ファイル                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | macOS 10.13 High Sierra | [Universal版](https://github.com/bubio/xm8m/releases/latest) |
-| Apple Silicon | macOS 11 Big Sur    | [Universal版](https://github.com/bubio/xm8m/releases/latest) |
+| x86_64        | macOS 10.13 High Sierra | [Universal版](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
+| Apple Silicon | macOS 11 Big Sur    | [Universal版](https://github.com/bubio/xm8m/releases/latest/download/XM8_macOS_Universal.dmg) |
 
 <br />
 
