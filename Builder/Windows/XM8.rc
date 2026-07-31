@@ -35,12 +35,12 @@ BEGIN
 		BLOCK "041104b0"
 		BEGIN
 			VALUE "CompanyName",			"\0"
-			VALUE "FileDescription",		"PC-8801MA EMULATOR XM8\0"
+			VALUE "FileDescription",		"PC-8801MA EMULATOR XM8M\0"
 			VALUE "FileVersion",			"2.0.0.0\0"
 			VALUE "InternalName",			"XM8.exe"
 			VALUE "LegalCopyright", 		"Copyright (C) 2015-2018 �o�h�D"
 			VALUE "OriginalFilename",		"XM8.exe"
-			VALUE "ProductName",			"XM8"
+			VALUE "ProductName",			"XM8M"
 			VALUE "ProductVersion",			"2.0.0.0\0"
 		END
 	END

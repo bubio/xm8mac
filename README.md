@@ -1,7 +1,7 @@
-# XM8 for macOS
+# XM8M
 
 <p align="center">
-  <img src="Documents/AppIcon.png" alt="XM8" width="128" height="128">
+  <img src="Documents/AppIcon.png" alt="XM8M" width="128" height="128">
 </p>
 
 [English](README.en.md)
@@ -10,44 +10,44 @@ NEC PC-8801のエミュレーターです。マルチプラットフォームで
 
 
 <p align="center">
-  <a href="https://github.com/bubio/xm8mac/releases/latest">
-    <img src="https://img.shields.io/github/v/release/bubio/xm8mac" alt="Latest Release">
+  <a href="https://github.com/bubio/xm8m/releases/latest">
+    <img src="https://img.shields.io/github/v/release/bubio/xm8m" alt="Latest Release">
   </a>
-  <a href="https://github.com/bubio/xm8mac/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/bubio/xm8mac" alt="License">
+  <a href="https://github.com/bubio/xm8m/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/bubio/xm8m" alt="License">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/Windows_x86_x64_arm64.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/Windows_x86_x64_arm64.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/Windows_x86_x64_arm64.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/Windows_x86_x64_arm64.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/macOS_Universal.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/macOS_Universal.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/macOS_Universal.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/macOS_Universal.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/Linux_x86_64.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/Linux_x86_64.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64_AppImage.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_x86_64_AppImage.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/Linux_x86_64_AppImage.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/Linux_x86_64_AppImage.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/Linux_arm64.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/Linux_arm64.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64_AppImage.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/Linux_arm64_AppImage.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/Linux_arm64_AppImage.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/Linux_arm64_AppImage.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/RaspberryPiOS_armhf.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/RaspberryPiOS_armhf.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/RaspberryPiOS_armhf.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/RaspberryPiOS_armhf.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/actions/workflows/Android.yml">
-    <img src="https://github.com/bubio/xm8mac/actions/workflows/Android.yml/badge.svg" alt="Windows">
+  <a href="https://github.com/bubio/xm8m/actions/workflows/Android.yml">
+    <img src="https://github.com/bubio/xm8m/actions/workflows/Android.yml/badge.svg" alt="Windows">
   </a>
-  <a href="https://github.com/bubio/xm8mac/releases/latest">
-    <img src="https://img.shields.io/github/downloads/bubio/xm8mac/total.svg" alt="Downloads">
+  <a href="https://github.com/bubio/xm8m/releases/latest">
+    <img src="https://img.shields.io/github/downloads/bubio/xm8m/total.svg" alt="Downloads">
   </a>
 </p>
 
-## XM8 for macOSとは
+## XM8Mとは
 ---
-XM8は、ＰＩ．さんが開発したマルチプラットフォーム（Windows/Linux/Android）に対応したPC-8801MA(PC-8801mkIISR上位互換)のエミュレータをmacOS用に改変したものです。
+XM8Mは、ＰＩ．さんが開発したXM8をベースにした、PC-8801MA（PC-8801mkIISR上位互換）のマルチプラットフォームエミュレータです。旧名称はxm8macです。
 
 <p align="center">
   <img width="752" src="Documents/Screenshot.png" alt="XM8 Screenhot">
@@ -69,9 +69,9 @@ http://retropc.net/pi/xm8/index.html
 ## インストール方法
 ---
 
-[リリース](https://github.com/bubio/xm8mac/releases)からお手持ちの環境にあった実行ファイルをダウンロードしてください。
+[リリース](https://github.com/bubio/xm8m/releases)からお手持ちの環境にあった実行ファイルをダウンロードしてください。
 
-`XM8.app`を`アプリケーション`フォルダに移動するなどして実行してください。
+`XM8M.app`を`アプリケーション`フォルダに移動するなどして実行してください。
 
 <br />
 
@@ -79,8 +79,8 @@ http://retropc.net/pi/xm8/index.html
 
 | CPU           | 最小OSバージョン    | 実行ファイル                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------ |
-| x86_64        | macOS 10.13 High Sierra | [x86_64版](https://github.com/bubio/xm8mac/releases/latest/download/XM8_macOS_Universal.dmg) |
-| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8mac/releases/latest/download/XM8_macOS_Universal.dmg) |
+| x86_64        | macOS 10.13 High Sierra | [x86_64版](https://github.com/bubio/xm8m/releases/latest/download/XM8M_macOS_Universal.dmg) |
+| Apple Silicon | macOS 11 Big Sur    | [Apple Silicon版](https://github.com/bubio/xm8m/releases/latest/download/XM8M_macOS_Universal.dmg) |
 
 <br />
 

@@ -1,11 +1,11 @@
 [Desktop Entry]
-Name=XM8
-GenericName=XM8
+Name=XM8M
+GenericName=XM8M
 Comment=PC-8801MA Emulator
 Comment[ja]=PC-8801MA エミュレーター
 Exec=xm8
 MimeType=application/x-m3u;audio/x-mpegurl;application/vnd.apple.mpegurl;
-Icon=xm8
+Icon=xm8m
 Terminal=false
 Type=Application
 X-DCOP-ServiceType=Multi

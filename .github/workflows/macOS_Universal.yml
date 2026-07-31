@@ -37,21 +37,21 @@ jobs:
         with:
           xcode-version: '16.4'
 
-      - name: Build XM8 macOS app
+      - name: Build XM8M macOS app
         run: |
           cd Builder/macOS
           ./dist_app.sh
-          mv ../../build/xm8.dmg ../../build/XM8_macOS_Universal.dmg
+          mv ../../build/XM8M.dmg ../../build/XM8M_macOS_Universal.dmg
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: XM8_macOS_Universal.dmg
+          name: XM8M_macOS_Universal.dmg
           path: build/*.dmg
 
       - name: Update Release
         if: ${{ github.event_name == 'release' && !env.ACT }}
         uses: svenstaro/upload-release-action@v2
         with:
-          file: build/XM8_macOS_Universal.dmg
+          file: build/XM8M_macOS_Universal.dmg
           overwrite: true

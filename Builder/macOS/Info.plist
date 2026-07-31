@@ -29,7 +29,7 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
-			<key>CFBundleTypeName</key><string>XM8 Disk and Playlist</string>
+			<key>CFBundleTypeName</key><string>XM8M Disk and Playlist</string>
 			<key>CFBundleTypeRole</key><string>Viewer</string>
 			<key>CFBundleTypeExtensions</key><array><string>d88</string><string>m3u</string><string>m3u8</string></array>
 		</dict>
