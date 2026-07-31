@@ -28,6 +28,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Install Flatpak builder
+        run: sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
+
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
