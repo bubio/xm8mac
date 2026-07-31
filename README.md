@@ -4,6 +4,7 @@
   <img src="Documents/AppIcon.png" alt="XM8" width="128" height="128">
 </p>
 
+[English](README.en.md)
 
 NEC PC-8801のエミュレーターです。マルチプラットフォームです。
 
