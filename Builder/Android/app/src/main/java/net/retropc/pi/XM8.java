@@ -52,6 +52,7 @@ import android.view.KeyEvent;
 import android.view.WindowManager;
 import androidx.core.content.ContextCompat;
 import android.content.pm.PackageManager;
+import android.content.pm.ActivityInfo;
 import androidx.core.app.ActivityCompat;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -70,6 +71,14 @@ import android.os.ParcelFileDescriptor;
 public class XM8 extends SDLActivity {
     // log
     private static final String LOG_TAG = "XM8";
+
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        // XM8 supports both the legacy landscape layout and the portrait
+        // game/control split.  SDL's default picks landscape from its initial
+        // 640x400 window size, so keep the Activity responsive to user rotation.
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
+    }
 
     // directory and filename
     private static final String ROM_DIRECTORY = "/XM8/";
