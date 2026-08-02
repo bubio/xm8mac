@@ -999,6 +999,11 @@ void Menu::EnterVideo(int id)
 #ifdef __ANDROID__
 	// force RGB565
 	list->AddCheckButton("RGB565 (for Samsung Galaxy)", MENU_VIDEO_FORCERGB565);
+
+	// rotation mode
+	list->AddRadioButton("Rotation: Auto", MENU_VIDEO_ROTATE_AUTO, MENU_VIDEO_ROTATION);
+	list->AddRadioButton("Rotation: Landscape", MENU_VIDEO_ROTATE_LANDSCAPE, MENU_VIDEO_ROTATION);
+	list->AddRadioButton("Rotation: Portrait", MENU_VIDEO_ROTATE_PORTRAIT, MENU_VIDEO_ROTATION);
 #endif // __ANDROID__
 
 	// skip frame
@@ -1063,6 +1068,19 @@ void Menu::EnterVideo(int id)
 #ifdef __ANDROID__
 	// force RGB565
 	list->SetCheck(MENU_VIDEO_FORCERGB565, setting->IsForceRGB565());
+
+	// rotation mode
+	switch (setting->GetRotationMode()) {
+	case Setting::RotationLandscape:
+		list->SetRadio(MENU_VIDEO_ROTATE_LANDSCAPE, MENU_VIDEO_ROTATION);
+		break;
+	case Setting::RotationPortrait:
+		list->SetRadio(MENU_VIDEO_ROTATE_PORTRAIT, MENU_VIDEO_ROTATION);
+		break;
+	default:
+		list->SetRadio(MENU_VIDEO_ROTATE_AUTO, MENU_VIDEO_ROTATION);
+		break;
+	}
 #endif // __ANDROID__
 
 	// set focus
@@ -2831,6 +2849,24 @@ void Menu::CmdVideo(bool down, int id)
 				setting->SetForceRGB565(true);
 				list->SetCheck(MENU_VIDEO_FORCERGB565, true);
 			}
+		}
+		break;
+
+	// rotation mode
+	case MENU_VIDEO_ROTATE_AUTO:
+	case MENU_VIDEO_ROTATE_LANDSCAPE:
+	case MENU_VIDEO_ROTATE_PORTRAIT:
+		if (down == false) {
+			int rotation = Setting::RotationAuto;
+			if (id == MENU_VIDEO_ROTATE_LANDSCAPE) {
+				rotation = Setting::RotationLandscape;
+			}
+			else if (id == MENU_VIDEO_ROTATE_PORTRAIT) {
+				rotation = Setting::RotationPortrait;
+			}
+			setting->SetRotationMode(rotation);
+			list->SetRadio(id, MENU_VIDEO_ROTATION);
+			app->ApplyAndroidRotationMode();
 		}
 		break;
 #endif // __ANDROID__

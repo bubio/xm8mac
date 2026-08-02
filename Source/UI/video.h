@@ -69,6 +69,10 @@ public:
 										// convert point from window to texturure
 	bool ConvertFinger(float tx, float ty, int *x, int *y);
 										// convert finger point from window to texture
+	bool ConvertSoftKeyPoint(int *x, int *y);
+										// convert point from window to softkey texture
+	bool ConvertSoftKeyFinger(float tx, float ty, int *x, int *y);
+										// convert finger point from window to softkey texture
 
 	// main scheduler
 	void SetFrameRate(Uint32 rate);
@@ -139,6 +143,8 @@ private:
 	// flag and parameter
 	bool horizontal;
 										// screen direction
+	bool portrait_split;
+										// Android portrait game/control split
 	bool menu_mode;
 										// menu mode
 	int window_width;
@@ -151,6 +157,10 @@ private:
 										// source rect
 	SDL_Rect status_rect;
 										// status rect
+	SDL_Rect softkey_rect;
+										// dedicated softkey rect in portrait mode
+	SDL_Rect menu_rect;
+										// dedicated menu rect in portrait mode
 	SDL_Rect clear_rect[2];
 										// clear rect
 	Uint8 brightness;

@@ -121,6 +121,10 @@ public:
 										// get full speed flag
 	void SetWindowWidth();
 										// set window width
+#ifdef __ANDROID__
+	void ApplyAndroidRotationMode();
+										// apply Android rotation mode
+#endif
 
 	// action
 	void OnKeyVM(SDL_Scancode code);
@@ -232,6 +236,8 @@ public:
 										// get application title
 	void* GetEvMgr();
 										// get event manager
+	bool IsRaOverlayBlocking() const;
+										// check blocking RA overlay
 
 private:
 	// drawing
@@ -408,8 +414,6 @@ private:
 										// save legacy XM8 state body
 	void ChangeSystemInternal(bool load, bool preserve_ra_session);
 										// rebuild VM with explicit RA lifecycle policy
-	bool IsRaOverlayBlocking() const;
-										// check blocking RA overlay
 	bool OpenStartupDisks(const std::vector<DiskSpec>& disks, std::string *error);
 										// open CLI disks
 	bool OpenDroppedDisk(const char *path, std::string *error);

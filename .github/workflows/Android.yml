@@ -50,7 +50,7 @@ jobs:
           path: |
             Builder/Android/app/jni/SDL
             Builder/Android/app/src/main/java/org/libsdl
-          key: ${{ runner.os }}-android-sdl2-${{ hashFiles('Builder/Android/setup_sdl2.sh') }}
+          key: ${{ runner.os }}-android-sdl2-${{ hashFiles('Builder/Android/setup_sdl2.sh', 'Builder/Android/patches/sdl2-2.32.10-android-compat.patch') }}
           restore-keys: |
             ${{ runner.os }}-android-sdl2-
 

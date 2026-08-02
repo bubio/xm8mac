@@ -81,7 +81,8 @@ int main(int argc, char *argv[])
 #if SDL_VERSION_ATLEAST(2, 0, 12)
 	SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
 #endif
-	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+	SDL_SetHint(SDL_HINT_ORIENTATIONS,
+		"LandscapeLeft LandscapeRight Portrait PortraitUpsideDown");
 
 		// initialize SDL
 	ret = SDL_Init( 

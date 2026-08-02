@@ -104,6 +104,10 @@ int Android_ChDir(char *dir, const char *name);
 //
 void Android_PollJoystick(void);
 
+// Android_SetRotationMode()
+// apply auto, landscape, or portrait Activity rotation mode
+void Android_SetRotationMode(int mode);
+
 // RetroAchievements Android bridge (available only in RA-enabled builds).
 int Android_RaHttpSend(unsigned long long request_id, const char *url,
 	const char *post_data, const char *content_type, int connect_timeout_ms,

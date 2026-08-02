@@ -907,7 +907,7 @@ void Input::OnMouseMotion(SDL_Event *e)
 	// convert point
 	x = e->motion.x;
 	y = e->motion.y;
-	if (video->ConvertPoint(&x, &y) == false) {
+	if (video->ConvertSoftKeyPoint(&x, &y) == false) {
 		return;
 	}
 
@@ -948,7 +948,7 @@ void Input::OnMouseButtonDown(SDL_Event *e)
 	// convert point
 	x = e->button.x;
 	y = e->button.y;
-	if (video->ConvertPoint(&x, &y) == false) {
+	if (video->ConvertSoftKeyPoint(&x, &y) == false) {
 		return;
 	}
 
@@ -990,7 +990,7 @@ void Input::OnMouseButtonUp(SDL_Event *e)
 	// convert point
 	x = e->button.x;
 	y = e->button.y;
-	if (video->ConvertPoint(&x, &y) == false) {
+	if (video->ConvertSoftKeyPoint(&x, &y) == false) {
 		return;
 	}
 
@@ -1110,7 +1110,7 @@ void Input::OnFingerDown(SDL_Event *e)
 	// convert finger
 	x = 0;
 	y = 0;
-	if (video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y) == false) {
+	if (video->ConvertSoftKeyFinger(e->tfinger.x, e->tfinger.y, &x, &y) == false) {
 		return;
 	}
 
@@ -1131,7 +1131,8 @@ void Input::OnFingerUp(SDL_Event *e)
 	// convert finger
 	x = 0;
 	y = 0;
-	if (video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y) == false) {
+	if (video->ConvertSoftKeyFinger(e->tfinger.x, e->tfinger.y, &x, &y) == false) {
+		OnInputMove(NULL, (int)e->tfinger.fingerId);
 		return;
 	}
 
@@ -1152,7 +1153,8 @@ void Input::OnFingerMotion(SDL_Event *e)
 	// convert finger
 	x = 0;
 	y = 0;
-	if (video->ConvertFinger(e->tfinger.x, e->tfinger.y, &x, &y) == false) {
+	if (video->ConvertSoftKeyFinger(e->tfinger.x, e->tfinger.y, &x, &y) == false) {
+		OnInputMove(NULL, (int)e->tfinger.fingerId);
 		return;
 	}
 

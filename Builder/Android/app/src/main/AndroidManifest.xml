@@ -55,6 +55,7 @@
          An example Java class can be found in README-android.md
     -->
     <application
+        android:appCategory="game"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -75,7 +76,7 @@
             android:launchMode="singleInstance"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:preferMinimalPostProcessing="true"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="sensor"
             android:exported="true">
 
             <intent-filter>
