@@ -60,6 +60,8 @@
 										// version 1.71
 #define SETTING_VERSION_173		20230501
 										// version 1.73
+#define SETTING_VERSION_200		20260801
+										// version 2.00
 
 // video
 #define DEFAULT_WINDOW_WIDTH	640
@@ -150,6 +152,7 @@ Setting::Setting()
 	scale_quality[0] = (char)('0' + DEFAULT_SCALE_QUALITY);
 	scale_quality[1] = '\0';
 	force_rgb565 = DEFAULT_FORCE_RGB565;
+	rotation_mode = RotationAuto;
 
 	// setting (input)
 	softkey_index = 0;
@@ -383,6 +386,14 @@ bool Setting::LoadSetting(FILEIO *fio)
 			num_to_numpad_enable = fio->FgetBool();
 		}
 
+		// version 2.00
+		if (version >= SETTING_VERSION_200) {
+			rotation_mode = fio->FgetInt32();
+			if (rotation_mode < RotationAuto || rotation_mode > RotationPortrait) {
+				rotation_mode = RotationAuto;
+			}
+		}
+
 		return true;
 	}
 
@@ -416,7 +427,7 @@ void Setting::SaveSetting(FILEIO *fio)
 	int loop;
 
 	// version
-	fio->FputUint32(SETTING_VERSION_173);
+	fio->FputUint32(SETTING_VERSION_200);
 
 	// system
 	fio->FputInt32(config.boot_mode);
@@ -477,6 +488,9 @@ void Setting::SaveSetting(FILEIO *fio)
 	// version 1.73
 	fio->FputBool(cursor_to_numpad_enable);
 	fio->FputBool(num_to_numpad_enable);
+
+	// version 2.00
+	fio->FputInt32(rotation_mode);
 }
 
 //
@@ -667,6 +681,27 @@ int Setting::GetWindowWidth()
 void Setting::SetWindowWidth(int width)
 {
 	window_width = width;
+}
+
+//
+// GetRotationMode()
+// get Android rotation mode
+//
+int Setting::GetRotationMode()
+{
+	return rotation_mode;
+}
+
+//
+// SetRotationMode()
+// set Android rotation mode
+//
+void Setting::SetRotationMode(int mode)
+{
+	if (mode < RotationAuto || mode > RotationPortrait) {
+		mode = RotationAuto;
+	}
+	rotation_mode = mode;
 }
 
 //

@@ -575,6 +575,20 @@ static jmethodID JNI_RaMethod(JNIEnv *env, const char *name, const char *signatu
 	return (*env)->GetMethodID(env, java_class, name, signature);
 }
 
+//
+// Android_SetRotationMode()
+// apply Android Activity rotation mode
+//
+void Android_SetRotationMode(int mode)
+{
+	JNIEnv *env = JNI_GetEnvironment();
+	if (env == NULL || java_activity == NULL || java_class == NULL) return;
+	jmethodID id = JNI_RaMethod(env, "setRotationMode", "(I)V");
+	if (id == NULL) return;
+	(*env)->CallVoidMethod(env, java_activity, id, (jint)mode);
+	JNI_HasException(env);
+}
+
 void Android_RaShowLogin(const char *username)
 {
 	JNIEnv *env = JNI_GetEnvironment();

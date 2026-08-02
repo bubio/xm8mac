@@ -121,6 +121,10 @@ public:
 										// get full speed flag
 	void SetWindowWidth();
 										// set window width
+#ifdef __ANDROID__
+	void ApplyAndroidRotationMode();
+										// apply Android rotation mode
+#endif
 
 	// action
 	void OnKeyVM(SDL_Scancode code);

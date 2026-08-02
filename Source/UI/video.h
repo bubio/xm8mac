@@ -159,6 +159,8 @@ private:
 										// status rect
 	SDL_Rect softkey_rect;
 										// dedicated softkey rect in portrait mode
+	SDL_Rect menu_rect;
+										// dedicated menu rect in portrait mode
 	SDL_Rect clear_rect[2];
 										// clear rect
 	Uint8 brightness;

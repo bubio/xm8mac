@@ -298,6 +298,14 @@
 										// scaling filter
 #define MENU_VIDEO_FORCERGB565          817
 										// force RGB565
+#define MENU_VIDEO_ROTATE_AUTO           818
+										// auto rotation
+#define MENU_VIDEO_ROTATE_LANDSCAPE      819
+										// landscape rotation
+#define MENU_VIDEO_ROTATE_PORTRAIT       820
+										// portrait rotation
+#define MENU_VIDEO_ROTATION              895
+										// rotation radio
 #define MENU_VIDEO_WINDOW               896
 										// window radio
 #define MENU_VIDEO_SKIP                 897

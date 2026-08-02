@@ -40,6 +40,7 @@ import org.libsdl.app.SDLActivity;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -56,6 +57,9 @@ import android.content.pm.ActivityInfo;
 import androidx.core.app.ActivityCompat;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.DisplayCutout;
+import android.view.RoundedCorner;
+import android.graphics.Insets;
 import android.widget.Toast;
 import android.widget.Button;
 import android.widget.EditText;
@@ -71,13 +75,100 @@ import android.os.ParcelFileDescriptor;
 public class XM8 extends SDLActivity {
     // log
     private static final String LOG_TAG = "XM8";
+    private static final int ROTATION_AUTO = 0;
+    private static final int ROTATION_LANDSCAPE = 1;
+    private static final int ROTATION_PORTRAIT = 2;
+    private int mRotationMode = ROTATION_AUTO;
+
+    private void installSafeAreaInsets() {
+        if (mLayout == null) return;
+
+        mLayout.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
+                int top;
+                int bottom;
+
+                // The portrait game/control layout needs room above and below
+                // its full-width panels. Do not inset landscape or the left /
+                // right edges: those margins are both visually excessive and
+                // unnecessary for the existing aspect-correct landscape view.
+                if (getResources().getConfiguration().orientation
+                        != Configuration.ORIENTATION_PORTRAIT) {
+                    view.setPadding(0, 0, 0, 0);
+                    return insets;
+                }
+
+                if (Build.VERSION.SDK_INT >= 30) {
+                    Insets safe = insets.getInsetsIgnoringVisibility(
+                            WindowInsets.Type.displayCutout());
+                    top = safe.top;
+                    bottom = safe.bottom;
+                } else {
+                    top = 0;
+                    bottom = 0;
+                    if (Build.VERSION.SDK_INT >= 28) {
+                        DisplayCutout cutout = insets.getDisplayCutout();
+                        if (cutout != null) {
+                            top = Math.max(top, cutout.getSafeInsetTop());
+                            bottom = Math.max(bottom, cutout.getSafeInsetBottom());
+                        }
+                    }
+                }
+
+                if (Build.VERSION.SDK_INT >= 31) {
+                    RoundedCorner topLeft = insets.getRoundedCorner(
+                            RoundedCorner.POSITION_TOP_LEFT);
+                    RoundedCorner topRight = insets.getRoundedCorner(
+                            RoundedCorner.POSITION_TOP_RIGHT);
+                    RoundedCorner bottomLeft = insets.getRoundedCorner(
+                            RoundedCorner.POSITION_BOTTOM_LEFT);
+                    RoundedCorner bottomRight = insets.getRoundedCorner(
+                            RoundedCorner.POSITION_BOTTOM_RIGHT);
+                    top = Math.max(top, Math.max(radiusOf(topLeft), radiusOf(topRight)));
+                    bottom = Math.max(bottom, Math.max(radiusOf(bottomLeft), radiusOf(bottomRight)));
+                }
+
+                view.setPadding(0, top, 0, bottom);
+                return insets;
+            }
+        });
+        mLayout.requestApplyInsets();
+    }
+
+    private static int radiusOf(RoundedCorner corner) {
+        return corner == null ? 0 : corner.getRadius();
+    }
 
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
         // XM8 supports both the legacy landscape layout and the portrait
         // game/control split.  SDL's default picks landscape from its initial
         // 640x400 window size, so keep the Activity responsive to user rotation.
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
+        applyRotationMode();
+    }
+
+    public void setRotationMode(final int mode) {
+        mRotationMode = (mode == ROTATION_LANDSCAPE || mode == ROTATION_PORTRAIT)
+                ? mode : ROTATION_AUTO;
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (!isFinishing()) applyRotationMode();
+            }
+        });
+    }
+
+    private void applyRotationMode() {
+        switch (mRotationMode) {
+        case ROTATION_LANDSCAPE:
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            break;
+        case ROTATION_PORTRAIT:
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+            break;
+        default:
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
+            break;
+        }
     }
 
     // directory and filename
@@ -182,6 +273,7 @@ public class XM8 extends SDLActivity {
 
         // immersive full-screen mode or dim status bar / navigation icon
         setupWindow();
+        installSafeAreaInsets();
 
         // set Build.VERSION.SDK_INT and app files directory
         nativeBuildVer(Build.VERSION.SDK_INT);

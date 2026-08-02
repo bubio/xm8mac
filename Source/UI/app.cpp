@@ -44,6 +44,9 @@
 #include "tapemgr.h"
 #include "clidisk.h"
 #include "m3u.h"
+#ifdef __ANDROID__
+#include "xm8jni.h"
+#endif
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_media_change_policy.h"
 #include "ra_build_info.h"
@@ -616,6 +619,9 @@ bool App::Init(const CliOptions& options)
 		Deinit();
 		return false;
 	}
+#ifdef __ANDROID__
+	ApplyAndroidRotationMode();
+#endif
 	if (ApplyCommandLineSettings(options) == false) {
 		Deinit();
 		return false;
@@ -5979,6 +5985,17 @@ void App::CtrlAudio()
 		audio->Stop();
 	}
 }
+
+#ifdef __ANDROID__
+//
+// ApplyAndroidRotationMode()
+// apply persisted Android Activity rotation mode
+//
+void App::ApplyAndroidRotationMode()
+{
+	Android_SetRotationMode(setting->GetRotationMode());
+}
+#endif
 
 //
 // ChangeAudio()

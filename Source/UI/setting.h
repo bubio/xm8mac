@@ -67,6 +67,11 @@
 class Setting
 {
 public:
+	enum RotationMode {
+		RotationAuto = 0,
+		RotationLandscape,
+		RotationPortrait
+	};
 	Setting();
 										// constructor
 	virtual ~Setting();
@@ -151,6 +156,10 @@ public:
 										// get RGB565 mode (Android only)
 	void SetForceRGB565(bool enable);
 										// set RGB565 mode (Android only)
+	int GetRotationMode();
+										// get Android rotation mode
+	void SetRotationMode(int mode);
+										// set Android rotation mode
 
 	// audio
 	int GetAudioDevice();
@@ -290,6 +299,8 @@ private:
 										// keyboard enable (version 1.10)
 	bool force_rgb565;
 										// force RGB565 (version 1.20)
+	int rotation_mode;
+										// Android rotation mode (version 2.00)
 	bool watch_battery;
 										// watch battery (version 1.30)
 	uint32 joystick_to_key[15];

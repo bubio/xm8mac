@@ -42,6 +42,8 @@
 										// minimum height
 #define STATUS_HEIGHT		16
 										// status area height
+#define PORTRAIT_PANEL_MIN_SCALE	90
+										// minimum lower-panel scale
 #define DRIVE_WIDTH			(28 * 8)
 										// drive area width
 #define FRAME_RATE_X		56
@@ -108,6 +110,7 @@ Video::Video(App *a)
 	SDL_zero(src_rect);
 	SDL_zero(status_rect);
 	SDL_zero(softkey_rect);
+	SDL_zero(menu_rect);
 	memset(clear_rect, 0, sizeof(clear_rect));
 
 	// drive status
@@ -356,6 +359,13 @@ void Video::SetWindowSize(int width, int height)
 	bool status;
 	int v_height;
 	int draw_height;
+	int game_height;
+	int panel_height;
+	int panel_width;
+
+#ifdef __ANDROID__
+	int panel_min_height;
+#endif
 
 	// font and disk manager
 	if (font == NULL) {
@@ -368,24 +378,6 @@ void Video::SetWindowSize(int width, int height)
 	// save parameter
 	window_width = width;
 	window_height = height;
-	portrait_split = false;
-#ifdef __ANDROID__
-	portrait_split = height > width;
-#endif
-	draw_height = portrait_split ? height / 2 : height;
-	if (portrait_split) {
-		softkey_rect.x = 0;
-		softkey_rect.y = draw_height;
-		softkey_rect.w = width;
-		softkey_rect.h = height - draw_height;
-		softkey_mod = 0;
-		if (softkey_texture != NULL) {
-			SDL_SetTextureAlphaMod(softkey_texture, 0xff);
-		}
-	}
-	else {
-		SDL_zero(softkey_rect);
-	}
 
 	// update video_height
 	status = setting->HasStatusLine();
@@ -401,6 +393,43 @@ void Video::SetWindowSize(int width, int height)
 		// rebuild texture (status only)
 		RebuildTexture(true);
 	}
+
+	// Android portrait game/control split. The game receives its full-width,
+	// aspect-correct height first. The lower panel may shrink uniformly to
+	// 90 percent, but smaller windows retain the legacy overlay layout.
+	portrait_split = false;
+	SDL_zero(softkey_rect);
+	SDL_zero(menu_rect);
+	game_height = 0;
+#ifdef __ANDROID__
+	panel_min_height = 0;
+	if (height > width) {
+		game_height = (width * video_height) / SCREEN_WIDTH;
+		panel_min_height = ((width * SCREEN_HEIGHT) / SCREEN_WIDTH) *
+			PORTRAIT_PANEL_MIN_SCALE / 100;
+		portrait_split = height >= game_height + panel_min_height;
+	}
+#endif
+	if (portrait_split) {
+		panel_height = height - game_height;
+		panel_width = (panel_height * SCREEN_WIDTH) / SCREEN_HEIGHT;
+		if (panel_width > width) {
+			panel_width = width;
+			panel_height = (panel_width * SCREEN_HEIGHT) / SCREEN_WIDTH;
+		}
+
+		softkey_rect.x = (width - panel_width) / 2;
+		softkey_rect.y = game_height + ((height - game_height - panel_height) / 2);
+		softkey_rect.w = panel_width;
+		softkey_rect.h = panel_height;
+		menu_rect = softkey_rect;
+		softkey_mod = 0;
+		if (softkey_texture != NULL) {
+			SDL_SetTextureAlphaMod(softkey_texture, 0xff);
+		}
+	}
+
+	draw_height = portrait_split ? game_height : height;
 
 	// check aspect
 	if ((draw_height * SCREEN_WIDTH) >= (width * video_height)) {
@@ -653,18 +682,30 @@ bool Video::ConvertPoint(int *x, int *y)
 {
 	int draw_x;
 	int draw_y;
+	SDL_Rect *rect;
+	int logical_height;
+
+	// Menus own the dedicated lower panel in Android portrait mode.
+	if (portrait_split == true && menu_mode == true) {
+		rect = &menu_rect;
+		logical_height = SCREEN_HEIGHT;
+	}
+	else {
+		rect = &draw_rect;
+		logical_height = video_height;
+	}
 
 	// get
 	draw_x = *x;
 	draw_y = *y;
 
 	// offset
-	draw_x -= draw_rect.x;
-	draw_y -= draw_rect.y;
+	draw_x -= rect->x;
+	draw_y -= rect->y;
 
 	// convert
-	draw_x = (draw_x * SCREEN_WIDTH) / draw_rect.w;
-	draw_y = (draw_y * video_height) / draw_rect.h;
+	draw_x = (draw_x * SCREEN_WIDTH) / rect->w;
+	draw_y = (draw_y * logical_height) / rect->h;
 
 	// over check
 	if ((draw_x < 0) || (draw_x >= SCREEN_WIDTH)) {
@@ -673,7 +714,7 @@ bool Video::ConvertPoint(int *x, int *y)
 		return false;
 	}
 
-	if ((draw_y < 0) || (draw_y >= video_height)) {
+	if ((draw_y < 0) || (draw_y >= logical_height)) {
 		*x = 0;
 		*y = 0;
 		return false;
@@ -1288,7 +1329,8 @@ void Video::DrawMenu(bool status)
 	// menu texture
 	if (ret == 0) {
 		// menu texture
-		ret = SDL_RenderCopy(renderer, menu_texture, NULL, &draw_rect);
+		ret = SDL_RenderCopy(renderer, menu_texture, NULL,
+			portrait_split ? &menu_rect : &draw_rect);
 		if (ret == 0) {
 			SDL_RenderPresent(renderer);
 		}

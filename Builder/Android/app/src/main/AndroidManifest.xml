@@ -55,6 +55,7 @@
          An example Java class can be found in README-android.md
     -->
     <application
+        android:appCategory="game"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
