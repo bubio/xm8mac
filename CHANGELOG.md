@@ -1,3 +1,39 @@
+# 2.0.0
+
+2026年8月3日 月曜日
+
+<br/>　
+
+## 動作環境
+| Platform | CPU | 最小OSバージョン |
+| ------------- | ------------------- | ------------- |
+| Mac | x86_64 | macOS 10.13 High Sierra |
+| Mac | Apple Silicon | macOS 11 Big Sur |
+| Windows | x86_64 | Windows 10 |
+| Windows | x86_32 | Windows 10 |
+| Linux | x86_64 | Ubuntu 22.04以降（.deb） / Fedora 36以降（.rpm） |
+| Raspberry Pi OS | armhf | Bookworm以降 |
+| Android | Arm | Android 4.4 |
+
+<br />　
+
+## 変更点
+- アプリ名称変更(XM8 for Mac -> XM8M)。
+- アプリアイコンを変更しました。
+- Androidのビルド環境を更新しました。
+- Androidの縦画面に対応しました。
+- m3u/m3u8ファイルの対応を拡充し、メニューなどからも開けるようにしました。
+- Linuxはflatpakでの配布を追加しました。
+- *🎖️[RetroAchievements](https://retroachievements.org)　に対応しました。*
+
+<br />　
+
+## 既知の問題
+- 特にありません。
+
+<br/>　
+<br/>　
+
 # 1.7.9
 
 2026年6月16日 火曜日
