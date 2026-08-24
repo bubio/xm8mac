@@ -31,8 +31,10 @@ int main()
 
 	context.session_state = RaSessionState::Starting;
 	Check(IsRaHardcoreSession(context), "Hardcore applies while starting");
+	Check(IsRaOperationAllowed(context, RaRestrictedOperation::SaveState),
+		"Hardcore allows creating debugging states");
 	for (RaRestrictedOperation operation : {
-		RaRestrictedOperation::LoadState, RaRestrictedOperation::SaveState,
+		RaRestrictedOperation::LoadState,
 		RaRestrictedOperation::FullSpeed, RaRestrictedOperation::FastDisk,
 		RaRestrictedOperation::Debugger}) {
 		Check(!IsRaOperationAllowed(context, operation),
@@ -40,6 +42,8 @@ int main()
 	}
 
 	context.selected_mode = RaPlayMode::Casual;
+	Check(CanLoadHardcoreDebugState(context),
+		"Casual is the only mode that can load Hardcore debug states");
 	Check(IsRaOperationAllowed(context, RaRestrictedOperation::LoadState),
 		"Casual allows state loading");
 	Check(IsRaOperationAllowed(context, RaRestrictedOperation::FullSpeed),
@@ -53,6 +57,8 @@ int main()
 	context.session_state = RaSessionState::ActiveDisconnected;
 	Check(IsRaHardcoreSession(context),
 		"disconnect does not weaken an active Hardcore session");
+	Check(!CanLoadHardcoreDebugState(context),
+		"Hardcore cannot call the lower-level debug state loader");
 	context.session_state = RaSessionState::Offline;
 	Check(EffectiveRaMode(context) == RaEffectiveMode::Offline,
 		"invalidated session is Offline");
@@ -60,6 +66,11 @@ int main()
 		"Offline allows its dedicated states");
 	Check(IsRaOperationAllowed(context, RaRestrictedOperation::FullSpeed),
 		"Offline restores normal speed policy");
+	Check(!CanLoadHardcoreDebugState(context),
+		"Offline cannot load a Hardcore debug state");
+	context.ra_enabled = false;
+	Check(!CanLoadHardcoreDebugState(context),
+		"Normal mode cannot load a Hardcore debug state");
 
 	if (failures != 0) return EXIT_FAILURE;
 	std::cout << "RA session policy tests passed\n";

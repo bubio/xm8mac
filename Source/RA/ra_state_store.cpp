@@ -133,9 +133,10 @@ bool BuildRaState(const RaStateRecord& record, std::vector<uint8_t> *bytes,
 		SetError(error, "RA state body is too large");
 		return false;
 	}
-	if (record.mode == RaStateMode::Casual) {
+	if (record.mode == RaStateMode::Casual ||
+		record.mode == RaStateMode::HardcoreDebug) {
 		if (record.game_id == 0 || record.progress.empty()) {
-			SetError(error, "Casual state requires a game and RA progress");
+			SetError(error, "online RA state requires a game and RA progress");
 			return false;
 		}
 	}
@@ -275,11 +276,13 @@ bool ParseRaState(const std::vector<uint8_t>& bytes, RaStateRecord *record,
 		SetError(error, "invalid RA state media MD5");
 		return false;
 	}
-	if ((parsed.mode == RaStateMode::Casual &&
+	if (((parsed.mode == RaStateMode::Casual ||
+		parsed.mode == RaStateMode::HardcoreDebug) &&
 		(parsed.game_id == 0 || parsed.progress.empty())) ||
 		(parsed.mode == RaStateMode::Offline &&
 		(parsed.game_id != 0 || !parsed.progress.empty())) ||
 		(parsed.mode != RaStateMode::Casual &&
+		parsed.mode != RaStateMode::HardcoreDebug &&
 		parsed.mode != RaStateMode::Offline)) {
 		SetError(error, "invalid RA state mode payload");
 		return false;
@@ -322,6 +325,9 @@ std::string RaStatePath(const std::string& ra_root, RaStateMode mode,
 	std::ostringstream directory;
 	if (mode == RaStateMode::Casual && game_id != 0) {
 		directory << game_id;
+	}
+	else if (mode == RaStateMode::HardcoreDebug && game_id != 0) {
+		directory << "hardcore-debug/" << game_id;
 	}
 	else if (mode == RaStateMode::Offline && game_id == 0) {
 		directory << "offline";

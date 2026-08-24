@@ -48,6 +48,7 @@
 #include "xm8jni.h"
 #endif
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+#include "ra_user_agent.h"
 #include "ra_media_change_policy.h"
 #include "ra_build_info.h"
 #include "ra_leaderboard_fetch_policy.h"
@@ -217,21 +218,7 @@ uint32_t ReadRaMemoryFromApp(uint32_t address, uint8_t *buffer,
 
 std::string MakeRaUserAgent()
 {
-	std::ostringstream stream;
-	stream << "XM8/" << GetAppVersionString()
-		<< " rcheevos/" << Xm8RaBuildInfo::RcheevosVersionString()
-		<< " (";
-#ifdef __ANDROID__
-	stream << "Android";
-#elif defined(_WIN32)
-	stream << "Windows";
-#elif defined(__linux__)
-	stream << "Linux";
-#else
-	stream << "macOS";
-#endif
-	stream << ")";
-	return stream.str();
+	return Xm8Ra::MakeXm8mUserAgent(GetAppVersionString());
 }
 
 std::string ParentDirectoryName(const std::string& path)
@@ -1766,6 +1753,7 @@ bool App::EnsureRaService(std::string *error)
 	Xm8Ra::RaServiceOptions ra_options;
 	ra_options.ra_root = ra_library->Root();
 	ra_options.user_agent = MakeRaUserAgent();
+	ra_options.pending_unlock_store = ra_library;
 	ra_options.credentials_store =
 		Xm8Ra::CreatePlatformRaCredentialsStore(ra_options.ra_root);
 	ra_options.http_client =
@@ -2068,6 +2056,12 @@ void App::ProcessRaService(bool emulation_idle)
 	const Xm8Ra::RaLeaderboardEntriesSnapshot entries_before =
 		ra_service->LeaderboardEntriesSnapshot();
 	ra_service->DrainHttp();
+	std::string integrity_failure;
+	if (ra_service->TakeIntegrityFailure(&integrity_failure)) {
+		EnterRaOfflineSession(integrity_failure.empty() ?
+			"unlock queue failure" : integrity_failure);
+		return;
+	}
 	ProcessRaMediaChange();
 	const Xm8Ra::RaLoginSnapshot login_after_drain =
 		ra_service->LoginSnapshot();
@@ -2170,14 +2164,29 @@ void App::ProcessRaService(bool emulation_idle)
 		}
 		else if (login.state == Xm8Ra::RaLoginState::LoggedIn &&
 			game.state == Xm8Ra::RaGameSessionState::NoGame) {
-			std::string error;
-			if (ra_service->BeginLoadGameByHash(ra_pending_game_hash,
-				&error)) {
+			const Xm8Ra::RaUnlockSyncSnapshot unlock_sync =
+				ra_service->UnlockSyncSnapshot();
+			if (unlock_sync.state == Xm8Ra::RaUnlockSyncState::None) {
+				std::string error;
+				if (!ra_service->BeginPendingUnlockSync(&error)) {
+					EnterRaOfflineSession(error.empty() ?
+						"pending unlock sync failed" : error);
+				}
+			}
+			else if (unlock_sync.state == Xm8Ra::RaUnlockSyncState::Failed) {
+				EnterRaOfflineSession(unlock_sync.message.empty() ?
+					"pending unlock sync failed" : unlock_sync.message);
+			}
+			else if (unlock_sync.state == Xm8Ra::RaUnlockSyncState::Succeeded) {
+				std::string error;
+				if (ra_service->BeginLoadGameByHash(ra_pending_game_hash,
+					&error)) {
 				ra_loaded_game_hash = ra_pending_game_hash;
 				menu->UpdateRaStatus();
-			}
-			else {
-				EnterRaOfflineSession("game load failed");
+				}
+				else {
+					EnterRaOfflineSession("game load failed");
+				}
 			}
 		}
 		else if (game.state == Xm8Ra::RaGameSessionState::Loaded) {
@@ -2198,8 +2207,9 @@ void App::ProcessRaService(bool emulation_idle)
 			ra_menu_status.Set(Xm8Ra::RaMenuStatusState::ActiveGame, game.title);
 			ra_pending_game_hash.clear();
 			ra_pending_library_game_id = 0;
-			AddRaNotice(game.title.empty() ? "RA: identified" :
-				"RA: identified " + game.title);
+			const std::string mode = IsRaHardcoreActive() ?
+				"RA: Hardcore - " : "RA: Casual - ";
+			AddRaNotice(mode + (game.title.empty() ? "identified" : game.title));
 			RefreshRaAchievementsOverlay();
 			menu->UpdateRaStatus();
 		}
@@ -2245,6 +2255,18 @@ void App::ProcessRaConnectivity()
 		transition.signal);
 	if (ra_session_state == previous) {
 		return;
+	}
+	if (transition.signal == Xm8Ra::RaSessionSignal::Reconnected &&
+		ra_service != NULL && ra_service->LoginSnapshot().state ==
+			Xm8Ra::RaLoginState::LoggedIn &&
+		ra_service->UnlockSyncSnapshot().state !=
+			Xm8Ra::RaUnlockSyncState::Pending) {
+		std::string sync_error;
+		if (!ra_service->BeginPendingUnlockSync(&sync_error)) {
+			AddRaNotice(sync_error.empty() ?
+				"RA: pending unlock sync failed" :
+				"RA: pending unlock sync failed - " + sync_error);
+		}
 	}
 	SetRaMenuStatusForConnectivity(
 		transition.signal == Xm8Ra::RaSessionSignal::Disconnected);
@@ -2482,8 +2504,12 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 {
 	bool leaderboards_changed = false;
 	bool session_state_changed = false;
+	bool reconnect_sync_requested = false;
 	for (const Xm8Ra::RaEvent& event : events) {
 		const uint32_t event_now = SDL_GetTicks();
+		if (event.type == Xm8Ra::RaEventType::Reconnected) {
+			reconnect_sync_requested = true;
+		}
 		if (event.type == Xm8Ra::RaEventType::Disconnected ||
 			event.type == Xm8Ra::RaEventType::Reconnected) {
 			const Xm8Ra::RaSessionState previous = ra_session_state;
@@ -2578,6 +2604,17 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 	}
 	if (leaderboards_changed) {
 		RefreshRaLeaderboardsOverlay();
+	}
+	if (reconnect_sync_requested && ra_service != NULL &&
+		ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn &&
+		ra_service->UnlockSyncSnapshot().state !=
+			Xm8Ra::RaUnlockSyncState::Pending) {
+		std::string sync_error;
+		if (!ra_service->BeginPendingUnlockSync(&sync_error)) {
+			AddRaNotice(sync_error.empty() ?
+				"RA: pending unlock sync failed" :
+				"RA: pending unlock sync failed - " + sync_error);
+		}
 	}
 	if (session_state_changed) {
 		menu->UpdateRaStatus();
@@ -6391,7 +6428,11 @@ bool App::GetStateTime(int slot, cur_time_t *cur_time)
 		Xm8Ra::RaStateExpectation expected;
 		std::string path;
 		std::string error;
-		return GetRaStateContext(slot, &expected, &path, &error) &&
+		const Xm8Ra::RaStateMode mode =
+			Xm8Ra::IsRaSessionOffline(ra_session_state) ?
+			Xm8Ra::RaStateMode::Offline : (IsRaHardcoreActive() ?
+			Xm8Ra::RaStateMode::HardcoreDebug : Xm8Ra::RaStateMode::Casual);
+		return GetRaStateContext(slot, mode, &expected, &path, &error) &&
 			platform->GetFileDateTime(path.c_str(), cur_time);
 	}
 #endif
@@ -6456,7 +6497,7 @@ void App::Quit()
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 
-bool App::GetRaStateContext(int slot,
+bool App::GetRaStateContext(int slot, Xm8Ra::RaStateMode requested_mode,
 	Xm8Ra::RaStateExpectation *expected, std::string *path,
 	std::string *error) const
 {
@@ -6481,15 +6522,18 @@ bool App::GetRaStateContext(int slot,
 	Xm8Ra::RaStateExpectation context;
 	context.anchor_md5 = anchor_md5;
 	context.rcheevos_version = Xm8RaBuildInfo::RcheevosVersion();
-	if (Xm8Ra::IsRaSessionOffline(ra_session_state)) {
+	if (requested_mode == Xm8Ra::RaStateMode::Offline &&
+		Xm8Ra::IsRaSessionOffline(ra_session_state)) {
 		context.mode = Xm8Ra::RaStateMode::Offline;
 		context.game_id = 0;
 	}
-	else if (Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
+	else if ((requested_mode == Xm8Ra::RaStateMode::Casual ||
+		requested_mode == Xm8Ra::RaStateMode::HardcoreDebug) &&
+		Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
 		ra_service != nullptr &&
 		ra_service->GameSessionSnapshot().state ==
 			Xm8Ra::RaGameSessionState::Loaded) {
-		context.mode = Xm8Ra::RaStateMode::Casual;
+		context.mode = requested_mode;
 		context.game_id = ra_service->GameSessionSnapshot().game_id;
 	}
 	else {
@@ -6513,8 +6557,12 @@ bool App::SaveRaState(int slot)
 	Xm8Ra::RaStateExpectation expected;
 	std::string path;
 	std::string error;
+	const Xm8Ra::RaStateMode mode =
+		Xm8Ra::IsRaSessionOffline(ra_session_state) ?
+		Xm8Ra::RaStateMode::Offline : (IsRaHardcoreActive() ?
+		Xm8Ra::RaStateMode::HardcoreDebug : Xm8Ra::RaStateMode::Casual);
 	LockVM();
-	if (!GetRaStateContext(slot, &expected, &path, &error)) {
+	if (!GetRaStateContext(slot, mode, &expected, &path, &error)) {
 		UnlockVM();
 		AddRaNotice("RA: " + error);
 		return false;
@@ -6525,7 +6573,8 @@ bool App::SaveRaState(int slot)
 	record.game_id = expected.game_id;
 	record.anchor_md5 = expected.anchor_md5;
 	record.rcheevos_version = expected.rcheevos_version;
-	if (record.mode == Xm8Ra::RaStateMode::Casual &&
+	if ((record.mode == Xm8Ra::RaStateMode::Casual ||
+		record.mode == Xm8Ra::RaStateMode::HardcoreDebug) &&
 		!ra_service->SerializeProgress(&record.progress, &error)) {
 		UnlockVM();
 		AddRaNotice("RA: state progress save failed");
@@ -6557,13 +6606,27 @@ bool App::SaveRaState(int slot)
 	return saved;
 }
 
-bool App::LoadRaState(int slot)
+bool App::LoadRaState(int slot, bool hardcore_debug)
 {
 	Xm8Ra::RaStateExpectation expected;
 	std::string path;
 	std::string error;
+	const Xm8Ra::RaSessionPolicyContext policy = GetRaPolicyContext();
+	if (!Xm8Ra::IsRaOperationAllowed(policy,
+		Xm8Ra::RaRestrictedOperation::LoadState)) {
+		AddRaNotice("RA: state loading is unavailable in Hardcore");
+		return false;
+	}
+	if (hardcore_debug && !Xm8Ra::CanLoadHardcoreDebugState(policy)) {
+		AddRaNotice("RA: Hardcore debug states can only be loaded in Casual");
+		return false;
+	}
+	const Xm8Ra::RaStateMode mode = hardcore_debug ?
+		Xm8Ra::RaStateMode::HardcoreDebug :
+		(Xm8Ra::IsRaSessionOffline(ra_session_state) ?
+			Xm8Ra::RaStateMode::Offline : Xm8Ra::RaStateMode::Casual);
 	LockVM();
-	if (!GetRaStateContext(slot, &expected, &path, &error)) {
+	if (!GetRaStateContext(slot, mode, &expected, &path, &error)) {
 		UnlockVM();
 		AddRaNotice("RA: " + error);
 		return false;
@@ -6606,12 +6669,24 @@ bool App::LoadRaState(int slot)
 		AddRaNotice("RA: state rollback preparation failed");
 		return false;
 	}
+	std::vector<uint8_t> previous_progress;
+	const bool has_ra_progress = record.mode == Xm8Ra::RaStateMode::Casual ||
+		record.mode == Xm8Ra::RaStateMode::HardcoreDebug;
+	if (has_ra_progress &&
+		!ra_service->SerializeProgress(&previous_progress, &error)) {
+		std::remove(target_body.c_str());
+		std::remove(rollback_body.c_str());
+		UnlockVM();
+		AddRaNotice("RA: progress rollback preparation failed");
+		return false;
+	}
 
 	const int previous_frequency = setting->GetAudioFreq();
 	FILEIO target;
 	bool loaded = target.Fopen(const_cast<char *>(target_body.c_str()),
 		FILEIO_READ_BINARY) && LoadStateBody(&target, previous_frequency, true);
 	target.Fclose();
+	loaded = loaded && !target.HasError();
 	if (!loaded) {
 		FILEIO restore;
 		bool restored = false;
@@ -6632,14 +6707,30 @@ bool App::LoadRaState(int slot)
 		}
 		return false;
 	}
+	if (has_ra_progress &&
+		!ra_service->DeserializeProgress(record.progress, &error)) {
+		FILEIO restore;
+		bool restored = false;
+		if (restore.Fopen(const_cast<char *>(rollback_body.c_str()),
+			FILEIO_READ_BINARY)) {
+			restored = LoadStateBody(&restore, previous_frequency, true);
+		}
+		restore.Fclose();
+		restored = restored && !restore.HasError() &&
+			ra_service->DeserializeProgress(previous_progress, &error);
+		std::remove(target_body.c_str());
+		std::remove(rollback_body.c_str());
+		UnlockVM();
+		if (!restored) {
+			EnterRaOfflineSession("state progress rollback failed");
+		}
+		else {
+			AddRaNotice("RA: state progress rejected; previous state restored");
+		}
+		return false;
+	}
 	std::remove(target_body.c_str());
 	std::remove(rollback_body.c_str());
-
-	if (record.mode == Xm8Ra::RaStateMode::Casual &&
-		!ra_service->DeserializeProgress(record.progress, &error)) {
-		ra_service->ResetProgress();
-		AddRaNotice("RA: state loaded; achievement progress reset");
-	}
 	RefreshRaAchievementsOverlay();
 	RefreshRaLeaderboardsOverlay();
 	UnlockVM();
@@ -6664,24 +6755,53 @@ bool App::IsRaRuntimeSupported() const
 // CheckRaStateAvailability()
 // validate RA state menu access and notify on failure
 //
-bool App::CheckRaStateAvailability()
+bool App::CheckRaStateAvailability(bool save, bool hardcore_debug)
 {
 	if (!ra_mode_enabled) {
 		AddRaNotice("RA: state is unavailable while RA mode is disabled");
 		return false;
 	}
-	if (!CheckRaOperation(Xm8Ra::RaRestrictedOperation::LoadState,
-		"RA: states are unavailable in Hardcore")) {
+	const Xm8Ra::RaRestrictedOperation operation = save ?
+		Xm8Ra::RaRestrictedOperation::SaveState :
+		Xm8Ra::RaRestrictedOperation::LoadState;
+	if (!CheckRaOperation(operation, save ?
+		"RA: state saving is unavailable" :
+		"RA: state loading is unavailable in Hardcore")) {
+		return false;
+	}
+	if (hardcore_debug && save != IsRaHardcoreActive()) {
+		AddRaNotice(save ? "RA: Hardcore debug save requires Hardcore" :
+			"RA: Hardcore debug states can only be loaded in Casual");
 		return false;
 	}
 	Xm8Ra::RaStateExpectation expected;
 	std::string path;
 	std::string error;
-	if (!GetRaStateContext(0, &expected, &path, &error)) {
+	const Xm8Ra::RaStateMode mode = hardcore_debug ?
+		Xm8Ra::RaStateMode::HardcoreDebug :
+		(Xm8Ra::IsRaSessionOffline(ra_session_state) ?
+			Xm8Ra::RaStateMode::Offline : Xm8Ra::RaStateMode::Casual);
+	if (!GetRaStateContext(0, mode, &expected, &path, &error)) {
 		AddRaNotice("RA: state unavailable - " + error);
 		return false;
 	}
 	return true;
+}
+
+bool App::LoadRaDebugState(int slot)
+{
+	if (!CheckRaStateAvailability(false, true)) return false;
+	return LoadRaState(slot, true);
+}
+
+bool App::GetRaDebugStateTime(int slot, cur_time_t *cur_time)
+{
+	Xm8Ra::RaStateExpectation expected;
+	std::string path;
+	std::string error;
+	return cur_time != nullptr && GetRaStateContext(slot,
+		Xm8Ra::RaStateMode::HardcoreDebug, &expected, &path, &error) &&
+		platform->GetFileDateTime(path.c_str(), cur_time);
 }
 
 //
@@ -6763,6 +6883,18 @@ bool App::IsRaHardcoreSelected() const
 bool App::IsRaHardcoreActive() const
 {
 	return Xm8Ra::IsRaHardcoreSession(GetRaPolicyContext());
+}
+
+bool App::IsRaCasualActive() const
+{
+	return Xm8Ra::EffectiveRaMode(GetRaPolicyContext()) ==
+		Xm8Ra::RaEffectiveMode::Casual;
+}
+
+bool App::IsRaOfflineActive() const
+{
+	return Xm8Ra::EffectiveRaMode(GetRaPolicyContext()) ==
+		Xm8Ra::RaEffectiveMode::Offline;
 }
 
 bool App::ToggleFastDisk()
@@ -7675,6 +7807,13 @@ void App::OpenRaWebsite()
 	}
 }
 
+void App::OpenRaPrivacyPolicy()
+{
+	if (SDL_OpenURL("https://github.com/bubio/xm8m/blob/main/PRIVACY.md") != 0) {
+		AddRaNotice("RA: could not open privacy policy");
+	}
+}
+
 //
 // CloseRaOverlayToMenu()
 // close RA overlay and return to RetroAchievements menu
@@ -7762,10 +7901,12 @@ bool App::OpenRaLoginOverlay()
 // LogoutRa()
 // logout RA
 //
-void App::LogoutRa()
+bool App::LogoutRa(bool delete_pending)
 {
+	bool logout_succeeded = true;
+	std::string logout_error;
 	if (ra_service != NULL) {
-		ra_service->Logout();
+		logout_succeeded = ra_service->Logout(delete_pending, &logout_error);
 	}
 	ra_session_state = Xm8Ra::TransitionRaSession(ra_session_state,
 		Xm8Ra::RaSessionSignal::SessionInvalidated);
@@ -7782,7 +7923,22 @@ void App::LogoutRa()
 	ra_menu_status.Set(ra_mode_enabled ? Xm8Ra::RaMenuStatusState::Enabled :
 		Xm8Ra::RaMenuStatusState::Disabled);
 	ra_leaderboard_scoreboards.clear();
-	ReplaceRaNotice("RA: logged out");
+	ReplaceRaNotice(logout_succeeded ? "RA: logged out" :
+		(logout_error.empty() ? "RA: logout cleanup failed" :
+			"RA: logout cleanup failed - " + logout_error));
+	return logout_succeeded;
+}
+
+bool App::GetRaPendingUnlockCount(size_t *count)
+{
+	if (count != nullptr) *count = 0;
+	std::string error;
+	if (count == nullptr || ra_service == NULL ||
+		!ra_service->HasPendingUnlocks(count, &error)) {
+		AddRaNotice("RA: pending unlock check failed");
+		return false;
+	}
+	return true;
 }
 
 //

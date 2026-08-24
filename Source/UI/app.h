@@ -169,8 +169,11 @@ public:
 										// get RA mode setting
 	bool IsRaRuntimeSupported() const;
 										// true when the current OS can securely run RA
-	bool CheckRaStateAvailability();
+	bool CheckRaStateAvailability(bool save = false,
+		bool hardcore_debug = false);
 										// validate RA state menu access and notify on failure
+	bool LoadRaDebugState(int slot);
+	bool GetRaDebugStateTime(int slot, cur_time_t *cur_time);
 	bool ToggleRaMode();
 										// toggle RA mode setting
 	bool ToggleRaPlayMode();
@@ -179,6 +182,10 @@ public:
 										// get persisted RA play mode
 	bool IsRaHardcoreActive() const;
 										// get effective Hardcore session state
+	bool IsRaCasualActive() const;
+										// get effective Casual session state
+	bool IsRaOfflineActive() const;
+										// true while the current RA session is offline
 	bool ToggleFastDisk();
 										// toggle pseudo fast disk through RA policy
 	bool OpenRaLoginOverlay();
@@ -213,13 +220,17 @@ public:
 	void SetRaMenuFirstVisibleItem(size_t index);
 	void OpenRaWebsite();
 										// open RetroAchievements in the default browser
+	void OpenRaPrivacyPolicy();
+										// open XM8M privacy policy
 	void CloseRaOverlayToMenu();
 	void CloseRaMenuContent();
 										// close RA overlay and return to RA menu
 	bool IsRaLoggedIn() const;
 										// get RA login state
-	void LogoutRa();
+	bool LogoutRa(bool delete_pending = false);
 										// logout RA
+	bool GetRaPendingUnlockCount(size_t *count);
+										// query pending unlocks for current account
 	void GetRaMenuStatus(char *buffer, size_t capacity) const;
 										// get RA status text for menu
 	void GetRaMenuPresence(char *buffer, size_t capacity) const;
@@ -397,10 +408,11 @@ private:
 										// submit RA overlay login form
 	void DrawRaOverlay();
 										// draw RA notice overlay
-	bool GetRaStateContext(int slot, Xm8Ra::RaStateExpectation *expected,
+	bool GetRaStateContext(int slot, Xm8Ra::RaStateMode requested_mode,
+		Xm8Ra::RaStateExpectation *expected,
 		std::string *path, std::string *error) const;
 										// resolve current Casual/offline state identity
-	bool LoadRaState(int slot);
+	bool LoadRaState(int slot, bool hardcore_debug = false);
 										// load validated RA-aware state
 	bool SaveRaState(int slot);
 										// save RA-aware state

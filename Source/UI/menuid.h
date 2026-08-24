@@ -807,6 +807,18 @@
 										// RetroAchievements website
 #define MENU_RA_GAME_START              2014
 										// RetroAchievements game detail action
+#define MENU_RA_LOAD_HARDCORE_DEBUG     2015
+										// load a Hardcore-created state in Casual
+#define MENU_RA_LOGOUT_YES              2016
+										// confirm deleting pending unlocks and logout
+#define MENU_RA_LOGOUT_NO               2017
+										// cancel logout
+#define MENU_RA_PRIVACY                 2018
+											// XM8M privacy policy
+#define MENU_RA_HARDCORE_CONFIRM        2019
+											// active Hardcore exit confirmation screen
+#define MENU_RA_LOGOUT_CONFIRM          2020
+											// pending unlock deletion confirmation screen
 #define MENU_RA_LIBRARY_ITEM_MIN        2100
 										// RetroAchievements library rows
 #define MENU_RA_ACHIEVEMENT_ITEM_MIN    4000

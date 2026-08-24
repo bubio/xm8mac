@@ -127,9 +127,13 @@ Options:
 
 In builds with RetroAchievements support, use `RetroAchievements` in the main menu to sign in and switch RA modes. Supported games can use achievements, leaderboards, Rich Presence, and Hardcore mode.
 
+XM8M is completely free and non-commercial. It has no advertising, in-app purchases, paid edition, or feature-bearing donation rewards.
+
 In RA mode, the selected D88 is registered in the library and an app-managed working copy is used, leaving the original unchanged. A game can still start if authentication or network access fails, but achievements are not evaluated or submitted for that session.
 
 The Android build runs on API level 19 and later, but the RetroAchievements UI, networking, and credential storage are available only on Android 6.0 (API level 23) and later.
+
+[Privacy policy](PRIVACY.md) / [日本語](PRIVACY.ja.md) / [Component licenses](LICENSES.md)
 
 ## Building
 

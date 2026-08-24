@@ -14,6 +14,7 @@ constexpr int kRaStateMaxSlot = 9;
 
 enum class RaStateMode : uint8_t {
 	Casual = 1,
+	HardcoreDebug = 2,
 	Offline = 3,
 };
 

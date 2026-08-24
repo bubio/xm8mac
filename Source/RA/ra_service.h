@@ -1,8 +1,14 @@
 #ifndef XM8_RA_SERVICE_H
 #define XM8_RA_SERVICE_H
 
+#if defined(XM8_ENABLE_RETROACHIEVEMENTS) && \
+	(defined(XM8_ENABLE_DEBUGGER) || defined(USE_DEBUGGER))
+#error "The emulator debugger is forbidden in RetroAchievements builds"
+#endif
+
 #include "ra_credentials.h"
 #include "ra_http_client.h"
+#include "ra_pending_unlock.h"
 #include "ra_rc_client_http.h"
 
 #include "rc_client.h"
@@ -272,6 +278,7 @@ struct RaServiceOptions {
 	RaHostReadMemoryFunc host_read_memory = nullptr;
 	void *host_read_memory_userdata = nullptr;
 	std::string user_agent;
+	RaPendingUnlockStore *pending_unlock_store = nullptr;
 };
 
 class RaService {
@@ -287,6 +294,7 @@ public:
 		const std::string& password, std::string *error);
 	bool BeginLoginWithSavedToken(std::string *error);
 	bool BeginLoadGameByHash(const std::string& hash, std::string *error);
+	bool BeginPendingUnlockSync(std::string *error);
 	bool BeginChangeMediaByHash(const std::string& hash, std::string *error);
 	void ClearMediaChangeResult();
 	bool BeginLibrarySync(const std::vector<std::string>& local_hashes,
@@ -308,13 +316,17 @@ public:
 	bool CanPause(uint32_t *frames_remaining = nullptr) const;
 	std::vector<RaEvent> TakeEvents();
 	void UnloadGame();
-	void Logout();
+	bool Logout(bool delete_pending = false, std::string *error = nullptr);
 	void Shutdown();
 
 	RaLoginSnapshot LoginSnapshot() const;
 	RaGameSessionSnapshot GameSessionSnapshot() const;
 	RaMediaChangeSnapshot MediaChangeSnapshot() const;
 	RaLibrarySyncSnapshot LibrarySyncSnapshot() const;
+	RaUnlockSyncSnapshot UnlockSyncSnapshot() const;
+	bool TakeIntegrityFailure(std::string *message);
+	bool HasPendingUnlocks(size_t *count, std::string *error) const;
+	bool DeletePendingUnlocks(std::string *error);
 	std::string RichPresence() const;
 	RaAchievementListSnapshot AchievementListSnapshot() const;
 	RaLeaderboardListSnapshot LeaderboardListSnapshot() const;
@@ -324,8 +336,14 @@ public:
 	const RaHttpClient *HttpClientForTesting() const;
 	RaHttpClient *HttpClientForTesting();
 	void QueueEventForTesting(const rc_client_event_t *event);
+	void ServerCallForTesting(const rc_api_request_t *request,
+		rc_client_server_callback_t callback, void *callback_data);
 
 private:
+	struct PendingAwardContext;
+	struct PendingLeaderboardContext;
+	struct PendingSyncContext;
+
 	enum class LoginKind {
 		None,
 		Password,
@@ -361,8 +379,29 @@ private:
 	static void RC_CCONV ServerCall(const rc_api_request_t *request,
 		rc_client_server_callback_t callback, void *callback_data,
 		rc_client_t *client);
+	static void RC_CCONV PendingAwardCallback(
+		const rc_api_server_response_t *server_response, void *userdata);
+	static void RC_CCONV PendingLeaderboardCallback(
+		const rc_api_server_response_t *server_response, void *userdata);
+	static void RC_CCONV PendingSyncCallback(
+		const rc_api_server_response_t *server_response, void *userdata);
 
 	void HandleLoginCallback(int result, const char *error_message);
+	bool InterceptAwardRequest(const rc_api_request_t *request,
+		rc_client_server_callback_t callback, void *callback_data);
+	bool InterceptLeaderboardSubmission(const rc_api_request_t *request,
+		rc_client_server_callback_t callback, void *callback_data);
+	void CancelPendingAwardRequests();
+	void CancelPendingLeaderboardRequests();
+	void CancelPendingUnlockSyncRequests();
+	void CompleteCanceledPendingAward(PendingAwardContext *context,
+		const char *message = nullptr);
+	void CompleteCanceledPendingLeaderboard(PendingLeaderboardContext *context,
+		const char *message = nullptr);
+	void CompleteSubmissionCallback(rc_client_server_callback_t callback,
+		void *callback_data, const char *message);
+	void StartNextPendingUnlock();
+	void InvalidatePendingUnlockSync();
 	void HandleLoadGameCallback(int result, const char *error_message);
 	void HandleMediaChangeCallback(int result, const char *error_message);
 	void HandleResolveMediaHashCallback(
@@ -392,6 +431,7 @@ private:
 	std::unique_ptr<RaHttpClient> http_client_;
 	std::unique_ptr<RaCredentialsStore> credentials_;
 	std::unique_ptr<RaRcClientHttpBridge> http_bridge_;
+	RaPendingUnlockStore *pending_unlock_store_ = nullptr;
 	rc_client_t *client_ = nullptr;
 	RaHostReadMemoryFunc host_read_memory_ = nullptr;
 	void *host_read_memory_userdata_ = nullptr;
@@ -405,6 +445,16 @@ private:
 	RaLeaderboardEntriesSnapshot leaderboard_entries_;
 	RaMediaChangeSnapshot media_change_;
 	RaLibrarySyncSnapshot library_sync_;
+	RaUnlockSyncSnapshot unlock_sync_;
+	std::vector<RaPendingUnlockRecord> pending_unlock_sync_records_;
+	size_t pending_unlock_sync_offset_ = 0;
+	uint64_t pending_unlock_sync_generation_ = 0;
+	std::map<uint64_t, PendingAwardContext *> pending_award_requests_;
+	std::map<uint64_t, PendingLeaderboardContext *>
+		pending_leaderboard_requests_;
+	std::map<uint64_t, PendingSyncContext *> pending_unlock_sync_requests_;
+	bool canceling_submission_requests_ = false;
+	std::string integrity_failure_;
 	std::map<std::string, bool> library_sync_local_hashes_;
 	std::vector<uint32_t> library_sync_title_game_ids_;
 	size_t library_sync_title_offset_ = 0;

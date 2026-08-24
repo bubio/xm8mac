@@ -17,7 +17,7 @@
 namespace Xm8Ra {
 namespace {
 
-constexpr int kSchemaVersion = 2;
+constexpr int kSchemaVersion = 4;
 
 std::string JoinPath(const std::string& base, const char *child)
 {
@@ -238,6 +238,11 @@ std::string RaLibrary::DatabasePath() const
 	return JoinPath(root_, "library.sqlite3");
 }
 
+std::string RaLibrary::PendingUnlockRecoveryPath() const
+{
+	return JoinPath(root_, "pending-unlock-recovery-required");
+}
+
 bool RaLibrary::Exec(const char *sql, std::string *error)
 {
 	char *message = nullptr;
@@ -415,6 +420,20 @@ bool RaLibrary::InitializeSchema(std::string *error)
 		" completed_at INTEGER NOT NULL,"
 		" result_code INTEGER NOT NULL"
 		");"
+		"CREATE TABLE IF NOT EXISTS pending_unlocks ("
+		" id INTEGER PRIMARY KEY,"
+		" account TEXT NOT NULL,"
+		" achievement_id INTEGER NOT NULL CHECK(achievement_id > 0),"
+		" hardcore INTEGER NOT NULL CHECK(hardcore IN (0, 1)),"
+		" game_hash TEXT NOT NULL,"
+		" unlocked_at INTEGER NOT NULL,"
+		" status INTEGER NOT NULL DEFAULT 0 CHECK(status IN (0, 1)),"
+		" attempt_count INTEGER NOT NULL DEFAULT 0,"
+		" last_error TEXT NOT NULL DEFAULT '',"
+		" UNIQUE(account, achievement_id, hardcore),"
+		" CHECK(length(game_hash) = 32),"
+		" CHECK(game_hash NOT GLOB '*[^0-9a-f]*')"
+		");"
 		"CREATE INDEX IF NOT EXISTS games_sort_title ON games(sort_title);"
 		"CREATE INDEX IF NOT EXISTS games_last_played ON games(last_played_at DESC);"
 		"CREATE INDEX IF NOT EXISTS media_game_order ON media(game_id, ordinal);";
@@ -442,6 +461,37 @@ bool RaLibrary::InitializeSchema(std::string *error)
 				"UPDATE media_banks SET ra_hash = media_md5"
 				" WHERE media_md5 IN (SELECT md5 FROM media WHERE bank_count = 1);"
 				"UPDATE schema_meta SET schema_version = 2, migrated_at ="
+				" strftime('%s','now') WHERE singleton = 1;";
+			if (!Exec(migration, error)) {
+				Exec("ROLLBACK", nullptr);
+				return false;
+			}
+		}
+		if (version <= 2) {
+			const char *migration =
+				"CREATE TABLE IF NOT EXISTS pending_unlocks ("
+				" id INTEGER PRIMARY KEY, account TEXT NOT NULL,"
+				" achievement_id INTEGER NOT NULL CHECK(achievement_id > 0),"
+				" hardcore INTEGER NOT NULL CHECK(hardcore IN (0, 1)),"
+				" game_hash TEXT NOT NULL, unlocked_at INTEGER NOT NULL,"
+				" status INTEGER NOT NULL DEFAULT 0 CHECK(status IN (0, 1)),"
+				" attempt_count INTEGER NOT NULL DEFAULT 0,"
+				" last_error TEXT NOT NULL DEFAULT '',"
+				" UNIQUE(account, achievement_id, hardcore),"
+				" CHECK(length(game_hash) = 32),"
+				" CHECK(game_hash NOT GLOB '*[^0-9a-f]*'));"
+				"UPDATE schema_meta SET schema_version = 4, migrated_at ="
+				" strftime('%s','now') WHERE singleton = 1;";
+			if (!Exec(migration, error)) {
+				Exec("ROLLBACK", nullptr);
+				return false;
+			}
+		}
+		else if (version == 3) {
+			const char *migration =
+				"ALTER TABLE pending_unlocks ADD COLUMN status INTEGER"
+				" NOT NULL DEFAULT 0 CHECK(status IN (0, 1));"
+				"UPDATE schema_meta SET schema_version = 4, migrated_at ="
 				" strftime('%s','now') WHERE singleton = 1;";
 			if (!Exec(migration, error)) {
 				Exec("ROLLBACK", nullptr);
@@ -520,7 +570,10 @@ bool RaLibrary::QuarantineDatabase(std::string *error)
 		!RenameIfExists(base + "-shm", base + "-shm" + suffix, error)) {
 		return false;
 	}
-	return true;
+	static const uint8_t marker[] =
+		"A quarantined RA database may contain pending unlocks.\n";
+	return WriteRaFile(PendingUnlockRecoveryPath(), marker,
+		sizeof(marker) - 1, error);
 }
 
 int64_t RaLibrary::NowUnixTime() const
@@ -2522,6 +2575,157 @@ bool RaLibrary::PruneImageCache(int64_t cache_limit_bytes,
 		total -= item.size;
 	}
 	return true;
+}
+
+bool RaLibrary::EnqueuePendingUnlock(const RaPendingUnlockRecord& record,
+	int64_t *record_id, std::string *error)
+{
+	if (record_id != nullptr) *record_id = 0;
+	if (db_ == nullptr || record.account.empty() || record.achievement_id == 0 ||
+		!IsMd5Hex(record.game_hash) || record.unlocked_at <= 0) {
+		if (error != nullptr) *error = "invalid pending unlock";
+		return false;
+	}
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"INSERT INTO pending_unlocks(account, achievement_id, hardcore,"
+		" game_hash, unlocked_at) VALUES(?, ?, ?, ?, ?)"
+		" ON CONFLICT(account, achievement_id, hardcore) DO UPDATE SET"
+		" game_hash=excluded.game_hash,"
+		" unlocked_at=MIN(pending_unlocks.unlocked_at, excluded.unlocked_at)"
+		" RETURNING id", &stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_text(stmt, 1, record.account.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(stmt, 2, record.achievement_id);
+	sqlite3_bind_int(stmt, 3, record.hardcore ? 1 : 0);
+	sqlite3_bind_text(stmt, 4, record.game_hash.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(stmt, 5, record.unlocked_at);
+	const int rc = sqlite3_step(stmt);
+	if (rc == SQLITE_ROW && record_id != nullptr) {
+		*record_id = sqlite3_column_int64(stmt, 0);
+	}
+	const bool ok = rc == SQLITE_ROW && sqlite3_step(stmt) == SQLITE_DONE;
+	if (!ok && error != nullptr) *error = sqlite3_errmsg(db_);
+	sqlite3_finalize(stmt);
+	return ok;
+}
+
+bool RaLibrary::ListPendingUnlocks(const std::string& account,
+	std::vector<RaPendingUnlockRecord> *records, std::string *error)
+{
+	if (records != nullptr) records->clear();
+	if (db_ == nullptr || account.empty() || records == nullptr) {
+		if (error != nullptr) *error = "invalid pending unlock query";
+		return false;
+	}
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_, "SELECT id, account, achievement_id, hardcore,"
+		" game_hash, unlocked_at, status, attempt_count, last_error"
+		" FROM pending_unlocks WHERE account=? ORDER BY unlocked_at, id",
+		&stmt, error)) return false;
+	sqlite3_bind_text(stmt, 1, account.c_str(), -1, SQLITE_TRANSIENT);
+	int rc = SQLITE_ROW;
+	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		RaPendingUnlockRecord record;
+		const int64_t achievement_id = sqlite3_column_int64(stmt, 2);
+		const int64_t attempt_count = sqlite3_column_int64(stmt, 7);
+		record.id = sqlite3_column_int64(stmt, 0);
+		record.account = ColumnText(stmt, 1);
+		record.achievement_id = achievement_id > 0 && achievement_id <= UINT32_MAX ?
+			static_cast<uint32_t>(achievement_id) : 0;
+		record.hardcore = sqlite3_column_int(stmt, 3) != 0;
+		record.game_hash = ColumnText(stmt, 4);
+		record.unlocked_at = sqlite3_column_int64(stmt, 5);
+		record.status = static_cast<RaPendingUnlockStatus>(
+			sqlite3_column_int(stmt, 6));
+		record.attempt_count = attempt_count >= 0 && attempt_count <= UINT32_MAX ?
+			static_cast<uint32_t>(attempt_count) : UINT32_MAX;
+		record.last_error = ColumnText(stmt, 8);
+		if (record.id <= 0 || record.account != account ||
+			record.achievement_id == 0 || !IsMd5Hex(record.game_hash) ||
+			record.unlocked_at <= 0 || attempt_count < 0 ||
+			attempt_count > UINT32_MAX ||
+			(record.status != RaPendingUnlockStatus::Pending &&
+			record.status != RaPendingUnlockStatus::Held)) {
+			if (error != nullptr) *error = "invalid pending unlock record";
+			sqlite3_finalize(stmt);
+			records->clear();
+			return false;
+		}
+		records->push_back(record);
+	}
+	if (rc != SQLITE_DONE && error != nullptr) *error = sqlite3_errmsg(db_);
+	sqlite3_finalize(stmt);
+	if (rc != SQLITE_DONE) records->clear();
+	return rc == SQLITE_DONE;
+}
+
+bool RaLibrary::MarkPendingUnlockAttempt(int64_t record_id,
+	RaPendingUnlockStatus status, const std::string& last_error,
+	std::string *error)
+{
+	sqlite3_stmt *stmt = nullptr;
+	if (record_id <= 0 || (status != RaPendingUnlockStatus::Pending &&
+		status != RaPendingUnlockStatus::Held) ||
+		!Prepare(db_, "UPDATE pending_unlocks SET status=?,"
+		" attempt_count=attempt_count+1, last_error=? WHERE id=?",
+		&stmt, error)) return false;
+	sqlite3_bind_int(stmt, 1, static_cast<int>(status));
+	sqlite3_bind_text(stmt, 2, last_error.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(stmt, 3, record_id);
+	return StepDone(db_, stmt, error);
+}
+
+bool RaLibrary::RemovePendingUnlock(int64_t record_id, std::string *error)
+{
+	sqlite3_stmt *stmt = nullptr;
+	if (record_id <= 0 || !Prepare(db_,
+		"DELETE FROM pending_unlocks WHERE id=?", &stmt, error)) return false;
+	sqlite3_bind_int64(stmt, 1, record_id);
+	return StepDone(db_, stmt, error);
+}
+
+bool RaLibrary::RemovePendingUnlocksForAccount(const std::string& account,
+	std::string *error)
+{
+	sqlite3_stmt *stmt = nullptr;
+	if (account.empty() || !Prepare(db_,
+		"DELETE FROM pending_unlocks WHERE account=?", &stmt, error)) return false;
+	sqlite3_bind_text(stmt, 1, account.c_str(), -1, SQLITE_TRANSIENT);
+	return StepDone(db_, stmt, error);
+}
+
+bool RaLibrary::CountPendingUnlocks(const std::string& account,
+	size_t *count, std::string *error)
+{
+	if (count != nullptr) *count = 0;
+	sqlite3_stmt *stmt = nullptr;
+	if (account.empty() || count == nullptr || !Prepare(db_,
+		"SELECT COUNT(*) FROM pending_unlocks WHERE account=?", &stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_text(stmt, 1, account.c_str(), -1, SQLITE_TRANSIENT);
+	const int rc = sqlite3_step(stmt);
+	if (rc == SQLITE_ROW) *count = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
+	if (rc != SQLITE_ROW && error != nullptr) *error = sqlite3_errmsg(db_);
+	sqlite3_finalize(stmt);
+	return rc == SQLITE_ROW;
+}
+
+bool RaLibrary::RecoveryRequired(std::string *reason) const
+{
+	const bool required = RaPathExists(PendingUnlockRecoveryPath());
+	if (reason != nullptr) {
+		*reason = required ?
+			"a quarantined RA database may contain pending unlocks" : "";
+	}
+	return required;
+}
+
+bool RaLibrary::ConfirmDiscardRecovery(std::string *error)
+{
+	return RemoveRaFile(PendingUnlockRecoveryPath(), error);
 }
 
 } // namespace Xm8Ra

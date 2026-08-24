@@ -54,7 +54,9 @@ inline bool IsRaOperationAllowed(const RaSessionPolicyContext& context,
 {
 	const RaEffectiveMode mode = EffectiveRaMode(context);
 	if (mode == RaEffectiveMode::Hardcore) {
-		return false;
+		// Hardcore states may be created for achievement debugging, but never
+		// loaded. All other assisted operations remain unavailable.
+		return operation == RaRestrictedOperation::SaveState;
 	}
 	if (mode == RaEffectiveMode::Casual) {
 		return operation != RaRestrictedOperation::FastDisk &&
@@ -73,6 +75,11 @@ inline bool IsRaOnlineSession(const RaSessionPolicyContext& context)
 inline bool IsRaHardcoreSession(const RaSessionPolicyContext& context)
 {
 	return EffectiveRaMode(context) == RaEffectiveMode::Hardcore;
+}
+
+inline bool CanLoadHardcoreDebugState(const RaSessionPolicyContext& context)
+{
+	return EffectiveRaMode(context) == RaEffectiveMode::Casual;
 }
 
 } // namespace Xm8Ra

@@ -44,6 +44,14 @@ endif()
 include(CTest)
 
 option(XM8_ENABLE_RETROACHIEVEMENTS "Enable RetroAchievements support" OFF)
+option(XM8_ENABLE_DEBUGGER "Enable the development-only emulator debugger" OFF)
+if(XM8_ENABLE_RETROACHIEVEMENTS AND XM8_ENABLE_DEBUGGER)
+  message(FATAL_ERROR
+    "XM8_ENABLE_DEBUGGER cannot be enabled in a RetroAchievements build")
+endif()
+if(XM8_ENABLE_DEBUGGER)
+  add_compile_definitions(XM8_ENABLE_DEBUGGER=1 USE_DEBUGGER=1)
+endif()
 
 # Packaging options
 option(MACOSX_STANDALONE_APP_BUNDLE "Generate a portable app bundle to use on other devices (requires sudo)" OFF)
@@ -181,6 +189,7 @@ if(XM8_ENABLE_RETROACHIEVEMENTS)
 
   set(RA_LICENSE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/XM8-GPL-2.0.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/SDL2-zlib.txt
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/xBRZ-GPL-3.0.txt
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/rcheevos-MIT.txt
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/stb-MIT-or-Public-Domain.txt
@@ -192,7 +201,14 @@ if(XM8_ENABLE_RETROACHIEVEMENTS)
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/THIRD_PARTY_NOTICES.md)
   set_source_files_properties(${RA_NOTICE_FILE} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources")
-  target_sources(${BIN_TARGET} PRIVATE ${RA_LICENSE_FILES} ${RA_NOTICE_FILE})
+  set(RA_PUBLIC_POLICY_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/PRIVACY.md
+    ${CMAKE_CURRENT_SOURCE_DIR}/PRIVACY.ja.md
+    ${CMAKE_CURRENT_SOURCE_DIR}/LICENSES.md)
+  set_source_files_properties(${RA_PUBLIC_POLICY_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources")
+  target_sources(${BIN_TARGET} PRIVATE ${RA_LICENSE_FILES} ${RA_NOTICE_FILE}
+    ${RA_PUBLIC_POLICY_FILES})
 endif()
 
 if(CMAKE_STRIP)
@@ -254,6 +270,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   install(FILES
     "${PROJECT_SOURCE_DIR}/Builder/Linux/Flatpak/com.github.bubio.xm8m.metainfo.xml"
     DESTINATION "share/metainfo")
+  if(XM8_ENABLE_RETROACHIEVEMENTS)
+    install(FILES "${PROJECT_SOURCE_DIR}/PRIVACY.md"
+      "${PROJECT_SOURCE_DIR}/PRIVACY.ja.md"
+      "${PROJECT_SOURCE_DIR}/LICENSES.md"
+      "${PROJECT_SOURCE_DIR}/ThirdParty/THIRD_PARTY_NOTICES.md"
+      DESTINATION "share/doc/xm8m")
+    install(FILES ${RA_LICENSE_FILES} DESTINATION "share/doc/xm8m/Licenses")
+  endif()
 endif()
 
 # Link SDL2 and xBRZ to xm8 target using interface target from Dependencies.cmake
@@ -271,9 +295,6 @@ if(BUILD_TESTING)
     Source/UI/m3u.cpp
   )
   target_include_directories(clidisk_test PRIVATE Source/UI)
-  if(APPLE)
-    target_link_libraries(clidisk_test PRIVATE ${XM8_ICONV_LIBRARY})
-  endif()
   add_test(NAME clidisk_test COMMAND clidisk_test)
 
   add_executable(d88probe_test
@@ -435,9 +456,6 @@ if(BUILD_TESTING)
       $<TARGET_OBJECTS:xm8_ra_media_xm8>
     )
     target_link_libraries(ra_dependency_test PRIVATE xm8_ra_dependencies)
-    if(APPLE)
-      target_link_libraries(ra_dependency_test PRIVATE ${XM8_ICONV_LIBRARY})
-    endif()
     target_include_directories(ra_dependency_test PRIVATE Source/RA Source/UI)
     target_compile_definitions(ra_dependency_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
@@ -499,6 +517,10 @@ if(BUILD_TESTING)
     )
     target_include_directories(ra_session_policy_test PRIVATE Source/RA)
     add_test(NAME ra_session_policy_test COMMAND ra_session_policy_test)
+
+    add_executable(ra_user_agent_test Tests/ra_user_agent_test.cpp)
+    target_include_directories(ra_user_agent_test PRIVATE Source/RA)
+    add_test(NAME ra_user_agent_test COMMAND ra_user_agent_test)
 
     add_executable(ra_state_store_test
       Tests/ra_state_store_test.cpp
@@ -690,6 +712,26 @@ if(BUILD_TESTING)
     target_compile_definitions(ra_text_converter_test PRIVATE
       XM8_ENABLE_RETROACHIEVEMENTS=1)
     add_test(NAME ra_text_converter_test COMMAND ra_text_converter_test)
+  endif()
+
+  if(APPLE)
+    # Every test/tool that compiles m3u.cpp uses iconv for CP932 conversion.
+    # Keep this list centralized so clean macOS builds cannot accidentally
+    # inherit the dependency from an unrelated target or stale build output.
+    foreach(XM8_M3U_TARGET
+        clidisk_test
+        d88fixture_test
+        ra_dependency_test
+        ra_media_probe_test
+        ra_inspect_media
+        ra_library_store_test
+        ra_seed_library_fixture
+        ra_seed_library_fixture_test
+        ra_credentials_http_test)
+      if(TARGET ${XM8_M3U_TARGET})
+        target_link_libraries(${XM8_M3U_TARGET} PRIVATE ${XM8_ICONV_LIBRARY})
+      endif()
+    endforeach()
   endif()
 
   if(WIN32 AND TARGET SDL2::SDL2)

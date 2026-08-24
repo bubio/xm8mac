@@ -228,6 +228,30 @@ int main()
 	}
 	Check(PathExists(JoinPath(ra_root, "library.sqlite3")),
 		"library DB exists");
+	Xm8Ra::RaPendingUnlockRecord pending;
+	pending.account = "outbox-user";
+	pending.achievement_id = 321;
+	pending.hardcore = true;
+	pending.game_hash = "0123456789abcdef0123456789abcdef";
+	pending.unlocked_at = 1700000000;
+	int64_t pending_id = 0;
+	Check(library.EnqueuePendingUnlock(pending, &pending_id, &error) &&
+		pending_id > 0, "enqueue pending unlock before network submission");
+	int64_t duplicate_id = 0;
+	pending.unlocked_at += 60;
+	Check(library.EnqueuePendingUnlock(pending, &duplicate_id, &error) &&
+		duplicate_id == pending_id, "deduplicate pending unlock identity");
+	size_t pending_count = 0;
+	Check(library.CountPendingUnlocks(pending.account, &pending_count, &error) &&
+		pending_count == 1, "pending unlock unique key enforced");
+	std::vector<Xm8Ra::RaPendingUnlockRecord> pending_records;
+	Check(library.ListPendingUnlocks(pending.account, &pending_records, &error) &&
+		pending_records.size() == 1 &&
+		pending_records[0].unlocked_at == 1700000000,
+		"pending unlock keeps earliest unlock time");
+	Check(library.MarkPendingUnlockAttempt(pending_id,
+		Xm8Ra::RaPendingUnlockStatus::Pending, "transport", &error),
+		"record pending unlock retry");
 
 	Xm8Ra::RaSettings settings;
 	Check(library.LoadSettings(&settings, &error), "load default RA settings");
@@ -746,6 +770,16 @@ int main()
 		"RA notification setting persisted");
 	Check(persisted.image_cache_limit_mib == 256,
 		"RA image cache setting persisted");
+	pending_records.clear();
+	Check(reopened.ListPendingUnlocks(pending.account, &pending_records, &error) &&
+		pending_records.size() == 1 &&
+		pending_records[0].attempt_count == 1 &&
+		pending_records[0].last_error == "transport",
+		"pending unlock survives process restart without token data");
+	Check(reopened.RemovePendingUnlocksForAccount(pending.account, &error),
+		"confirmed logout removes pending unlocks");
+	Check(reopened.CountPendingUnlocks(pending.account, &pending_count, &error) &&
+		pending_count == 0, "pending unlock removal is complete");
 	Xm8Ra::RaSettings invalid = persisted;
 	invalid.last_mode = 99;
 	Check(!reopened.SaveSettings(invalid, &error),
@@ -769,9 +803,9 @@ int main()
 		"COMMIT; PRAGMA foreign_keys=ON;", &error),
 		"downgrade empty fixture to schema v1");
 	Xm8Ra::RaLibrary migrated;
-	Check(migrated.Open(legacy_root, &error), "migrate schema v1 to v2");
+	Check(migrated.Open(legacy_root, &error), "migrate schema v1 to v4");
 	Check(QueryInt(migrated.DatabasePath(),
-		"SELECT schema_version FROM schema_meta WHERE singleton = 1") == 2,
+		"SELECT schema_version FROM schema_meta WHERE singleton = 1") == 4,
 		"migration advances schema version");
 	Check(QueryInt(migrated.DatabasePath(),
 		"SELECT COUNT(*) FROM pragma_table_info('media_banks')"
@@ -1045,6 +1079,14 @@ int main()
 	Check(recovered.LoadSettings(&settings, &error),
 		"new settings exist after corrupt DB recovery");
 	Check(!settings.enabled, "recovered DB settings default disabled");
+	std::string recovery_reason;
+	Check(recovered.RecoveryRequired(&recovery_reason) &&
+		!recovery_reason.empty(),
+		"corrupt DB recovery requires explicit pending-unlock acknowledgement");
+	Check(recovered.ConfirmDiscardRecovery(&error),
+		"acknowledge possible pending unlock loss");
+	Check(!recovered.RecoveryRequired(nullptr),
+		"recovery acknowledgement clears the durable marker");
 	recovered.Close();
 
 	const std::string empty_root = JoinPath(base, "empty-ra");
