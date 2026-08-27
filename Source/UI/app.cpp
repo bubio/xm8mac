@@ -2024,6 +2024,7 @@ void App::AttachRaHostFrameCallback()
 //
 void App::ProcessRaEmulationFrame()
 {
+	ra_pause_request_gate.AdvanceFrame();
 	if (!ra_mode_enabled ||
 		!Xm8Ra::IsRaSessionEvaluating(ra_session_state) ||
 		ra_service == NULL ||
@@ -4759,11 +4760,35 @@ void App::Run()
 #else
 		const bool ra_hardcore_menu_running = false;
 #endif
+		const bool host_pause_requested =
+			(app_menu == true && !ra_hardcore_menu_running) ||
+			(app_background == true) || (app_powerdown == true) ||
+			ra_overlay_blocking;
+		bool pause_virtual_machine = host_pause_requested;
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		Xm8Ra::RaPauseDecision pause_decision =
+			ra_pause_request_gate.Evaluate(host_pause_requested,
+				IsRaHardcoreActive());
+		if (pause_decision == Xm8Ra::RaPauseDecision::CheckHardcore) {
+			uint32_t frames_remaining = 0;
+			const bool allowed = ra_service == NULL ||
+				ra_service->CanPause(&frames_remaining);
+			pause_decision = ra_pause_request_gate.ResolveHardcore(allowed,
+				frames_remaining);
+			if (!allowed && ra_pause_request_gate.TakeDenialNotification()) {
+				AddRaNotice("RA: pause denied in Hardcore");
+			}
+		}
+		pause_virtual_machine =
+			pause_decision == Xm8Ra::RaPauseDecision::Pause;
+		const bool wait_for_ra_session =
+			Xm8Ra::MustWaitForRaSession(GetRaPolicyContext());
+#else
+		const bool wait_for_ra_session = false;
+#endif
 
 		// stop virtual machine or menu
-		if ((app_menu == true && !ra_hardcore_menu_running) ||
-			(app_background == true) ||
-			(app_powerdown == true) || ra_overlay_blocking) {
+		if (pause_virtual_machine || wait_for_ra_session) {
 			// draw
 			if ((app_mobile != true) || (app_background != true)) {
 				// no draw if app_mobile && app_background

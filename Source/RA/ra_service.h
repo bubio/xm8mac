@@ -22,6 +22,7 @@ namespace Xm8Ra {
 
 typedef uint32_t (*RaHostReadMemoryFunc)(uint32_t address, uint8_t *buffer,
 	uint32_t num_bytes, void *userdata);
+typedef uint64_t (*RaMonotonicMillisFunc)(void *userdata);
 
 enum class RaLoginState {
 	LoggedOut,
@@ -279,6 +280,8 @@ struct RaServiceOptions {
 	void *host_read_memory_userdata = nullptr;
 	std::string user_agent;
 	RaPendingUnlockStore *pending_unlock_store = nullptr;
+	RaMonotonicMillisFunc monotonic_millis = nullptr;
+	void *monotonic_millis_userdata = nullptr;
 };
 
 class RaService {
@@ -391,6 +394,8 @@ private:
 		rc_client_server_callback_t callback, void *callback_data);
 	bool InterceptLeaderboardSubmission(const rc_api_request_t *request,
 		rc_client_server_callback_t callback, void *callback_data);
+	bool StartPendingLeaderboardRequest(PendingLeaderboardContext *context);
+	void ProcessPendingLeaderboardRetries();
 	void CancelPendingAwardRequests();
 	void CancelPendingLeaderboardRequests();
 	void CancelPendingUnlockSyncRequests();
@@ -432,6 +437,8 @@ private:
 	std::unique_ptr<RaCredentialsStore> credentials_;
 	std::unique_ptr<RaRcClientHttpBridge> http_bridge_;
 	RaPendingUnlockStore *pending_unlock_store_ = nullptr;
+	RaMonotonicMillisFunc monotonic_millis_ = nullptr;
+	void *monotonic_millis_userdata_ = nullptr;
 	rc_client_t *client_ = nullptr;
 	RaHostReadMemoryFunc host_read_memory_ = nullptr;
 	void *host_read_memory_userdata_ = nullptr;
@@ -452,6 +459,8 @@ private:
 	std::map<uint64_t, PendingAwardContext *> pending_award_requests_;
 	std::map<uint64_t, PendingLeaderboardContext *>
 		pending_leaderboard_requests_;
+	std::map<PendingLeaderboardContext *, PendingLeaderboardContext *>
+		pending_leaderboard_retries_;
 	std::map<uint64_t, PendingSyncContext *> pending_unlock_sync_requests_;
 	bool canceling_submission_requests_ = false;
 	std::string integrity_failure_;

@@ -495,6 +495,8 @@ private:
 											// deduplicated reachability transitions
 	Xm8Ra::RaUnlockRetryBackoff ra_unlock_retry_backoff;
 											// endpoint failure retry clock
+	Xm8Ra::RaPauseRequestGate ra_pause_request_gate;
+											// one Hardcore check per host pause request
 	Xm8Ra::RaOverlay *ra_overlay;
 										// RA overlay state
 	std::map<uint32_t, Xm8Ra::RaLeaderboardScoreboardEvent>

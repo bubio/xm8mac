@@ -139,6 +139,17 @@ struct ServerCallbackCapture {
 	std::string body;
 };
 
+struct FakeMonotonicClock {
+	uint64_t now = 1000;
+
+	static uint64_t Read(void *userdata)
+	{
+		FakeMonotonicClock *clock =
+			static_cast<FakeMonotonicClock *>(userdata);
+		return clock != nullptr ? clock->now : 0;
+	}
+};
+
 void RC_CCONV CaptureServerCallback(
 	const rc_api_server_response_t *response, void *userdata)
 {
@@ -1231,6 +1242,7 @@ int main()
 
 	{
 		MemoryPendingUnlockStore pending_unlocks;
+		FakeMonotonicClock retry_clock;
 		auto fake_http = MakeFakeHttp();
 		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
 		Xm8Ra::RaServiceOptions options;
@@ -1239,6 +1251,8 @@ int main()
 			Xm8Ra::CreatePlatformRaCredentialsStore(base);
 		options.http_client = std::move(fake_http);
 		options.pending_unlock_store = &pending_unlocks;
+		options.monotonic_millis = FakeMonotonicClock::Read;
+		options.monotonic_millis_userdata = &retry_clock;
 		Xm8Ra::RaService service(std::move(options));
 		std::string error;
 		Check(service.BeginLoginWithPassword("submission-player", "secret",
@@ -1365,19 +1379,88 @@ int main()
 		ServerCallbackCapture leaderboard_capture;
 		service.ServerCallForTesting(&leaderboard_request,
 			CaptureServerCallback, &leaderboard_capture);
+		const size_t requests_before_leaderboard =
+			fake_http_raw->SentRequests().size();
 		const uint64_t leaderboard_request_id = service.LastIssuedRequestId();
 		fake_http_raw->Complete(MakeJsonResponseWithStatus(
 			leaderboard_request_id, 503,
 			"{\"Success\":false,\"Error\":\"Maintenance\"}"));
 		service.DrainHttp();
-		Check(leaderboard_capture.calls == 1 &&
-			leaderboard_capture.http_status == 400,
-			"transient leaderboard response cannot schedule an unowned retry");
-		const size_t requests_after_transient =
-			fake_http_raw->SentRequests().size();
+		Check(leaderboard_capture.calls == 0 &&
+			fake_http_raw->SentRequests().size() ==
+				requests_before_leaderboard + 1,
+			"first transient leaderboard response retries immediately");
+		const uint64_t immediate_retry_id = service.LastIssuedRequestId();
+		Check(immediate_retry_id != leaderboard_request_id &&
+			fake_http_raw->SentRequests().back().post_data ==
+				fake_http_raw->SentRequests()[requests_before_leaderboard - 1].post_data,
+			"leaderboard retry preserves request identity and payload");
+		fake_http_raw->Complete(MakeJsonResponseWithStatus(
+			immediate_retry_id, 503,
+			"{\"Success\":false,\"Error\":\"Maintenance\"}"));
 		service.DrainHttp();
-		Check(fake_http_raw->SentRequests().size() == requests_after_transient,
-			"transient leaderboard response produces no delayed HTTP retry");
+		const size_t requests_during_backoff =
+			fake_http_raw->SentRequests().size();
+		Check(leaderboard_capture.calls == 0 &&
+			service.PendingHttpCount() == 1 &&
+			service.IsProcessingRequired(),
+			"second transient leaderboard response enters owned backoff");
+		retry_clock.now += 999;
+		service.DrainHttp();
+		Check(fake_http_raw->SentRequests().size() == requests_during_backoff,
+			"leaderboard retry waits for the full backoff interval");
+		retry_clock.now += 1;
+		service.DrainHttp();
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_during_backoff + 1,
+			"leaderboard retry resumes when the backoff expires");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"Score\":-123}"));
+		service.DrainHttp();
+		Check(leaderboard_capture.calls == 1 &&
+			leaderboard_capture.http_status == 200 &&
+			service.PendingHttpCount() == 0,
+			"successful leaderboard retry reaches the original callback once");
+
+		ServerCallbackCapture rejected_leaderboard_capture;
+		const size_t requests_before_rejected_leaderboard =
+			fake_http_raw->SentRequests().size();
+		service.ServerCallForTesting(&leaderboard_request,
+			CaptureServerCallback, &rejected_leaderboard_capture);
+		fake_http_raw->Complete(MakeJsonResponseWithStatus(
+			service.LastIssuedRequestId(), 400,
+			"{\"Success\":false,\"Error\":\"Invalid leaderboard\"}"));
+		service.DrainHttp();
+		Check(rejected_leaderboard_capture.calls == 1 &&
+			rejected_leaderboard_capture.http_status == 400 &&
+			fake_http_raw->SentRequests().size() ==
+				requests_before_rejected_leaderboard + 1 &&
+			service.PendingHttpCount() == 0,
+			"permanent leaderboard rejection is delivered without retrying");
+
+		ServerCallbackCapture waiting_leaderboard_capture;
+		service.ServerCallForTesting(&leaderboard_request,
+			CaptureServerCallback, &waiting_leaderboard_capture);
+		fake_http_raw->Complete(MakeJsonResponseWithStatus(
+			service.LastIssuedRequestId(), 503,
+			"{\"Success\":false,\"Error\":\"Maintenance\"}"));
+		service.DrainHttp();
+		fake_http_raw->Complete(MakeJsonResponseWithStatus(
+			service.LastIssuedRequestId(), 503,
+			"{\"Success\":false,\"Error\":\"Maintenance\"}"));
+		service.DrainHttp();
+		const size_t requests_before_waiting_cancel =
+			fake_http_raw->SentRequests().size();
+		service.UnloadGame();
+		Check(waiting_leaderboard_capture.calls == 1 &&
+			waiting_leaderboard_capture.http_status == 400 &&
+			service.PendingHttpCount() == 0,
+			"game unload terminally owns and cancels a waiting retry");
+		retry_clock.now += 120000;
+		service.DrainHttp();
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_before_waiting_cancel,
+			"canceled waiting leaderboard retry cannot restart later");
 
 		ServerCallbackCapture canceled_leaderboard_capture;
 		service.ServerCallForTesting(&leaderboard_request,

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -105,7 +106,7 @@ bool ParseSigned(const std::string& value, int32_t *number)
 	return true;
 }
 
-bool IsRetryableAwardResponse(const rc_api_server_response_t *response)
+bool IsRetryableSubmissionResponse(const rc_api_server_response_t *response)
 {
 	if (response == nullptr) return false;
 	switch (response->http_status_code) {
@@ -136,6 +137,21 @@ bool IsAlreadyAwardedResponse(
 {
 	return response.response.error_message != nullptr &&
 		std::strncmp(response.response.error_message, "User already has", 16) == 0;
+}
+
+uint64_t DefaultMonotonicMillis(void *)
+{
+	return static_cast<uint64_t>(std::chrono::duration_cast<
+		std::chrono::milliseconds>(std::chrono::steady_clock::now()
+		.time_since_epoch()).count());
+}
+
+uint64_t LeaderboardRetryDelayMillis(uint32_t retry_count)
+{
+	if (retry_count <= 1) return 0;
+	const uint32_t seconds = retry_count > 8 ? 120U :
+		(1U << (retry_count - 2));
+	return static_cast<uint64_t>(seconds) * 1000U;
 }
 
 RaEventType MapEventType(uint32_t type)
@@ -343,6 +359,12 @@ struct RaService::PendingLeaderboardContext {
 	uint64_t request_id = 0;
 	uint64_t generation = 0;
 	std::string account;
+	std::string url;
+	std::string post_data;
+	std::string content_type;
+	bool has_post_data = false;
+	uint32_t retry_count = 0;
+	uint64_t retry_at = 0;
 	rc_client_server_callback_t callback = nullptr;
 	void *callback_data = nullptr;
 };
@@ -359,7 +381,10 @@ struct RaService::PendingSyncContext {
 RaService::RaService(RaServiceOptions options)
 	: http_client_(std::move(options.http_client)),
 	  credentials_(std::move(options.credentials_store)),
-	  pending_unlock_store_(options.pending_unlock_store)
+	  pending_unlock_store_(options.pending_unlock_store),
+	  monotonic_millis_(options.monotonic_millis != nullptr ?
+		options.monotonic_millis : DefaultMonotonicMillis),
+	  monotonic_millis_userdata_(options.monotonic_millis_userdata)
 {
 	if (http_client_ == nullptr) {
 		SetFailed(RC_INVALID_STATE, "HTTP client is required");
@@ -638,7 +663,7 @@ void RC_CCONV RaService::PendingSyncCallback(
 	const RaPendingUnlockStatus status = mismatched_success ?
 		RaPendingUnlockStatus::Held :
 		(response.response.error_message != nullptr ?
-			(IsRetryableAwardResponse(server_response) ?
+			(IsRetryableSubmissionResponse(server_response) ?
 				RaPendingUnlockStatus::Pending : RaPendingUnlockStatus::Held) :
 			RaPendingUnlockStatus::Pending);
 	const bool attempt_recorded =
@@ -943,6 +968,7 @@ void RaService::DrainHttp()
 {
 	if (http_bridge_ != nullptr) {
 		http_bridge_->DrainCompleted();
+		ProcessPendingLeaderboardRetries();
 		if (client_ != nullptr) {
 			game_session_.load_state = rc_client_get_load_game_state(client_);
 		}
@@ -974,7 +1000,8 @@ bool RaService::Idle()
 
 bool RaService::IsProcessingRequired() const
 {
-	return client_ != nullptr && rc_client_is_processing_required(client_) != 0;
+	return (client_ != nullptr && rc_client_is_processing_required(client_) != 0) ||
+		!pending_leaderboard_retries_.empty();
 }
 
 bool RaService::SerializeProgress(std::vector<uint8_t> *progress,
@@ -1276,7 +1303,8 @@ RaLeaderboardEntriesSnapshot RaService::LeaderboardEntriesSnapshot() const
 
 size_t RaService::PendingHttpCount() const
 {
-	return http_bridge_ != nullptr ? http_bridge_->PendingCount() : 0;
+	return (http_bridge_ != nullptr ? http_bridge_->PendingCount() : 0) +
+		pending_leaderboard_retries_.size();
 }
 
 uint64_t RaService::LastIssuedRequestId() const
@@ -1557,16 +1585,61 @@ bool RaService::InterceptLeaderboardSubmission(const rc_api_request_t *request,
 	context->service = this;
 	context->generation = http_bridge_->CurrentGeneration();
 	context->account = login_.username;
+	context->url = request->url;
+	context->has_post_data = request->post_data != nullptr;
+	if (request->post_data != nullptr) context->post_data = request->post_data;
+	if (request->content_type != nullptr) {
+		context->content_type = request->content_type;
+	}
 	context->callback = callback;
 	context->callback_data = callback_data;
-	context->request_id = http_bridge_->BeginServerCall(
-		request, PendingLeaderboardCallback, context);
-	if (context->request_id == 0) {
+	if (!StartPendingLeaderboardRequest(context)) {
+		CompleteCanceledPendingLeaderboard(context,
+			"Leaderboard submission HTTP request did not start");
 		delete context;
-		return true;
 	}
+	return true;
+}
+
+bool RaService::StartPendingLeaderboardRequest(
+	PendingLeaderboardContext *context)
+{
+	if (context == nullptr || http_bridge_ == nullptr || context->url.empty()) {
+		return false;
+	}
+	rc_api_request_t request = {};
+	request.url = context->url.c_str();
+	request.post_data = context->has_post_data ?
+		context->post_data.c_str() : nullptr;
+	request.content_type = context->content_type.empty() ?
+		nullptr : context->content_type.c_str();
+	context->request_id = http_bridge_->BeginServerCall(
+		&request, PendingLeaderboardCallback, context);
+	if (context->request_id == 0) return false;
 	pending_leaderboard_requests_[context->request_id] = context;
 	return true;
+}
+
+void RaService::ProcessPendingLeaderboardRetries()
+{
+	if (pending_leaderboard_retries_.empty() || monotonic_millis_ == nullptr) {
+		return;
+	}
+	const uint64_t now = monotonic_millis_(monotonic_millis_userdata_);
+	for (auto pending = pending_leaderboard_retries_.begin();
+		pending != pending_leaderboard_retries_.end();) {
+		PendingLeaderboardContext *context = pending->second;
+		if (context == nullptr || context->retry_at > now) {
+			++pending;
+			continue;
+		}
+		pending = pending_leaderboard_retries_.erase(pending);
+		if (!StartPendingLeaderboardRequest(context)) {
+			CompleteCanceledPendingLeaderboard(context,
+				"Leaderboard retry HTTP request did not start");
+			delete context;
+		}
+	}
 }
 
 void RaService::CompleteSubmissionCallback(rc_client_server_callback_t callback,
@@ -1631,6 +1704,12 @@ void RaService::CancelPendingLeaderboardRequests()
 		if (http_bridge_ != nullptr) http_bridge_->Abandon(request_id);
 		CompleteCanceledPendingLeaderboard(context.get());
 	}
+	while (!pending_leaderboard_retries_.empty()) {
+		auto pending = pending_leaderboard_retries_.begin();
+		std::unique_ptr<PendingLeaderboardContext> context(pending->second);
+		pending_leaderboard_retries_.erase(pending);
+		CompleteCanceledPendingLeaderboard(context.get());
+	}
 }
 
 void RaService::CancelPendingUnlockSyncRequests()
@@ -1647,24 +1726,44 @@ void RaService::CancelPendingUnlockSyncRequests()
 void RC_CCONV RaService::PendingLeaderboardCallback(
 	const rc_api_server_response_t *server_response, void *userdata)
 {
-	std::unique_ptr<PendingLeaderboardContext> context(
-		static_cast<PendingLeaderboardContext *>(userdata));
+	PendingLeaderboardContext *context =
+		static_cast<PendingLeaderboardContext *>(userdata);
 	if (context == nullptr || context->service == nullptr) return;
 	RaService *service = context->service;
 	auto pending = service->pending_leaderboard_requests_.find(
 		context->request_id);
 	if (pending != service->pending_leaderboard_requests_.end() &&
-		pending->second == context.get()) {
+		pending->second == context) {
 		service->pending_leaderboard_requests_.erase(pending);
 	}
 	if (context->generation != service->http_bridge_->CurrentGeneration() ||
-		context->account != service->login_.username ||
-		IsRetryableAwardResponse(server_response) || server_response == nullptr ||
-		server_response->body == nullptr || server_response->body_length == 0) {
-		service->CompleteCanceledPendingLeaderboard(context.get(),
-			"Leaderboard submission deferred after a transport failure");
+		context->account != service->login_.username) {
+		std::unique_ptr<PendingLeaderboardContext> owned(context);
+		service->CompleteCanceledPendingLeaderboard(owned.get());
 		return;
 	}
+	const bool retryable = IsRetryableSubmissionResponse(server_response) ||
+		server_response == nullptr || server_response->body == nullptr ||
+		server_response->body_length == 0;
+	if (retryable) {
+		++context->retry_count;
+		const uint64_t delay = LeaderboardRetryDelayMillis(context->retry_count);
+		if (delay == 0) {
+			if (!service->StartPendingLeaderboardRequest(context)) {
+				std::unique_ptr<PendingLeaderboardContext> owned(context);
+				service->CompleteCanceledPendingLeaderboard(owned.get(),
+					"Leaderboard retry HTTP request did not start");
+			}
+		}
+		else {
+			const uint64_t now = service->monotonic_millis_ != nullptr ?
+				service->monotonic_millis_(service->monotonic_millis_userdata_) : 0;
+			context->retry_at = now + delay;
+			service->pending_leaderboard_retries_[context] = context;
+		}
+		return;
+	}
+	std::unique_ptr<PendingLeaderboardContext> owned(context);
 	if (context->callback != nullptr) {
 		context->callback(server_response, context->callback_data);
 	}
@@ -1697,7 +1796,7 @@ void RC_CCONV RaService::PendingAwardCallback(
 		response.awarded_achievement_id == context->achievement_id);
 	const bool mismatched_success = result == RC_OK &&
 		response.response.succeeded && !matching_success;
-	const bool retryable = IsRetryableAwardResponse(server_response) ||
+	const bool retryable = IsRetryableSubmissionResponse(server_response) ||
 		(response.response.error_message == nullptr && result != RC_OK);
 	std::string store_error;
 	if (matching_success) {
