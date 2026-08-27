@@ -155,8 +155,12 @@ void RC_CCONV CaptureServerCallback(
 class MemoryPendingUnlockStore : public Xm8Ra::RaPendingUnlockStore {
 public:
 	bool EnqueuePendingUnlock(const Xm8Ra::RaPendingUnlockRecord& record,
-		int64_t *record_id, std::string *) override
+		int64_t *record_id, std::string *error) override
 	{
+		if (fail_enqueue) {
+			if (error != nullptr) *error = "forced pending enqueue failure";
+			return false;
+		}
 		for (auto& item : records) {
 			if (item.account == record.account &&
 				item.achievement_id == record.achievement_id &&
@@ -182,8 +186,12 @@ public:
 	}
 	bool MarkPendingUnlockAttempt(int64_t id,
 		Xm8Ra::RaPendingUnlockStatus status, const std::string& message,
-		std::string *) override
+		std::string *error) override
 	{
+		if (fail_mark) {
+			if (error != nullptr) *error = "forced pending mark failure";
+			return false;
+		}
 		for (auto& item : records) if (item.id == id) {
 			++item.attempt_count;
 			item.status = status;
@@ -236,6 +244,8 @@ public:
 	std::vector<Xm8Ra::RaPendingUnlockRecord> records;
 	int64_t next_id = 1;
 	bool fail_count = false;
+	bool fail_enqueue = false;
+	bool fail_mark = false;
 	bool recovery_required = false;
 };
 
@@ -543,11 +553,11 @@ int main()
 			"{\"Success\":false,\"Error\":\"Maintenance\"}"));
 		service.DrainHttp();
 		Check(service.UnlockSyncSnapshot().state ==
-			Xm8Ra::RaUnlockSyncState::Failed &&
+			Xm8Ra::RaUnlockSyncState::None &&
 			pending_unlocks.records.size() == 1 &&
 			pending_unlocks.records[0].status ==
 				Xm8Ra::RaPendingUnlockStatus::Pending,
-			"HTTP 503 with an error body remains retryable Pending");
+			"HTTP 503 remains Pending and requests a scheduled retry");
 
 		Check(service.BeginPendingUnlockSync(&error),
 			"retry pending unlock sync after transient failure");
@@ -588,6 +598,28 @@ int main()
 			pending_unlocks.records[0].status ==
 				Xm8Ra::RaPendingUnlockStatus::Held,
 			"permanent API rejection is held for user attention");
+		Check(pending_unlocks.RemovePendingUnlock(
+			pending_unlocks.records[0].id, nullptr),
+			"remove held rejection before mark failure test");
+
+		record.achievement_id = 81;
+		pending_unlocks.EnqueuePendingUnlock(record, nullptr, nullptr);
+		pending_unlocks.fail_mark = true;
+		Check(service.BeginPendingUnlockSync(&error),
+			"begin pending sync before attempt persistence failure");
+		fake_http_raw->Complete(MakeJsonResponseWithStatus(
+			service.LastIssuedRequestId(), 400,
+			"{\"Success\":false,\"Error\":\"Invalid achievement\"}"));
+		service.DrainHttp();
+		std::string integrity_failure;
+		Check(service.UnlockSyncSnapshot().state ==
+			Xm8Ra::RaUnlockSyncState::Failed &&
+			service.UnlockSyncSnapshot().message ==
+				"forced pending mark failure",
+			"attempt persistence failure replaces the transport failure reason");
+		Check(service.TakeIntegrityFailure(&integrity_failure) &&
+			integrity_failure == "forced pending mark failure",
+			"attempt persistence failure is latched as an integrity failure");
 	}
 
 	{
@@ -1287,6 +1319,36 @@ int main()
 			"outbox-owned reconnect synchronization removes confirmed record");
 		rc_api_destroy_request(&award_request);
 
+		award_params.achievement_id = 90;
+		award_request = {};
+		Check(rc_api_init_award_achievement_request(&award_request,
+			&award_params) == RC_OK,
+			"create live award request before permanent rejection");
+		ServerCallbackCapture rejected_award_capture;
+		service.ServerCallForTesting(&award_request, CaptureServerCallback,
+			&rejected_award_capture);
+		fake_http_raw->Complete(MakeJsonResponseWithStatus(
+			service.LastIssuedRequestId(), 400,
+			"{\"Success\":false,\"Error\":\"Invalid achievement\"}"));
+		service.DrainHttp();
+		Check(rejected_award_capture.calls == 1 &&
+			rejected_award_capture.http_status == 400 &&
+			pending_unlocks.records.size() == 1 &&
+			pending_unlocks.records[0].status ==
+				Xm8Ra::RaPendingUnlockStatus::Held &&
+			service.UnlockSyncSnapshot().state ==
+				Xm8Ra::RaUnlockSyncState::Failed,
+			"permanently rejected live award blocks the next sync boundary");
+		const size_t requests_before_held_load =
+			fake_http_raw->SentRequests().size();
+		Check(!service.BeginLoadGameByHash(kKnownSupportedPc8800Hash, &error) &&
+			fake_http_raw->SentRequests().size() == requests_before_held_load,
+			"held live award prevents the next game load");
+		Check(pending_unlocks.RemovePendingUnlock(
+			pending_unlocks.records[0].id, nullptr),
+			"remove held live rejection after load gate test");
+		rc_api_destroy_request(&award_request);
+
 		rc_api_submit_lboard_entry_request_t leaderboard_params = {};
 		leaderboard_params.username = "submission-player";
 		leaderboard_params.api_token = "submission-token";
@@ -1449,6 +1511,57 @@ int main()
 		}
 		Check(reset_count == 1,
 			"enabling Hardcore with a loaded game requests exactly one reset");
+	}
+
+	{
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
+		FrameMemory memory;
+		MemoryPendingUnlockStore pending_unlocks;
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
+		options.http_client = std::move(fake_http);
+		options.host_read_memory = ReadFrameMemory;
+		options.host_read_memory_userdata = &memory;
+		options.pending_unlock_store = &pending_unlocks;
+		Xm8Ra::RaService service(std::move(options));
+		std::string error;
+
+		Check(service.BeginLoginWithPassword("fail-closed-player", "secret",
+			&error), "begin login for frame fail-closed test");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"User\":\"fail-closed-player\","
+			"\"Token\":\"fail-closed-token\",\"Score\":1,"
+			"\"SoftcoreScore\":2,\"Messages\":0}"));
+		service.DrainHttp();
+		Check(service.BeginLoadGameByHash(kKnownSupportedPc8800Hash, &error),
+			"begin game load for frame fail-closed test");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			FrameAchievementSetsJson()));
+		service.DrainHttp();
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			StartSessionJson()));
+		service.DrainHttp();
+		service.Idle();
+		Check(service.GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::Loaded,
+			"game is loaded before frame fail-closed test");
+
+		memory.value = 0;
+		Check(service.DoFrame(), "prime achievement before enqueue failure");
+		service.TakeEvents();
+		pending_unlocks.fail_enqueue = true;
+		memory.value = 1;
+		Check(service.DoFrame(),
+			"frame that encounters enqueue failure completes evaluation");
+		Check(!service.DoFrame(),
+			"next frame is rejected while integrity failure is unconsumed");
+		std::string integrity_failure;
+		Check(service.TakeIntegrityFailure(&integrity_failure) &&
+			integrity_failure == "forced pending enqueue failure",
+			"enqueue failure remains available after the rejected frame");
 	}
 
 	{

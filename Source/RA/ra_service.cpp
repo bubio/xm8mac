@@ -631,7 +631,7 @@ void RC_CCONV RaService::PendingSyncCallback(
 	}
 	const bool mismatched_success = result == RC_OK &&
 		response.response.succeeded && !matching_success;
-	const std::string message = !store_error.empty() ? store_error :
+	std::string message = !store_error.empty() ? store_error :
 		(mismatched_success ? "award response achievement ID mismatch" :
 		(response.response.error_message != nullptr ? response.response.error_message :
 			rc_error_str(result)));
@@ -641,10 +641,24 @@ void RC_CCONV RaService::PendingSyncCallback(
 			(IsRetryableAwardResponse(server_response) ?
 				RaPendingUnlockStatus::Pending : RaPendingUnlockStatus::Held) :
 			RaPendingUnlockStatus::Pending);
-	service->pending_unlock_store_->MarkPendingUnlockAttempt(
-		context->record_id, status, message, nullptr);
-	service->unlock_sync_.state = RaUnlockSyncState::Failed;
-	service->unlock_sync_.message = message;
+	const bool attempt_recorded =
+		service->pending_unlock_store_->MarkPendingUnlockAttempt(
+			context->record_id, status, message, &store_error);
+	if (!attempt_recorded) {
+		if (store_error.empty()) {
+			store_error = "pending unlock attempt could not be recorded";
+		}
+		service->integrity_failure_ = store_error;
+		message = store_error;
+	}
+	if (attempt_recorded && status == RaPendingUnlockStatus::Pending) {
+		service->unlock_sync_ = RaUnlockSyncSnapshot();
+		service->unlock_sync_.message = message;
+	}
+	else {
+		service->unlock_sync_.state = RaUnlockSyncState::Failed;
+		service->unlock_sync_.message = message;
+	}
 	rc_api_destroy_award_achievement_response(&response);
 }
 
@@ -937,7 +951,8 @@ void RaService::DrainHttp()
 
 bool RaService::DoFrame()
 {
-	if (!IsReady() || game_session_.state != RaGameSessionState::Loaded) {
+	if (!IsReady() || game_session_.state != RaGameSessionState::Loaded ||
+		!integrity_failure_.empty()) {
 		return false;
 	}
 
@@ -1702,16 +1717,15 @@ void RC_CCONV RaService::PendingAwardCallback(
 			service->integrity_failure_ = store_error.empty() ?
 				"pending unlock attempt could not be recorded" : store_error;
 		}
+		if (status == RaPendingUnlockStatus::Held) {
+			service->unlock_sync_.state = RaUnlockSyncState::Failed;
+			service->unlock_sync_.message = message;
+		}
 	}
 	rc_api_destroy_award_achievement_response(&response);
 	if (retryable || mismatched_success) {
 		if (retryable) {
 			service->unlock_sync_ = RaUnlockSyncSnapshot();
-		}
-		else {
-			service->unlock_sync_.state = RaUnlockSyncState::Failed;
-			service->unlock_sync_.message =
-				"award response achievement ID mismatch";
 		}
 		service->CompleteCanceledPendingAward(context.get(),
 			retryable ? "Achievement submission retained for later synchronization" :

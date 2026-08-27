@@ -184,31 +184,38 @@ if(WIN32)
   target_link_libraries(${BIN_TARGET} PRIVATE imm32)
 endif()
 
+set(XM8_COMMON_LICENSE_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/XM8-GPL-2.0.txt
+  ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/SDL2-zlib.txt
+  ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/xBRZ-GPL-3.0.txt
+)
+set(XM8_RA_LICENSE_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/rcheevos-MIT.txt
+  ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/stb-MIT-or-Public-Domain.txt
+  ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/SQLite-Public-Domain.txt
+)
+set(XM8_DISTRIBUTION_LICENSE_FILES
+  ${XM8_COMMON_LICENSE_FILES}
+  ${XM8_RA_LICENSE_FILES}
+)
+set(XM8_NOTICE_FILE
+  ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/THIRD_PARTY_NOTICES.md)
+set(XM8_PUBLIC_POLICY_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/PRIVACY.md
+  ${CMAKE_CURRENT_SOURCE_DIR}/PRIVACY.ja.md
+  ${CMAKE_CURRENT_SOURCE_DIR}/LICENSES.md)
+
+set_source_files_properties(${XM8_DISTRIBUTION_LICENSE_FILES} PROPERTIES
+  MACOSX_PACKAGE_LOCATION "Resources/Licenses")
+set_source_files_properties(${XM8_NOTICE_FILE} PROPERTIES
+  MACOSX_PACKAGE_LOCATION "Resources")
+set_source_files_properties(${XM8_PUBLIC_POLICY_FILES} PROPERTIES
+  MACOSX_PACKAGE_LOCATION "Resources")
+target_sources(${BIN_TARGET} PRIVATE ${XM8_DISTRIBUTION_LICENSE_FILES}
+  ${XM8_NOTICE_FILE} ${XM8_PUBLIC_POLICY_FILES})
+
 if(XM8_ENABLE_RETROACHIEVEMENTS)
   xm8_enable_ra_for_target(${BIN_TARGET})
-
-  set(RA_LICENSE_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/XM8-GPL-2.0.txt
-    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/SDL2-zlib.txt
-    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/xBRZ-GPL-3.0.txt
-    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/rcheevos-MIT.txt
-    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/stb-MIT-or-Public-Domain.txt
-    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses/SQLite-Public-Domain.txt
-  )
-  set_source_files_properties(${RA_LICENSE_FILES} PROPERTIES
-    MACOSX_PACKAGE_LOCATION "Resources/Licenses")
-  set(RA_NOTICE_FILE
-    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/THIRD_PARTY_NOTICES.md)
-  set_source_files_properties(${RA_NOTICE_FILE} PROPERTIES
-    MACOSX_PACKAGE_LOCATION "Resources")
-  set(RA_PUBLIC_POLICY_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/PRIVACY.md
-    ${CMAKE_CURRENT_SOURCE_DIR}/PRIVACY.ja.md
-    ${CMAKE_CURRENT_SOURCE_DIR}/LICENSES.md)
-  set_source_files_properties(${RA_PUBLIC_POLICY_FILES} PROPERTIES
-    MACOSX_PACKAGE_LOCATION "Resources")
-  target_sources(${BIN_TARGET} PRIVATE ${RA_LICENSE_FILES} ${RA_NOTICE_FILE}
-    ${RA_PUBLIC_POLICY_FILES})
 endif()
 
 if(CMAKE_STRIP)
@@ -270,14 +277,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   install(FILES
     "${PROJECT_SOURCE_DIR}/Builder/Linux/Flatpak/com.github.bubio.xm8m.metainfo.xml"
     DESTINATION "share/metainfo")
-  if(XM8_ENABLE_RETROACHIEVEMENTS)
-    install(FILES "${PROJECT_SOURCE_DIR}/PRIVACY.md"
-      "${PROJECT_SOURCE_DIR}/PRIVACY.ja.md"
-      "${PROJECT_SOURCE_DIR}/LICENSES.md"
-      "${PROJECT_SOURCE_DIR}/ThirdParty/THIRD_PARTY_NOTICES.md"
-      DESTINATION "share/doc/xm8m")
-    install(FILES ${RA_LICENSE_FILES} DESTINATION "share/doc/xm8m/Licenses")
-  endif()
+  install(FILES ${XM8_PUBLIC_POLICY_FILES} ${XM8_NOTICE_FILE}
+    DESTINATION "share/doc/xm8m")
+  install(FILES ${XM8_DISTRIBUTION_LICENSE_FILES}
+    DESTINATION "share/doc/xm8m/Licenses")
 endif()
 
 # Link SDL2 and xBRZ to xm8 target using interface target from Dependencies.cmake

@@ -110,8 +110,8 @@ void Android_SetRotationMode(int mode);
 
 // RetroAchievements Android bridge (available only in RA-enabled builds).
 int Android_RaHttpSend(unsigned long long request_id, const char *url,
-	const char *post_data, const char *content_type, int connect_timeout_ms,
-	int total_timeout_ms, int max_response_bytes);
+	const char *post_data, const char *content_type, const char *user_agent,
+	int connect_timeout_ms, int total_timeout_ms, int max_response_bytes);
 void Android_RaHttpCancel(unsigned long long request_id);
 void Android_RaHttpCancelAll(void);
 int Android_RaHasNetwork(void);

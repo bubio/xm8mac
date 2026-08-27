@@ -348,7 +348,9 @@ private:
 	void ProcessRaService(bool emulation_idle);
 										// progress async RA service work
 	void ProcessRaConnectivity();
-										// observe platform connectivity changes
+											// observe platform connectivity changes
+	void ProcessRaPendingUnlockRetry();
+											// retry durable unlocks with bounded backoff
 	void ProcessRaImages();
 										// progress RA badge image HTTP
 	void RequestRaBadgeImage(const std::string& url,
@@ -490,7 +492,9 @@ private:
 	std::unique_ptr<Xm8Ra::RaConnectivityMonitor> ra_connectivity_monitor;
 										// platform network reachability monitor
 	Xm8Ra::RaConnectivityTracker ra_connectivity_tracker;
-										// deduplicated reachability transitions
+											// deduplicated reachability transitions
+	Xm8Ra::RaUnlockRetryBackoff ra_unlock_retry_backoff;
+											// endpoint failure retry clock
 	Xm8Ra::RaOverlay *ra_overlay;
 										// RA overlay state
 	std::map<uint32_t, Xm8Ra::RaLeaderboardScoreboardEvent>

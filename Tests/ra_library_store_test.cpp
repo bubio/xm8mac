@@ -813,6 +813,32 @@ int main()
 		"migration adds bank-level RA columns");
 	migrated.Close();
 
+	const std::string unknown_version_root = JoinPath(base, "unknown-version-ra");
+	Xm8Ra::RaLibrary unknown_version_seed;
+	Check(unknown_version_seed.Open(unknown_version_root, &error),
+		"create library before unknown-version fixtures");
+	unknown_version_seed.Close();
+	const std::string unknown_version_db =
+		JoinPath(unknown_version_root, "library.sqlite3");
+	Check(ExecSql(unknown_version_db,
+		"UPDATE schema_meta SET schema_version = 0 WHERE singleton = 1;", &error),
+		"set zero schema version fixture");
+	Xm8Ra::RaLibrary zero_version;
+	Check(!zero_version.Open(unknown_version_root, &error),
+		"reject zero schema version");
+	Check(QueryInt(unknown_version_db,
+		"SELECT schema_version FROM schema_meta WHERE singleton = 1") == 0,
+		"zero schema version is not silently migrated");
+	Check(ExecSql(unknown_version_db,
+		"UPDATE schema_meta SET schema_version = -1 WHERE singleton = 1;", &error),
+		"set negative schema version fixture");
+	Xm8Ra::RaLibrary negative_version;
+	Check(!negative_version.Open(unknown_version_root, &error),
+		"reject negative schema version");
+	Check(QueryInt(unknown_version_db,
+		"SELECT schema_version FROM schema_meta WHERE singleton = 1") == -1,
+		"negative schema version is not silently migrated");
+
 	// Duplicate local games that resolve to one RA ID are merged atomically.
 	const std::string merge_root = JoinPath(base, "merge-ra");
 	Xm8Ra::RaLibrary merge_library;
@@ -1088,6 +1114,29 @@ int main()
 	Check(!recovered.RecoveryRequired(nullptr),
 		"recovery acknowledgement clears the durable marker");
 	recovered.Close();
+
+	const std::string marked_corrupt_root =
+		JoinPath(base, "marked-corrupt-ra");
+	Check(MakeDirectoryTree(marked_corrupt_root, &error),
+		"create marked corrupt DB root");
+	Check(WriteTextFile(JoinPath(marked_corrupt_root, "library.sqlite3"),
+		"this is also not a sqlite database"),
+		"write marked corrupt DB");
+	const std::string existing_marker =
+		JoinPath(marked_corrupt_root, "pending-unlock-recovery-required");
+	Check(WriteTextFile(existing_marker, "existing recovery marker\n"),
+		"write existing pending-unlock recovery marker");
+	const std::vector<char> existing_marker_bytes = ReadFile(existing_marker);
+	Xm8Ra::RaLibrary marked_recovery;
+	Check(marked_recovery.Open(marked_corrupt_root, &error),
+		"recover corrupt RA DB with existing marker");
+	Check(marked_recovery.RecoveryRequired(nullptr),
+		"existing marker remains fail-closed after quarantine");
+	Check(ReadFile(existing_marker) == existing_marker_bytes,
+		"quarantine preserves an existing recovery marker");
+	Check(marked_recovery.ConfirmDiscardRecovery(&error),
+		"acknowledge preserved recovery marker");
+	marked_recovery.Close();
 
 	const std::string empty_root = JoinPath(base, "empty-ra");
 	Xm8Ra::RaLibrary empty_library;

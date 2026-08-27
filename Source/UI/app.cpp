@@ -2166,14 +2166,7 @@ void App::ProcessRaService(bool emulation_idle)
 			game.state == Xm8Ra::RaGameSessionState::NoGame) {
 			const Xm8Ra::RaUnlockSyncSnapshot unlock_sync =
 				ra_service->UnlockSyncSnapshot();
-			if (unlock_sync.state == Xm8Ra::RaUnlockSyncState::None) {
-				std::string error;
-				if (!ra_service->BeginPendingUnlockSync(&error)) {
-					EnterRaOfflineSession(error.empty() ?
-						"pending unlock sync failed" : error);
-				}
-			}
-			else if (unlock_sync.state == Xm8Ra::RaUnlockSyncState::Failed) {
+			if (unlock_sync.state == Xm8Ra::RaUnlockSyncState::Failed) {
 				EnterRaOfflineSession(unlock_sync.message.empty() ?
 					"pending unlock sync failed" : unlock_sync.message);
 			}
@@ -2233,6 +2226,7 @@ void App::ProcessRaService(bool emulation_idle)
 	}
 	ProcessRaLibrarySync();
 	AddRaEventsAsNotices(ra_service->TakeEvents());
+	ProcessRaPendingUnlockRetry();
 	HandleRaResetRequest();
 }
 
@@ -2261,18 +2255,52 @@ void App::ProcessRaConnectivity()
 			Xm8Ra::RaLoginState::LoggedIn &&
 		ra_service->UnlockSyncSnapshot().state !=
 			Xm8Ra::RaUnlockSyncState::Pending) {
-		std::string sync_error;
-		if (!ra_service->BeginPendingUnlockSync(&sync_error)) {
-			AddRaNotice(sync_error.empty() ?
-				"RA: pending unlock sync failed" :
-				"RA: pending unlock sync failed - " + sync_error);
-		}
+		ra_unlock_retry_backoff.RequestImmediate(SDL_GetTicks());
 	}
 	SetRaMenuStatusForConnectivity(
 		transition.signal == Xm8Ra::RaSessionSignal::Disconnected);
 	AddRaNotice(transition.signal == Xm8Ra::RaSessionSignal::Disconnected ?
 		"RA: disconnected" : "RA: reconnected");
 	menu->UpdateRaStatus();
+}
+
+//
+// ProcessRaPendingUnlockRetry()
+// retry outbox records even when interface reachability never transitions
+//
+void App::ProcessRaPendingUnlockRetry()
+{
+	if (ra_service == NULL ||
+		ra_service->LoginSnapshot().state != Xm8Ra::RaLoginState::LoggedIn) {
+		ra_unlock_retry_backoff.Reset();
+		return;
+	}
+
+	const Xm8Ra::RaUnlockSyncSnapshot sync =
+		ra_service->UnlockSyncSnapshot();
+	if (sync.state == Xm8Ra::RaUnlockSyncState::Succeeded ||
+		sync.state == Xm8Ra::RaUnlockSyncState::Failed) {
+		ra_unlock_retry_backoff.Reset();
+		return;
+	}
+	if (sync.state == Xm8Ra::RaUnlockSyncState::Pending ||
+		ra_connectivity_tracker.State() ==
+			Xm8Ra::RaReachabilityState::Unreachable) {
+		return;
+	}
+
+	const uint32_t now = SDL_GetTicks();
+	ra_unlock_retry_backoff.Schedule(now);
+	if (!ra_unlock_retry_backoff.IsDue(now)) {
+		return;
+	}
+	ra_unlock_retry_backoff.RecordAttempt(now);
+	std::string sync_error;
+	if (!ra_service->BeginPendingUnlockSync(&sync_error)) {
+		AddRaNotice(sync_error.empty() ?
+			"RA: pending unlock sync failed" :
+			"RA: pending unlock sync failed - " + sync_error);
+	}
 }
 
 //
@@ -2609,12 +2637,7 @@ void App::AddRaEventsAsNotices(const std::vector<Xm8Ra::RaEvent>& events)
 		ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn &&
 		ra_service->UnlockSyncSnapshot().state !=
 			Xm8Ra::RaUnlockSyncState::Pending) {
-		std::string sync_error;
-		if (!ra_service->BeginPendingUnlockSync(&sync_error)) {
-			AddRaNotice(sync_error.empty() ?
-				"RA: pending unlock sync failed" :
-				"RA: pending unlock sync failed - " + sync_error);
-		}
+		ra_unlock_retry_backoff.RequestImmediate(SDL_GetTicks());
 	}
 	if (session_state_changed) {
 		menu->UpdateRaStatus();

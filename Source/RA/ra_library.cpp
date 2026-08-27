@@ -36,6 +36,33 @@ bool RenameIfExists(const std::string& source, const std::string& destination,
 	return MoveRaFile(source, destination, false, error);
 }
 
+bool EnsurePendingUnlockRecoveryMarker(const std::string& path,
+	std::string *error)
+{
+	if (RaPathExists(path)) {
+		return true;
+	}
+
+	static const uint8_t marker[] =
+		"A quarantined RA database may contain pending unlocks.\n";
+	const std::string temporary = path + ".tmp";
+	RemoveRaFile(temporary, nullptr);
+	if (!WriteRaFile(temporary, marker, sizeof(marker) - 1, error)) {
+		RemoveRaFile(temporary, nullptr);
+		return false;
+	}
+	if (!MoveRaFile(temporary, path, false, error)) {
+		RemoveRaFile(temporary, nullptr);
+		// Another process may have created the conservative marker first.
+		if (RaPathExists(path)) {
+			if (error != nullptr) error->clear();
+			return true;
+		}
+		return false;
+	}
+	return true;
+}
+
 bool Prepare(sqlite3 *db, const char *sql, sqlite3_stmt **stmt,
 	std::string *error)
 {
@@ -467,7 +494,7 @@ bool RaLibrary::InitializeSchema(std::string *error)
 				return false;
 			}
 		}
-		if (version <= 2) {
+		if (version == 1 || version == 2) {
 			const char *migration =
 				"CREATE TABLE IF NOT EXISTS pending_unlocks ("
 				" id INTEGER PRIMARY KEY, account TEXT NOT NULL,"
@@ -565,15 +592,18 @@ bool RaLibrary::QuarantineDatabase(std::string *error)
 {
 	const std::string base = DatabasePath();
 	const std::string suffix = ".corrupt." + std::to_string(NowUnixTime());
+	// Persist the fail-closed marker before moving any database file. If a
+	// later rename fails or the process stops partway through quarantine, the
+	// next launch must still require explicit recovery acknowledgement.
+	if (!EnsurePendingUnlockRecoveryMarker(PendingUnlockRecoveryPath(), error)) {
+		return false;
+	}
 	if (!RenameIfExists(base, base + suffix, error) ||
 		!RenameIfExists(base + "-wal", base + "-wal" + suffix, error) ||
 		!RenameIfExists(base + "-shm", base + "-shm" + suffix, error)) {
 		return false;
 	}
-	static const uint8_t marker[] =
-		"A quarantined RA database may contain pending unlocks.\n";
-	return WriteRaFile(PendingUnlockRecoveryPath(), marker,
-		sizeof(marker) - 1, error);
+	return true;
 }
 
 int64_t RaLibrary::NowUnixTime() const
