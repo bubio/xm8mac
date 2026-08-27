@@ -1081,6 +1081,7 @@ bool RaService::Logout(bool delete_pending, std::string *error)
 	std::string cleanup_error;
 	if (credentials_ == nullptr || !credentials_->Delete(&cleanup_error)) {
 		login_.state = RaLoginState::Failed;
+		login_kind_ = LoginKind::None;
 		login_.message = cleanup_error.empty() ?
 			"RA credential deletion failed" : cleanup_error;
 		if (error != nullptr) *error = login_.message;
@@ -1088,6 +1089,7 @@ bool RaService::Logout(bool delete_pending, std::string *error)
 	}
 	if (delete_pending && !DeletePendingUnlocks(&cleanup_error)) {
 		login_.state = RaLoginState::Failed;
+		login_kind_ = LoginKind::None;
 		login_.message = cleanup_error.empty() ?
 			"pending unlock deletion failed" : cleanup_error;
 		if (error != nullptr) *error = login_.message;

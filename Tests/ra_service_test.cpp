@@ -415,6 +415,9 @@ int main()
 			service.LoginSnapshot().state == Xm8Ra::RaLoginState::Failed &&
 			error.find("credential") != std::string::npos,
 			"credential deletion failure cannot report logout success");
+		Check(service.BeginLoginWithPassword("credential-player-retry", "secret",
+			&error),
+			"credential deletion failure leaves service ready for a new login");
 		Check(failing_credentials_raw->credentials.token == "credential-token",
 			"failed credential deletion remains observable for remediation");
 	}
