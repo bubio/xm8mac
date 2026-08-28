@@ -41,7 +41,10 @@ static_assert(MENU_RA_MIN > MENU_SCALEFILTER_MAX &&
 	"RetroAchievements menu IDs must not overlap another menu range");
 static_assert(MENU_RA_HARDCORE_CONFIRM != MENU_RA &&
 	MENU_RA_LOGOUT_CONFIRM != MENU_RA &&
-	MENU_RA_HARDCORE_CONFIRM != MENU_RA_LOGOUT_CONFIRM,
+	MENU_RA_RESET_CONFIRM != MENU_RA &&
+	MENU_RA_HARDCORE_CONFIRM != MENU_RA_LOGOUT_CONFIRM &&
+	MENU_RA_HARDCORE_CONFIRM != MENU_RA_RESET_CONFIRM &&
+	MENU_RA_LOGOUT_CONFIRM != MENU_RA_RESET_CONFIRM,
 	"RetroAchievements confirmation screens require distinct menu IDs");
 #endif
 
@@ -83,6 +86,7 @@ Menu::Menu(App *a)
 	// state menu parent
 	ra_state_menu = false;
 	ra_hardcore_debug_state_menu = false;
+	ra_reset_confirmation_enables_mode = false;
 }
 
 //
@@ -944,6 +948,19 @@ void Menu::EnterRaHardcoreConfirmation()
 	list->AddButton("Yes (Switch to Casual)", MENU_RA_HARDCORE_YES);
 	list->AddButton("No", MENU_RA_HARDCORE_NO);
 	list->SetFocus(MENU_RA_HARDCORE_NO);
+}
+
+void Menu::EnterRaResetConfirmation(bool enable_ra_mode)
+{
+	ra_reset_confirmation_enables_mode = enable_ra_mode;
+	list->SetTitle(enable_ra_mode ?
+		"<< Enable RA Mode in Hardcore? >>" :
+		"<< Switch to Hardcore? >>", MENU_RA_RESET_CONFIRM);
+	list->AddButton(enable_ra_mode ?
+		"Yes (Reset and Enable)" :
+		"Yes (Reset and Switch)", MENU_RA_RESET_YES);
+	list->AddButton("No", MENU_RA_RESET_NO);
+	list->SetFocus(MENU_RA_RESET_NO);
 }
 
 void Menu::EnterRaLogoutConfirmation(size_t pending_count)
@@ -2066,6 +2083,10 @@ void Menu::CmdBack()
 	case MENU_RA_LOGOUT_CONFIRM:
 		EnterRa(MENU_RA_LOGIN);
 		break;
+	case MENU_RA_RESET_CONFIRM:
+		EnterRa(ra_reset_confirmation_enables_mode ?
+			MENU_RA_MODE : MENU_RA_HARDCORE);
+		break;
 	case MENU_RA_LIBRARY_VIEW:
 		EnterRa(MENU_RA_LIBRARY);
 		break;
@@ -2657,13 +2678,22 @@ void Menu::CmdRa(int id)
 
 	switch (id) {
 	case MENU_RA_MODE:
-		app->ToggleRaMode();
-		EnterRa(MENU_RA_MODE);
+		if (!app->IsRaModeEnabled() && app->IsRaHardcoreSelected()) {
+			EnterRaResetConfirmation(true);
+		}
+		else {
+			app->ToggleRaMode();
+			EnterRa(MENU_RA_MODE);
+		}
 		break;
 
 	case MENU_RA_HARDCORE:
 		if (app->IsRaHardcoreActive()) {
 			EnterRaHardcoreConfirmation();
+		}
+		else if (app->IsRaModeEnabled() &&
+			!app->IsRaHardcoreSelected()) {
+			EnterRaResetConfirmation(false);
 		}
 		else {
 			app->ToggleRaPlayMode();
@@ -2678,6 +2708,18 @@ void Menu::CmdRa(int id)
 
 	case MENU_RA_HARDCORE_NO:
 		EnterRa(MENU_RA_HARDCORE);
+		break;
+
+	case MENU_RA_RESET_YES:
+		if (ra_reset_confirmation_enables_mode) app->ToggleRaMode();
+		else app->ToggleRaPlayMode();
+		EnterRa(ra_reset_confirmation_enables_mode ?
+			MENU_RA_MODE : MENU_RA_HARDCORE);
+		break;
+
+	case MENU_RA_RESET_NO:
+		EnterRa(ra_reset_confirmation_enables_mode ?
+			MENU_RA_MODE : MENU_RA_HARDCORE);
 		break;
 
 	case MENU_RA_STATUS:

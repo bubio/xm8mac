@@ -819,6 +819,12 @@
 											// active Hardcore exit confirmation screen
 #define MENU_RA_LOGOUT_CONFIRM          2020
 											// pending unlock deletion confirmation screen
+#define MENU_RA_RESET_YES                2021
+											// confirm reset-requiring RA mode change
+#define MENU_RA_RESET_NO                 2022
+											// cancel reset-requiring RA mode change
+#define MENU_RA_RESET_CONFIRM            2023
+											// reset-requiring RA mode confirmation screen
 #define MENU_RA_LIBRARY_ITEM_MIN        2100
 										// RetroAchievements library rows
 #define MENU_RA_ACHIEVEMENT_ITEM_MIN    4000

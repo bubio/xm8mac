@@ -63,6 +63,7 @@ public:
 	bool IsRaGameDetailMenu() const;
 	int GetRaContentSelection() const;
 	void EnterRaHardcoreConfirmation();
+	void EnterRaResetConfirmation(bool enable_ra_mode);
 	void EnterRaLogoutConfirmation(size_t pending_count);
 										// confirm ending an active Hardcore session
 	void UpdateRaStatus();
@@ -211,6 +212,8 @@ private:
 										// state menu was opened from RetroAchievements
 	bool ra_hardcore_debug_state_menu;
 										// state menu targets Hardcore debugging states
+	bool ra_reset_confirmation_enables_mode;
+										// pending reset confirmation enables RA mode, not Hardcore
 	std::vector<DiskSpec> playlist_entries;
 	int playlist_drive;
 	int playlist_first;
