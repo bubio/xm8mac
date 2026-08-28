@@ -6891,6 +6891,13 @@ bool App::ToggleRaMode()
 		ra_service->UnloadGame();
 	}
 	else if (enable) {
+		if (Xm8Ra::MustResetWhenEnablingRa(ra_play_mode)) {
+			NormalSpeed();
+			LockVM();
+			vm->reset();
+			upd1990a->resync();
+			UnlockVM();
+		}
 		BeginRaSavedTokenLogin(false);
 		BeginRaSessionForMountedDrive1();
 	}

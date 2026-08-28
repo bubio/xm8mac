@@ -175,6 +175,11 @@ inline bool MustWaitForRaSession(const RaSessionPolicyContext& context)
 		context.session_state == RaSessionState::Starting;
 }
 
+inline bool MustResetWhenEnablingRa(RaPlayMode selected_mode)
+{
+	return selected_mode == RaPlayMode::Hardcore;
+}
+
 } // namespace Xm8Ra
 
 #endif

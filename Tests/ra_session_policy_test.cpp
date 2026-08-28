@@ -82,6 +82,11 @@ int main()
 	Check(!CanLoadHardcoreDebugState(context),
 		"Normal mode cannot load a Hardcore debug state");
 
+	Check(MustResetWhenEnablingRa(RaPlayMode::Hardcore),
+		"enabling RA with Hardcore selected requires a cold reset");
+	Check(!MustResetWhenEnablingRa(RaPlayMode::Casual),
+		"enabling RA with Casual selected preserves the running VM");
+
 	RaPauseRequestGate pause_gate;
 	Check(pause_gate.Evaluate(false, true) == RaPauseDecision::Run,
 		"no host pause request keeps Hardcore running");
