@@ -1597,6 +1597,18 @@ int main()
 		}
 		Check(reset_count == 1,
 			"enabling Hardcore with a loaded game requests exactly one reset");
+		service.SetHardcoreEnabled(false);
+		const std::vector<Xm8Ra::RaEvent> casual_events = service.TakeEvents();
+		bool casual_requested_reset = false;
+		for (const Xm8Ra::RaEvent& event : casual_events) {
+			if (event.type == Xm8Ra::RaEventType::ResetRequested) {
+				casual_requested_reset = true;
+			}
+		}
+		Check(!casual_requested_reset && !service.IsHardcoreEnabled() &&
+			service.GameSessionSnapshot().state ==
+				Xm8Ra::RaGameSessionState::Loaded,
+			"disabling Hardcore keeps the loaded game without requesting reset");
 	}
 
 	{

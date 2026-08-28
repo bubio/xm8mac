@@ -634,10 +634,12 @@ private:
 										// requested target RA hash
 	std::string ra_media_change_old_hash;
 										// rollback RA hash
+	bool ra_media_change_old_target_open;
+										// rollback target drive open state
 	std::string ra_media_change_old_path;
-										// rollback VM path
+										// rollback target drive path
 	int ra_media_change_old_bank;
-										// rollback VM bank
+										// rollback target drive bank
 	bool ra_media_change_open_pair;
 										// change Drive 1 and Drive 2 atomically
 	bool ra_media_change_old_drive2_open;

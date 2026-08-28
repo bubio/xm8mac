@@ -180,6 +180,13 @@ inline bool MustResetWhenEnablingRa(RaPlayMode selected_mode)
 	return selected_mode == RaPlayMode::Hardcore;
 }
 
+inline bool MustResetWhenChangingRaPlayMode(RaPlayMode current_mode,
+	RaPlayMode target_mode)
+{
+	return current_mode != RaPlayMode::Hardcore &&
+		target_mode == RaPlayMode::Hardcore;
+}
+
 } // namespace Xm8Ra
 
 #endif

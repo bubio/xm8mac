@@ -43,14 +43,12 @@ inline bool RaMediaRollbackRestoredAllDrives(bool open_pair,
 	return drive1_restored && (!open_pair || drive2_restored);
 }
 
-inline RaMediaChangeAction ClassifyMediaChange(int drive,
-	bool game_loaded, bool change_pending, bool same_working_media,
-	int64_t active_library_game_id,
+inline RaMediaChangeAction ClassifyMediaChange(bool game_loaded,
+	bool change_pending, int64_t active_library_game_id,
 	const std::string& active_hash, int64_t target_library_game_id,
 	const std::string& target_hash)
 {
-	if (drive != 0 || !game_loaded || same_working_media ||
-		active_hash == target_hash) {
+	if (!game_loaded || active_hash == target_hash) {
 		return RaMediaChangeAction::NoChange;
 	}
 	if (change_pending) {

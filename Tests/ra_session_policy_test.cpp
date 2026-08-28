@@ -86,6 +86,12 @@ int main()
 		"enabling RA with Hardcore selected requires a cold reset");
 	Check(!MustResetWhenEnablingRa(RaPlayMode::Casual),
 		"enabling RA with Casual selected preserves the running VM");
+	Check(MustResetWhenChangingRaPlayMode(RaPlayMode::Casual,
+		RaPlayMode::Hardcore),
+		"Casual to Hardcore requires a full reset");
+	Check(!MustResetWhenChangingRaPlayMode(RaPlayMode::Hardcore,
+		RaPlayMode::Casual),
+		"Hardcore to Casual preserves the running VM");
 
 	RaPauseRequestGate pause_gate;
 	Check(pause_gate.Evaluate(false, true) == RaPauseDecision::Run,
