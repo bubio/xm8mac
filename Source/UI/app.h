@@ -147,6 +147,8 @@ public:
 										// remember user-selected disk directory
 	bool OpenDiskFromMenu(const DiskSpec& spec, std::string *error);
 										// open disk from menu
+	bool ChangeDiskBankFromMenu(int drive, int bank, std::string *error);
+										// change mounted D88 bank through RA policy
 	bool OpenDiskPairFromMenu(const std::string& path, bool *drive2_open,
 		std::string *error);
 										// open bank 0/1 as one transaction
@@ -293,7 +295,7 @@ private:
 										// resolve disk to RA working copy
 	bool BeginRaMediaChange(const DiskSpec& target, const std::string& hash,
 		bool open_pair, int target_banks, std::string *error);
-										// begin same-game Drive 1 media change
+										// begin same-game media change
 	void ProcessRaMediaChange();
 										// commit or roll back pending media change
 	void ClearRaMediaChangeState();

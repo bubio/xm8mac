@@ -38,6 +38,28 @@ inline RaMediaMountPlan PlanRaMediaMount(bool same_game_change,
 	return plan;
 }
 
+// While the Drive 1 game is still being loaded by rcheevos, do not let a
+// later mount silently replace it. Drive 2 may only be populated with media
+// already known to belong to the same local game.
+inline bool CanMountWhileGameLoadPending(int drive,
+	int64_t pending_library_game_id, const std::string& pending_hash,
+	int64_t target_library_game_id, const std::string& target_hash)
+{
+	if (drive == 0) {
+		return !pending_hash.empty() && target_hash == pending_hash;
+	}
+	return drive == 1 && pending_library_game_id > 0 &&
+		target_library_game_id == pending_library_game_id;
+}
+
+// A raw D88 drop replaces the legacy Drive 1/Drive 2 pair even when the
+// image has only one bank (in which case Drive 2 is closed). Treat it as one
+// transaction so that the close also waits for RA approval.
+inline bool ShouldOpenDroppedD88AsPair(bool is_playlist)
+{
+	return !is_playlist;
+}
+
 inline bool RaMediaRollbackRestoredAllDrives(bool open_pair,
 	bool drive1_restored, bool drive2_restored)
 {

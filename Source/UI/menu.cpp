@@ -2352,8 +2352,15 @@ void Menu::CmdDrive1(int id)
 
 	default:
 		id -= MENU_DRIVE1_BANK0;
-		diskmgr[0]->SetBank(id);
-		app->LeaveMenu();
+		{
+			std::string error;
+			if (app->ChangeDiskBankFromMenu(0, id, &error)) {
+				app->LeaveMenu();
+			}
+			else {
+				platform->MsgBox(NULL, error.c_str());
+			}
+		}
 		break;
 	}
 }
@@ -2389,8 +2396,15 @@ void Menu::CmdDrive2(int id)
 
 	default:
 		id -= MENU_DRIVE2_BANK0;
-		diskmgr[1]->SetBank(id);
-		app->LeaveMenu();
+		{
+			std::string error;
+			if (app->ChangeDiskBankFromMenu(1, id, &error)) {
+				app->LeaveMenu();
+			}
+			else {
+				platform->MsgBox(NULL, error.c_str());
+			}
+		}
 		break;
 	}
 }

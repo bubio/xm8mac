@@ -1087,6 +1087,107 @@ bool App::OpenDiskFromMenu(const DiskSpec& spec, std::string *error)
 }
 
 //
+// ChangeDiskBankFromMenu()
+// route an already-mounted D88 bank change through RA media approval
+//
+bool App::ChangeDiskBankFromMenu(int drive, int bank, std::string *error)
+{
+	if (drive < 0 || drive >= MAX_DRIVE || diskmgr[drive] == NULL ||
+		!diskmgr[drive]->IsOpen()) {
+		if (error != NULL) *error = "target drive is not ready";
+		return false;
+	}
+
+	const std::string path = diskmgr[drive]->GetPath();
+	int banks = 0;
+	if (!ProbeDisk({path, drive, bank}, &banks, error)) {
+		return false;
+	}
+
+#ifndef XM8_ENABLE_RETROACHIEVEMENTS
+	if (!diskmgr[drive]->SetBank(bank)) {
+		if (error != NULL) *error = "failed to change disk bank";
+		return false;
+	}
+	return true;
+#else
+	if (!ra_mode_enabled) {
+		if (!diskmgr[drive]->SetBank(bank)) {
+			if (error != NULL) *error = "failed to change disk bank";
+			return false;
+		}
+		return true;
+	}
+	if (!ra_pending_game_hash.empty()) {
+		if (error != NULL) *error = "RA game load is still pending";
+		return false;
+	}
+	if (ra_media_change_pending) {
+		if (error != NULL) *error = "RA media change is already pending";
+		return false;
+	}
+	if (ra_library == NULL || ra_service == NULL) {
+		if (error != NULL) *error = "RA media change is not available";
+		return false;
+	}
+
+	Xm8Ra::D88MediaInfo media;
+	if (!Xm8Ra::ProbeD88File(path.c_str(), &media, error) ||
+		bank >= static_cast<int>(media.bank_md5s.size())) {
+		if (error != NULL && error->empty())
+			*error = "RA D88 bank hash is not available";
+		return false;
+	}
+	Xm8Ra::MediaRecord record;
+	std::string find_error;
+	if (!ra_library->FindMedia(media.md5, &record, &find_error)) {
+		if (error != NULL) *error = find_error.empty() ?
+			"mounted disk is not registered in the RA library" : find_error;
+		return false;
+	}
+
+	const std::string& target_hash = media.bank_md5s[bank];
+	const bool game_loaded = Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
+		ra_service->GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::Loaded;
+	const Xm8Ra::RaMediaChangeAction action = Xm8Ra::ClassifyMediaChange(
+		game_loaded, false, ra_loaded_library_game_id, ra_loaded_game_hash,
+		record.game_id, target_hash);
+	if (action == Xm8Ra::RaMediaChangeAction::RejectDifferentGame && drive != 0) {
+		if (error != NULL)
+			*error = "RA Drive 2 media does not belong to the active game";
+		return false;
+	}
+	if (action == Xm8Ra::RaMediaChangeAction::BeginSameGameChange) {
+		return BeginRaMediaChange({path, drive, bank}, target_hash, false,
+			banks, error);
+	}
+
+	const int old_bank = diskmgr[drive]->GetBank();
+	if (!diskmgr[drive]->Open(path.c_str(), bank)) {
+		if (error != NULL) *error = "failed to change disk bank";
+		return false;
+	}
+	if (!RememberRaLaunchDriveForMountedDisk(drive, error)) {
+		diskmgr[drive]->Open(path.c_str(), old_bank);
+		return false;
+	}
+
+	const bool starts_session = drive == 0 &&
+		(action == Xm8Ra::RaMediaChangeAction::RejectDifferentGame ||
+		 !game_loaded || Xm8Ra::IsRaSessionOffline(ra_session_state));
+	if (starts_session) {
+		LockVM();
+		vm->reset();
+		upd1990a->resync();
+		UnlockVM();
+		BeginRaSessionForMedia(target_hash, record.game_id);
+	}
+	return true;
+#endif
+}
+
+//
 // OpenDiskPairFromMenu()
 // open bank 0/1 without exposing a half-applied two-drive state
 //
@@ -1181,13 +1282,22 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		return false;
 	}
 	resolved->path = imported.working_path;
-	if (ra_pending_game_hash.empty()) {
-		const int bank = spec.bank < 0 ? 0 : spec.bank;
-		if (bank >= static_cast<int>(imported.media_info.bank_md5s.size())) {
-			*error = "RA D88 bank hash is not available";
+	const int bank = spec.bank < 0 ? 0 : spec.bank;
+	if (bank >= static_cast<int>(imported.media_info.bank_md5s.size())) {
+		*error = "RA D88 bank hash is not available";
+		return false;
+	}
+	const std::string& ra_hash = imported.media_info.bank_md5s[bank];
+	if (!ra_pending_game_hash.empty()) {
+		if (!Xm8Ra::CanMountWhileGameLoadPending(spec.drive,
+			ra_pending_library_game_id, ra_pending_game_hash,
+			imported.record.game_id, ra_hash)) {
+			*error = "RA game load is pending; disk change was rejected";
 			return false;
 		}
-		const std::string& ra_hash = imported.media_info.bank_md5s[bank];
+		return true;
+	}
+	{
 		const bool game_loaded = ra_service != NULL &&
 			Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
 			ra_service->GameSessionSnapshot().state ==
@@ -4385,9 +4495,14 @@ bool App::OpenDroppedDisk(const char *path, std::string *error)
 		}
 	};
 
-	// A non-playlist two-bank D88 is one atomic paired mount. In RA mode the
-	// VM changes both drives only after the single media approval succeeds.
+	// A raw D88 drop is one paired operation in RA mode, including the
+	// single-bank case where Drive 2 must be closed after approval.
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	const bool open_raw_pair = Xm8Ra::ShouldOpenDroppedD88AsPair(
+		!playlist_specs.empty());
+#else
 	const bool open_raw_pair = playlist_specs.empty() && banks > 1;
+#endif
 	if (OpenDiskFromUser(first, error, open_raw_pair) == false) {
 		restore();
 		return false;
@@ -4401,9 +4516,11 @@ bool App::OpenDroppedDisk(const char *path, std::string *error)
 		if (playlist_specs.size() == 1) diskmgr[1]->Close();
 		return true;
 	}
+#ifndef XM8_ENABLE_RETROACHIEVEMENTS
 	if (banks <= 1) {
 		diskmgr[1]->Close();
 	}
+#endif
 	return true;
 }
 

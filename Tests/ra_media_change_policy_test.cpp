@@ -21,6 +21,7 @@ int main()
 {
 	using Xm8Ra::ClassifyMediaChange;
 	using Xm8Ra::CanApplySequentialRaMediaBatch;
+	using Xm8Ra::CanMountWhileGameLoadPending;
 	using Xm8Ra::PlanRaMediaMount;
 	using Xm8Ra::RaDrive2MountAction;
 	using Xm8Ra::RaMediaChangeAction;
@@ -89,6 +90,22 @@ int main()
 		"online session rejects changing one drive while closing the other");
 	Check(CanApplySequentialRaMediaBatch(true, 1, false),
 		"online session allows one independent drive change");
+
+	Check(CanMountWhileGameLoadPending(0, 7, old_hash, 7, old_hash),
+		"pending load allows the same Drive 1 media");
+	Check(!CanMountWhileGameLoadPending(0, 7, old_hash, 7, new_hash),
+		"pending load rejects replacing Drive 1");
+	Check(CanMountWhileGameLoadPending(1, 7, old_hash, 7, new_hash),
+		"pending load allows known same-game Drive 2 media");
+	Check(!CanMountWhileGameLoadPending(1, 7, old_hash, 8, new_hash),
+		"pending load rejects another game's Drive 2 media");
+	Check(!CanMountWhileGameLoadPending(1, 0, old_hash, 0, new_hash),
+		"pending unidentified load rejects unverified Drive 2 media");
+
+	Check(Xm8Ra::ShouldOpenDroppedD88AsPair(false),
+		"raw D88 drop is one paired transaction even with one bank");
+	Check(!Xm8Ra::ShouldOpenDroppedD88AsPair(true),
+		"playlist drop retains its explicit drive assignments");
 
 	if (failures != 0) {
 		return EXIT_FAILURE;
