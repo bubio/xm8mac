@@ -1,6 +1,7 @@
 #ifndef XM8_RA_MEDIA_CHANGE_POLICY_H
 #define XM8_RA_MEDIA_CHANGE_POLICY_H
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -41,6 +42,16 @@ inline bool RaMediaRollbackRestoredAllDrives(bool open_pair,
 	bool drive1_restored, bool drive2_restored)
 {
 	return drive1_restored && (!open_pair || drive2_restored);
+}
+
+// rcheevos exposes one current media hash. A paired open of banks from the
+// same D88 is handled as one deferred mount elsewhere, but a sequence of
+// independent drive changes cannot be made atomic around asynchronous RA
+// approval. Reject such batches before either the VM or RA state is changed.
+inline bool CanApplySequentialRaMediaBatch(bool online_session,
+	size_t target_count, bool closes_drive2)
+{
+	return !online_session || (target_count <= 1 && !closes_drive2);
 }
 
 inline RaMediaChangeAction ClassifyMediaChange(bool game_loaded,

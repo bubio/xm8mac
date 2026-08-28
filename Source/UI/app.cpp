@@ -1114,6 +1114,14 @@ bool App::OpenDiskSpecsFromMenu(const std::vector<DiskSpec>& specs,
 		*error = "invalid disk selection";
 		return false;
 	}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	if (!Xm8Ra::CanApplySequentialRaMediaBatch(
+		Xm8Ra::IsRaOnlineSession(GetRaPolicyContext()), specs.size(),
+		close_drive2)) {
+		*error = "RA online sessions require changing one drive at a time";
+		return false;
+	}
+#endif
 	for (const DiskSpec& spec : specs)
 		if (!ProbeDisk(spec, &banks, error)) return false;
 	for (int drive = 0; drive < MAX_DRIVE; ++drive) {
@@ -2140,6 +2148,22 @@ void App::ProcessRaService(bool emulation_idle)
 				login.username : login.display_name;
 			ReplaceRaNotice(name.empty() ? "RA: logged in" :
 				"RA: logged in " + name);
+			// A first-time login can complete after enabling RA fell back to an
+			// offline session for lack of saved credentials. Start the mounted
+			// game now; Hardcore must receive a fresh cold boot because the VM
+			// may have run while the login overlay was open.
+			if ((ra_session_state == Xm8Ra::RaSessionState::Ready ||
+				ra_session_state == Xm8Ra::RaSessionState::Offline) &&
+				diskmgr[0] != NULL && diskmgr[0]->IsOpen()) {
+				if (Xm8Ra::MustResetWhenEnablingRa(ra_play_mode)) {
+					NormalSpeed();
+					LockVM();
+					vm->reset();
+					upd1990a->resync();
+					UnlockVM();
+				}
+				BeginRaSessionForMountedDrive1();
+			}
 			RefreshRaAchievementsOverlay();
 			menu->UpdateRaStatus();
 		}
@@ -4333,6 +4357,14 @@ bool App::OpenDroppedDisk(const char *path, std::string *error)
 		for (const DiskSpec& spec : playlist_specs) {
 			if (ProbeDisk(spec, &banks, error) == false) return false;
 		}
+#ifdef XM8_ENABLE_RETROACHIEVEMENTS
+		if (!Xm8Ra::CanApplySequentialRaMediaBatch(
+			Xm8Ra::IsRaOnlineSession(GetRaPolicyContext()),
+			playlist_specs.size(), playlist_specs.size() == 1)) {
+			*error = "RA online sessions require changing one drive at a time";
+			return false;
+		}
+#endif
 	}
 	for (int drive=0; drive<MAX_DRIVE; drive++) {
 		snapshots[drive].open = diskmgr[drive]->IsOpen();
@@ -4353,7 +4385,10 @@ bool App::OpenDroppedDisk(const char *path, std::string *error)
 		}
 	};
 
-	if (OpenDiskFromUser(first, error) == false) {
+	// A non-playlist two-bank D88 is one atomic paired mount. In RA mode the
+	// VM changes both drives only after the single media approval succeeds.
+	const bool open_raw_pair = playlist_specs.empty() && banks > 1;
+	if (OpenDiskFromUser(first, error, open_raw_pair) == false) {
 		restore();
 		return false;
 	}
@@ -4366,13 +4401,7 @@ bool App::OpenDroppedDisk(const char *path, std::string *error)
 		if (playlist_specs.size() == 1) diskmgr[1]->Close();
 		return true;
 	}
-	if (banks > 1) {
-		DiskSpec second = {path, 1, 1};
-		if (OpenDiskFromUser(second, error) == false) {
-			restore();
-			return false;
-		}
-	} else {
+	if (banks <= 1) {
 		diskmgr[1]->Close();
 	}
 	return true;
@@ -7938,12 +7967,10 @@ bool App::OpenRaLoginOverlay()
 
 	std::string error;
 	if (!ra_mode_enabled) {
-		if (!SaveRaModeSetting(true, &error)) {
-			AddRaNotice("RA: setting save failed");
-			return false;
-		}
-		ra_mode_enabled = true;
-		ra_menu_status.Set(Xm8Ra::RaMenuStatusState::Enabled);
+		AddRaNotice(IsRaHardcoreSelected() ?
+			"RA: enable RA mode first; Hardcore requires reset" :
+			"RA: enable RA mode first");
+		return false;
 	}
 	if (!EnsureRaService(&error)) {
 		AddRaNotice("RA: service unavailable");

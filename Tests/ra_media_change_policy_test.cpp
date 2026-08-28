@@ -20,6 +20,7 @@ void Check(bool condition, const char *message)
 int main()
 {
 	using Xm8Ra::ClassifyMediaChange;
+	using Xm8Ra::CanApplySequentialRaMediaBatch;
 	using Xm8Ra::PlanRaMediaMount;
 	using Xm8Ra::RaDrive2MountAction;
 	using Xm8Ra::RaMediaChangeAction;
@@ -79,6 +80,15 @@ int main()
 		"paired rollback fails when Drive 2 was not restored");
 	Check(Xm8Ra::RaMediaRollbackRestoredAllDrives(true, true, true),
 		"paired rollback requires both drives");
+
+	Check(CanApplySequentialRaMediaBatch(false, 2, false),
+		"multi-drive batch is allowed before an online session");
+	Check(!CanApplySequentialRaMediaBatch(true, 2, false),
+		"online session rejects two independent drive changes");
+	Check(!CanApplySequentialRaMediaBatch(true, 1, true),
+		"online session rejects changing one drive while closing the other");
+	Check(CanApplySequentialRaMediaBatch(true, 1, false),
+		"online session allows one independent drive change");
 
 	if (failures != 0) {
 		return EXIT_FAILURE;
