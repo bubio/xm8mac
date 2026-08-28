@@ -21,6 +21,7 @@ int main()
 {
 	using Xm8Ra::ClassifyMediaChange;
 	using Xm8Ra::CanApplySequentialRaMediaBatch;
+	using Xm8Ra::CanCommitRaMediaMount;
 	using Xm8Ra::CanMountWhileGameLoadPending;
 	using Xm8Ra::PlanRaMediaMount;
 	using Xm8Ra::RaDrive2MountAction;
@@ -57,18 +58,26 @@ int main()
 	Check(pending_pair.drive2_action_after_approval ==
 		RaDrive2MountAction::OpenBank1,
 		"two-bank pair opens Drive 2 only after approval");
+	Check(!CanCommitRaMediaMount(pending_pair, false),
+		"paired bank cannot mount before same-game verification");
+	Check(CanCommitRaMediaMount(pending_pair, true),
+		"verified paired bank can mount after primary approval");
 	const Xm8Ra::RaMediaMountPlan pending_single_bank =
 		PlanRaMediaMount(true, true, 1);
 	Check(pending_single_bank.wait_for_ra_approval &&
 		pending_single_bank.drive2_action_after_approval ==
 			RaDrive2MountAction::Close,
 		"single-bank pair defers Drive 2 close until approval");
+	Check(CanCommitRaMediaMount(pending_single_bank, false),
+		"single-bank pair does not require auxiliary verification");
 	const Xm8Ra::RaMediaMountPlan direct_pair =
 		PlanRaMediaMount(false, true, 2);
 	Check(!direct_pair.wait_for_ra_approval &&
 		direct_pair.drive2_action_after_approval ==
 			RaDrive2MountAction::OpenBank1,
-		"non-media-change pair applies both drives directly");
+		"non-media-change pair still plans the auxiliary bank");
+	Check(!CanCommitRaMediaMount(direct_pair, false),
+		"fresh paired launch still requires auxiliary verification");
 	const Xm8Ra::RaMediaMountPlan single_drive =
 		PlanRaMediaMount(true, false, 2);
 	Check(single_drive.wait_for_ra_approval &&

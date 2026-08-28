@@ -1099,6 +1099,56 @@ int main()
 			Xm8Ra::RaMediaChangeState::None,
 			"media change result can be consumed");
 
+		const std::string paired_media_hash =
+			"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+		const size_t requests_before_pair_verification =
+			fake_http_raw->SentRequests().size();
+		Check(service.BeginVerifyMediaHashForCurrentGame(
+			paired_media_hash, &error),
+			"begin paired media verification");
+		Check(service.MediaVerificationSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Pending,
+			"paired media verification enters pending state");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":1234}"));
+		service.DrainHttp();
+		Check(service.MediaVerificationSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Succeeded,
+			"same-game paired media is verified");
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_before_pair_verification + 1,
+			"verification does not invoke rc_client media change");
+		Check(service.GameSessionSnapshot().hash == alternate_media_hash,
+			"verification preserves the active media hash");
+		service.ClearMediaVerificationResult();
+		const size_t requests_after_pair_verification =
+			fake_http_raw->SentRequests().size();
+		Check(service.BeginVerifyMediaHashForCurrentGame(
+			paired_media_hash, &error),
+			"repeat paired media verification uses the verified cache");
+		Check(service.MediaVerificationSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Succeeded,
+			"cached paired media verification completes synchronously");
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_after_pair_verification,
+			"cached paired media verification sends no request");
+		service.ClearMediaVerificationResult();
+
+		const std::string paired_other_game_hash =
+			"ffffffffffffffffffffffffffffffff";
+		Check(service.BeginVerifyMediaHashForCurrentGame(
+			paired_other_game_hash, &error),
+			"begin different-game paired media verification");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":9999}"));
+		service.DrainHttp();
+		Check(service.MediaVerificationSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Failed,
+			"different-game paired media is rejected");
+		Check(service.GameSessionSnapshot().hash == alternate_media_hash,
+			"rejected paired media preserves the active hash");
+		service.ClearMediaVerificationResult();
+
 		const std::string failed_media_hash =
 			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 		Check(service.BeginChangeMediaByHash(failed_media_hash, &error),

@@ -512,6 +512,12 @@ App::App()
 	ra_media_change_old_drive2_open = false;
 	ra_media_change_old_drive2_bank = 0;
 	ra_media_change_target_banks = 0;
+	ra_media_change_pair_verified = false;
+	ra_pair_validation_pending = false;
+	ra_pair_validation_target = {"", 1, 1};
+	ra_pair_validation_old_drive2_open = false;
+	ra_pair_validation_old_drive2_bank = 0;
+	ra_pair_validation_close_on_failure = false;
 #endif
 
 	// flags
@@ -978,12 +984,25 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
 		return false;
 	}
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
+	std::string ra_pair_hash;
+	if (ra_mode_enabled && open_pair && banks > 1) {
+		Xm8Ra::D88MediaInfo pair_media;
+		if (!Xm8Ra::ProbeD88File(open_spec.path.c_str(), &pair_media, error) ||
+			pair_media.bank_md5s.size() < 2) {
+			if (error != NULL && error->empty()) {
+				*error = "RA paired bank hash is not available";
+			}
+			return false;
+		}
+		ra_pair_hash = pair_media.bank_md5s[1];
+	}
 	const Xm8Ra::RaMediaMountPlan mount_plan = Xm8Ra::PlanRaMediaMount(
 		ra_media_change, open_pair, banks);
 	if (mount_plan.wait_for_ra_approval) {
 		return BeginRaMediaChange(open_spec, ra_hash_to_identify,
-			open_pair, banks, error);
+			open_pair, banks, ra_pair_hash, error);
 	}
+	const bool defer_drive2 = ra_mode_enabled && open_pair && banks > 1;
 #endif
 	struct DiskSnapshot {
 		bool open = false;
@@ -1032,7 +1051,7 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
 		bool open_drive2_bank1 = true;
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 		open_drive2_bank1 = mount_plan.drive2_action_after_approval ==
-			Xm8Ra::RaDrive2MountAction::OpenBank1;
+			Xm8Ra::RaDrive2MountAction::OpenBank1 && !defer_drive2;
 		if (!open_drive2_bank1 && mount_plan.drive2_action_after_approval ==
 			Xm8Ra::RaDrive2MountAction::Close) {
 			diskmgr[1]->Close();
@@ -1054,8 +1073,20 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
 			*error += "; previous disk could not be restored";
 		return false;
 	}
-	if (ra_mode_enabled && open_pair &&
+	if (ra_mode_enabled && open_pair && !defer_drive2 &&
 		!RememberRaLaunchPairForMountedDisks(error)) {
+		if (!restore() && error != NULL)
+			*error += "; previous disks could not be restored";
+		return false;
+	}
+	if (ra_mode_enabled && defer_drive2 &&
+		!RememberRaLaunchDriveForMountedDisk(0, error)) {
+		if (!restore() && error != NULL)
+			*error += "; previous disks could not be restored";
+		return false;
+	}
+	if (defer_drive2 && !BeginRaPairValidation(open_spec.path, ra_pair_hash,
+		!ra_hash_to_identify.empty(), error)) {
 		if (!restore() && error != NULL)
 			*error += "; previous disks could not be restored";
 		return false;
@@ -1122,7 +1153,7 @@ bool App::ChangeDiskBankFromMenu(int drive, int bank, std::string *error)
 		if (error != NULL) *error = "RA game load is still pending";
 		return false;
 	}
-	if (ra_media_change_pending) {
+	if (ra_media_change_pending || ra_pair_validation_pending) {
 		if (error != NULL) *error = "RA media change is already pending";
 		return false;
 	}
@@ -1160,7 +1191,7 @@ bool App::ChangeDiskBankFromMenu(int drive, int bank, std::string *error)
 	}
 	if (action == Xm8Ra::RaMediaChangeAction::BeginSameGameChange) {
 		return BeginRaMediaChange({path, drive, bank}, target_hash, false,
-			banks, error);
+			banks, std::string(), error);
 	}
 
 	const int old_bank = diskmgr[drive]->GetBank();
@@ -1288,6 +1319,10 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		return false;
 	}
 	const std::string& ra_hash = imported.media_info.bank_md5s[bank];
+	if (ra_pair_validation_pending) {
+		*error = "RA paired media verification is still pending";
+		return false;
+	}
 	if (!ra_pending_game_hash.empty()) {
 		if (!Xm8Ra::CanMountWhileGameLoadPending(spec.drive,
 			ra_pending_library_game_id, ra_pending_game_hash,
@@ -1353,11 +1388,11 @@ bool App::ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 //
 bool App::BeginRaMediaChange(const DiskSpec& target,
 	const std::string& hash, bool open_pair, int target_banks,
-	std::string *error)
+	const std::string& pair_hash, std::string *error)
 {
 	if (ra_service == NULL || target.drive < 0 || target.drive >= MAX_DRIVE ||
 		diskmgr[target.drive] == NULL || (open_pair && target.drive != 0) ||
-		hash.empty()) {
+		hash.empty() || ra_pair_validation_pending) {
 		if (error != NULL) {
 			*error = "RA media change is not available";
 		}
@@ -1382,13 +1417,31 @@ bool App::BeginRaMediaChange(const DiskSpec& target,
 	}
 	ra_media_change_open_pair = open_pair;
 	ra_media_change_target_banks = target_banks;
+	ra_media_change_pair_hash = pair_hash;
+	ra_media_change_pair_verified = pair_hash.empty();
 	ra_media_change_old_drive2_open = open_pair && diskmgr[1] != NULL &&
 		diskmgr[1]->IsOpen();
 	if (ra_media_change_old_drive2_open) {
 		ra_media_change_old_drive2_path = diskmgr[1]->GetPath();
 		ra_media_change_old_drive2_bank = diskmgr[1]->GetBank();
 	}
-	if (!ra_service->BeginChangeMediaByHash(hash, error)) {
+	if (!pair_hash.empty()) {
+		if (!ra_service->BeginVerifyMediaHashForCurrentGame(pair_hash, error)) {
+			ra_service->ClearMediaVerificationResult();
+			ClearRaMediaChangeState();
+			return false;
+		}
+		const Xm8Ra::RaMediaVerificationSnapshot verification =
+			ra_service->MediaVerificationSnapshot();
+		if (verification.state == Xm8Ra::RaMediaChangeState::Pending) {
+			return true;
+		}
+		ra_media_change_pair_verified =
+			verification.state == Xm8Ra::RaMediaChangeState::Succeeded;
+		ra_service->ClearMediaVerificationResult();
+	}
+	if (!ra_media_change_pair_verified ||
+		!ra_service->BeginChangeMediaByHash(hash, error)) {
 		ra_service->ClearMediaChangeResult();
 		ClearRaMediaChangeState();
 		return false;
@@ -1405,6 +1458,32 @@ void App::ProcessRaMediaChange()
 {
 	if (!ra_media_change_pending || ra_service == NULL) {
 		return;
+	}
+	if (!ra_media_change_pair_verified) {
+		const Xm8Ra::RaMediaVerificationSnapshot verification =
+			ra_service->MediaVerificationSnapshot();
+		if (verification.state == Xm8Ra::RaMediaChangeState::None ||
+			verification.state == Xm8Ra::RaMediaChangeState::Pending) {
+			return;
+		}
+		if (verification.state != Xm8Ra::RaMediaChangeState::Succeeded) {
+			const std::string message = verification.message.empty() ?
+				"paired Drive 2 media was rejected" : verification.message;
+			ra_service->ClearMediaVerificationResult();
+			ClearRaMediaChangeState();
+			AddRaNotice("RA: " + message);
+			return;
+		}
+		ra_media_change_pair_verified = true;
+		ra_service->ClearMediaVerificationResult();
+		std::string error;
+		if (!ra_service->BeginChangeMediaByHash(
+			ra_media_change_new_hash, &error)) {
+			ClearRaMediaChangeState();
+			AddRaNotice("RA: " + (error.empty() ?
+				std::string("media change failed") : error));
+			return;
+		}
 	}
 	const Xm8Ra::RaMediaChangeSnapshot change =
 		ra_service->MediaChangeSnapshot();
@@ -1442,11 +1521,13 @@ void App::ProcessRaMediaChange()
 	std::string vm_error;
 	const Xm8Ra::RaMediaMountPlan mount_plan = Xm8Ra::PlanRaMediaMount(false,
 		ra_media_change_open_pair, ra_media_change_target_banks);
+	const bool mount_approved = Xm8Ra::CanCommitRaMediaMount(mount_plan,
+		ra_media_change_pair_verified);
 	const int target_drive = ra_media_change_target.drive;
-	bool vm_changed = diskmgr[target_drive]->Open(
+	bool vm_changed = mount_approved && diskmgr[target_drive]->Open(
 		ra_media_change_target.path.c_str(), ra_media_change_target.bank);
 	if (!vm_changed) {
-		vm_error = "VM rejected changed media";
+		if (vm_error.empty()) vm_error = "VM rejected changed media";
 	}
 	else if (mount_plan.drive2_action_after_approval ==
 			Xm8Ra::RaDrive2MountAction::OpenBank1 &&
@@ -1471,6 +1552,7 @@ void App::ProcessRaMediaChange()
 		ra_loaded_game_hash = ra_media_change_new_hash;
 		ra_service->ClearMediaChangeResult();
 		ClearRaMediaChangeState();
+		if (app_menu) menu->UpdateMenu();
 		return;
 	}
 
@@ -1526,6 +1608,98 @@ void App::ClearRaMediaChangeState()
 	ra_media_change_old_drive2_path.clear();
 	ra_media_change_old_drive2_bank = 0;
 	ra_media_change_target_banks = 0;
+	ra_media_change_pair_hash.clear();
+	ra_media_change_pair_verified = false;
+	if (ra_service != NULL) ra_service->ClearMediaVerificationResult();
+}
+
+bool App::BeginRaPairValidation(const std::string& path,
+	const std::string& hash, bool close_drive2_on_failure,
+	std::string *error)
+{
+	if (ra_service == NULL || path.empty() || hash.empty() ||
+		ra_pair_validation_pending) {
+		if (error != NULL) {
+			*error = ra_pair_validation_pending ?
+				"RA paired media verification is already pending" :
+				"RA paired media verification is unavailable";
+		}
+		return false;
+	}
+	ra_pair_validation_pending = true;
+	ra_pair_validation_target = {path, 1, 1};
+	ra_pair_validation_hash = hash;
+	ra_pair_validation_old_drive2_open = diskmgr[1] != NULL &&
+		diskmgr[1]->IsOpen();
+	if (ra_pair_validation_old_drive2_open) {
+		ra_pair_validation_old_drive2_path = diskmgr[1]->GetPath();
+		ra_pair_validation_old_drive2_bank = diskmgr[1]->GetBank();
+	}
+	ra_pair_validation_close_on_failure = close_drive2_on_failure;
+	if (error != NULL) error->clear();
+	return true;
+}
+
+void App::ProcessRaPairValidation()
+{
+	if (!ra_pair_validation_pending || ra_service == NULL ||
+		ra_service->GameSessionSnapshot().state !=
+			Xm8Ra::RaGameSessionState::Loaded) {
+		return;
+	}
+
+	Xm8Ra::RaMediaVerificationSnapshot verification =
+		ra_service->MediaVerificationSnapshot();
+	std::string error;
+	if (verification.state == Xm8Ra::RaMediaChangeState::None) {
+		ra_service->BeginVerifyMediaHashForCurrentGame(
+			ra_pair_validation_hash, &error);
+		verification = ra_service->MediaVerificationSnapshot();
+	}
+	if (verification.state == Xm8Ra::RaMediaChangeState::Pending) return;
+
+	bool mounted = verification.state == Xm8Ra::RaMediaChangeState::Succeeded;
+	if (mounted) {
+		mounted = diskmgr[1]->Open(ra_pair_validation_target.path.c_str(),
+			ra_pair_validation_target.bank);
+		if (!mounted) error = "VM rejected paired Drive 2 media";
+	}
+	if (mounted && !RememberRaLaunchPairForMountedDisks(&error)) {
+		mounted = false;
+	}
+	if (!mounted) {
+		if (ra_pair_validation_close_on_failure) {
+			diskmgr[1]->Close();
+		}
+		else if (ra_pair_validation_old_drive2_open) {
+			diskmgr[1]->Open(ra_pair_validation_old_drive2_path.c_str(),
+				ra_pair_validation_old_drive2_bank);
+		}
+		else {
+			diskmgr[1]->Close();
+		}
+		if (error.empty()) {
+			error = verification.message.empty() ?
+				"paired Drive 2 media was rejected" : verification.message;
+		}
+	}
+
+	ra_service->ClearMediaVerificationResult();
+	ClearRaPairValidationState();
+	AddRaNotice(mounted ? "RA: paired Drive 2 media verified" :
+		"RA: " + error);
+	if (app_menu) menu->UpdateMenu();
+}
+
+void App::ClearRaPairValidationState()
+{
+	ra_pair_validation_pending = false;
+	ra_pair_validation_target = {"", 1, 1};
+	ra_pair_validation_hash.clear();
+	ra_pair_validation_old_drive2_open = false;
+	ra_pair_validation_old_drive2_path.clear();
+	ra_pair_validation_old_drive2_bank = 0;
+	ra_pair_validation_close_on_failure = false;
 }
 
 void App::SetRaMenuStatusAfterSessionStop()
@@ -1579,6 +1753,11 @@ void App::EnterRaOfflineSession(const std::string& message)
 	ra_loaded_game_hash.clear();
 	ra_leaderboard_scoreboards.clear();
 	ClearRaMediaChangeState();
+	if (ra_pair_validation_pending && ra_pair_validation_close_on_failure &&
+		diskmgr[1] != NULL) {
+		diskmgr[1]->Close();
+	}
+	ClearRaPairValidationState();
 	if (ra_overlay != NULL) {
 		ra_overlay->ClearGameplayStatus();
 	}
@@ -2195,6 +2374,7 @@ void App::ProcessRaService(bool emulation_idle)
 		return;
 	}
 	ProcessRaMediaChange();
+	ProcessRaPairValidation();
 	const Xm8Ra::RaLoginSnapshot login_after_drain =
 		ra_service->LoginSnapshot();
 	const Xm8Ra::RaGameSessionSnapshot game_after_drain =
@@ -2330,7 +2510,8 @@ void App::ProcessRaService(bool emulation_idle)
 				}
 			}
 		}
-		else if (game.state == Xm8Ra::RaGameSessionState::Loaded) {
+		else if (game.state == Xm8Ra::RaGameSessionState::Loaded &&
+			!ra_pair_validation_pending) {
 			// The VM has already been cold-reset for this launch. Establish the
 			// matching rcheevos frame-zero state exactly once.
 			ra_service->ResetProgress();
@@ -4681,6 +4862,7 @@ void App::Deinit()
 	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
 	ClearRaMediaChangeState();
+	ClearRaPairValidationState();
 	ra_leaderboard_scoreboards.clear();
 #endif
 
@@ -4882,7 +5064,12 @@ void App::Run()
 
 #ifdef __ANDROID__
 	// android intent
-	if (ProcessIntent() == false) {
+	const bool has_startup_intent = Android_HasIntent() != 0;
+	std::string startup_intent_error;
+	if (!has_startup_intent || !ProcessIntent(&startup_intent_error)) {
+		if (has_startup_intent && !startup_intent_error.empty()) {
+			platform->MsgBox(window, startup_intent_error.c_str());
+		}
 		// load state 0 (auto)
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 		if (!ra_mode_enabled) Load(0);
@@ -4913,6 +5100,17 @@ void App::Run()
 
 	// main loop
 	while (app_quit == false) {
+#ifdef __ANDROID__
+		if (Android_HasIntent() != 0) {
+			std::string intent_error;
+			if (!ProcessIntent(&intent_error)) {
+				platform->MsgBox(window, intent_error.c_str());
+			}
+			else if (app_menu) {
+				menu->UpdateMenu();
+			}
+		}
+#endif
 		const bool ra_overlay_blocking = IsRaOverlayBlocking();
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 		const bool ra_hardcore_menu_running = IsRaHardcoreMenuRunning();
@@ -5370,10 +5568,9 @@ void App::PowerMng()
 // ProcessIntent()
 // process android intent
 //
-bool App::ProcessIntent()
+bool App::ProcessIntent(std::string *error)
 {
-	bool result;
-	const char *intent;
+	char intent[_MAX_PATH * 3];
 
 	// check intent
 	if (Android_HasIntent() == 0) {
@@ -5381,23 +5578,13 @@ bool App::ProcessIntent()
 	}
 
 	// get intent
-	intent = Android_GetIntent();
-
-	// drive 1
-	diskmgr[0]->Close();
-	result = diskmgr[0]->Open(intent, 0);
-
-	// drive 2
-	diskmgr[1]->Close();
-	if (result == true) {
-		if (diskmgr[0]->GetBanks() > 1) {
-			diskmgr[1]->Open(intent, 1);
-		}
+	if (Android_TakeIntent(intent, sizeof(intent)) == 0) {
+		if (error != NULL) *error = "Android intent path is unavailable";
+		return false;
 	}
 
-	// clear intent
-	Android_ClearIntent();
-
+	const bool result = OpenDroppedDisk(intent, error);
+	if (result) RememberDiskOpenDir(intent);
 	return result;
 }
 #endif // __ANDROID__
@@ -6329,6 +6516,7 @@ void App::ChangeSystemInternal(bool load, bool preserve_ra_session)
 		ra_loaded_library_game_id = 0;
 		ra_loaded_game_hash.clear();
 		ClearRaMediaChangeState();
+		ClearRaPairValidationState();
 		ra_leaderboard_scoreboards.clear();
 	}
 #else
@@ -6514,6 +6702,7 @@ void App::Reset()
 		ra_loaded_library_game_id = 0;
 		ra_loaded_game_hash.clear();
 		ClearRaMediaChangeState();
+		ClearRaPairValidationState();
 		ra_leaderboard_scoreboards.clear();
 		RefreshRaAchievementsOverlay();
 		RefreshRaLeaderboardsOverlay();
@@ -6733,6 +6922,7 @@ bool App::GetRaStateContext(int slot, Xm8Ra::RaStateMode requested_mode,
 		Xm8Ra::IsRaSessionOffline(ra_session_state)) {
 		context.mode = Xm8Ra::RaStateMode::Offline;
 		context.game_id = 0;
+		context.active_media_hash.clear();
 	}
 	else if ((requested_mode == Xm8Ra::RaStateMode::Casual ||
 		requested_mode == Xm8Ra::RaStateMode::HardcoreDebug) &&
@@ -6742,6 +6932,7 @@ bool App::GetRaStateContext(int slot, Xm8Ra::RaStateMode requested_mode,
 			Xm8Ra::RaGameSessionState::Loaded) {
 		context.mode = requested_mode;
 		context.game_id = ra_service->GameSessionSnapshot().game_id;
+		context.active_media_hash = ra_service->GameSessionSnapshot().hash;
 	}
 	else {
 		if (error != nullptr) *error = "RA session is not ready for states";
@@ -6779,6 +6970,7 @@ bool App::SaveRaState(int slot)
 	record.mode = expected.mode;
 	record.game_id = expected.game_id;
 	record.anchor_md5 = expected.anchor_md5;
+	record.active_media_hash = expected.active_media_hash;
 	record.rcheevos_version = expected.rcheevos_version;
 	if ((record.mode == Xm8Ra::RaStateMode::Casual ||
 		record.mode == Xm8Ra::RaStateMode::HardcoreDebug) &&
@@ -7045,6 +7237,7 @@ bool App::ToggleRaMode()
 	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
 	ClearRaMediaChangeState();
+	ClearRaPairValidationState();
 	ra_leaderboard_scoreboards.clear();
 	if (!enable && ra_service != NULL) {
 		ra_service->UnloadGame();
@@ -7887,6 +8080,7 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
 	ClearRaMediaChangeState();
+	ClearRaPairValidationState();
 	ra_leaderboard_scoreboards.clear();
 	BeginRaSessionForMedia(anchor_hash, game_id);
 	ra_library->MarkGamePlayed(game_id, nullptr);
@@ -8144,6 +8338,7 @@ bool App::LogoutRa(bool delete_pending)
 	ra_loaded_library_game_id = 0;
 	ra_loaded_game_hash.clear();
 	ClearRaMediaChangeState();
+	ClearRaPairValidationState();
 	ra_menu_status.Set(ra_mode_enabled ? Xm8Ra::RaMenuStatusState::Enabled :
 		Xm8Ra::RaMenuStatusState::Disabled);
 	ra_leaderboard_scoreboards.clear();

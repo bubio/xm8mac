@@ -264,7 +264,7 @@ private:
 										// power management
 
 #ifdef __ANDROID__
-	bool ProcessIntent();
+	bool ProcessIntent(std::string *error = nullptr);
 										// process intent
 #endif // __ANDROID__
 
@@ -294,12 +294,21 @@ private:
 		bool *ra_media_change, std::string *error);
 										// resolve disk to RA working copy
 	bool BeginRaMediaChange(const DiskSpec& target, const std::string& hash,
-		bool open_pair, int target_banks, std::string *error);
+		bool open_pair, int target_banks, const std::string& pair_hash,
+		std::string *error);
 										// begin same-game media change
 	void ProcessRaMediaChange();
 										// commit or roll back pending media change
 	void ClearRaMediaChangeState();
 										// clear App media change transaction
+	bool BeginRaPairValidation(const std::string& path,
+		const std::string& hash, bool close_drive2_on_failure,
+		std::string *error);
+										// verify paired Drive 2 media before mounting
+	void ProcessRaPairValidation();
+										// commit or reject deferred paired Drive 2 media
+	void ClearRaPairValidationState();
+										// clear deferred paired media state
 	void EnterRaOfflineSession(const std::string& message);
 										// stop RA evaluation for the current game
 	void SetRaMenuStatusAfterSessionStop();
@@ -652,6 +661,20 @@ private:
 										// rollback Drive 2 bank
 	int ra_media_change_target_banks;
 										// target D88 bank count
+	std::string ra_media_change_pair_hash;
+										// paired bank hash requiring same-game verification
+	bool ra_media_change_pair_verified;
+										// paired bank passed same-game verification
+	bool ra_pair_validation_pending;
+										// Drive 2 waits for same-game verification
+	DiskSpec ra_pair_validation_target;
+										// deferred Drive 2 working-copy bank
+	std::string ra_pair_validation_hash;
+										// deferred Drive 2 bank hash
+	bool ra_pair_validation_old_drive2_open;
+	std::string ra_pair_validation_old_drive2_path;
+	int ra_pair_validation_old_drive2_bank;
+	bool ra_pair_validation_close_on_failure;
 #endif
 
 	// flags

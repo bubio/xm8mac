@@ -208,6 +208,13 @@ struct RaMediaChangeSnapshot {
 	std::string hash;
 };
 
+struct RaMediaVerificationSnapshot {
+	RaMediaChangeState state = RaMediaChangeState::None;
+	int result = 0;
+	std::string message;
+	std::string hash;
+};
+
 enum class RaLibrarySyncState {
 	None,
 	PendingHashes,
@@ -300,6 +307,9 @@ public:
 	bool BeginPendingUnlockSync(std::string *error);
 	bool BeginChangeMediaByHash(const std::string& hash, std::string *error);
 	void ClearMediaChangeResult();
+	bool BeginVerifyMediaHashForCurrentGame(const std::string& hash,
+		std::string *error);
+	void ClearMediaVerificationResult();
 	bool BeginLibrarySync(const std::vector<std::string>& local_hashes,
 		std::string *error);
 	void ClearLibrarySyncResult();
@@ -325,6 +335,7 @@ public:
 	RaLoginSnapshot LoginSnapshot() const;
 	RaGameSessionSnapshot GameSessionSnapshot() const;
 	RaMediaChangeSnapshot MediaChangeSnapshot() const;
+	RaMediaVerificationSnapshot MediaVerificationSnapshot() const;
 	RaLibrarySyncSnapshot LibrarySyncSnapshot() const;
 	RaUnlockSyncSnapshot UnlockSyncSnapshot() const;
 	bool TakeIntegrityFailure(std::string *message);
@@ -364,6 +375,8 @@ private:
 	static void RC_CCONV MediaChangeCallback(int result,
 		const char *error_message, rc_client_t *client, void *userdata);
 	static void RC_CCONV ResolveMediaHashCallback(
+		const rc_api_server_response_t *server_response, void *userdata);
+	static void RC_CCONV VerifyMediaHashCallback(
 		const rc_api_server_response_t *server_response, void *userdata);
 	static void RC_CCONV LibraryHashesCallback(int result,
 		const char *error_message, rc_client_hash_library_t *list,
@@ -411,6 +424,8 @@ private:
 	void HandleMediaChangeCallback(int result, const char *error_message);
 	void HandleResolveMediaHashCallback(
 		const rc_api_server_response_t *server_response);
+	void HandleVerifyMediaHashCallback(
+		const rc_api_server_response_t *server_response);
 	bool StartClientMediaChange(std::string *error);
 	void HandleLibraryHashesCallback(int result, const char *error_message,
 		rc_client_hash_library_t *list);
@@ -451,6 +466,7 @@ private:
 	RaGameSessionSnapshot game_session_;
 	RaLeaderboardEntriesSnapshot leaderboard_entries_;
 	RaMediaChangeSnapshot media_change_;
+	RaMediaVerificationSnapshot media_verification_;
 	RaLibrarySyncSnapshot library_sync_;
 	RaUnlockSyncSnapshot unlock_sync_;
 	std::vector<RaPendingUnlockRecord> pending_unlock_sync_records_;
@@ -469,6 +485,7 @@ private:
 	size_t library_sync_title_offset_ = 0;
 	std::map<std::string, uint32_t> verified_media_game_ids_;
 	bool media_change_preflight_pending_ = false;
+	bool media_verification_pending_ = false;
 	std::vector<RaEvent> events_;
 	std::string rich_presence_;
 	bool shutdown_ = false;

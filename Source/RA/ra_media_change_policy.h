@@ -38,6 +38,13 @@ inline RaMediaMountPlan PlanRaMediaMount(bool same_game_change,
 	return plan;
 }
 
+inline bool CanCommitRaMediaMount(const RaMediaMountPlan& plan,
+	bool paired_bank_verified)
+{
+	return plan.drive2_action_after_approval !=
+		RaDrive2MountAction::OpenBank1 || paired_bank_verified;
+}
+
 // While the Drive 1 game is still being loaded by rcheevos, do not let a
 // later mount silently replace it. Drive 2 may only be populated with media
 // already known to belong to the same local game.

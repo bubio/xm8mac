@@ -16,6 +16,8 @@
 #ifndef XM8JNI_H
 #define XM8JNI_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -26,17 +28,8 @@ extern "C" {
 //
 int Android_HasIntent(void);
 
-//
-// Android_GetIntent()
-// get intent buffer
-//
-const char* Android_GetIntent(void);
-
-//
-// Android_ClearIntent()
-// clear intent buffer
-//
-void Android_ClearIntent(void);
+// atomically copy and clear the intent buffer
+int Android_TakeIntent(char *buffer, size_t buffer_size);
 
 //
 // Android_GetSdkVersion()
