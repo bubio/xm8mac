@@ -182,6 +182,10 @@ public:
 		MediaRecord *record, std::string *error);
 	bool FindMedia(const std::string& md5, MediaRecord *record,
 		std::string *error);
+	bool FindMediaByWorkingRelpath(const std::string& working_relpath,
+		MediaRecord *record, std::string *error);
+	bool LoadMediaBankHash(const std::string& media_md5, int bank_index,
+		std::string *ra_hash, std::string *error);
 	bool LoadMediaHealthRecord(const std::string& md5,
 		MediaHealthRecord *record, std::string *error);
 	bool UpdateMediaHealth(const MediaHealthStatus& status,

@@ -300,6 +300,12 @@ if(BUILD_TESTING)
   target_include_directories(clidisk_test PRIVATE Source/UI)
   add_test(NAME clidisk_test COMMAND clidisk_test)
 
+  add_executable(menu_file_routing_test
+    Tests/menu_file_routing_test.cpp
+  )
+  target_include_directories(menu_file_routing_test PRIVATE Source/UI)
+  add_test(NAME menu_file_routing_test COMMAND menu_file_routing_test)
+
   add_executable(d88probe_test
     Tests/d88probe_test.cpp
     Source/UI/d88probe.cpp
@@ -374,8 +380,12 @@ if(BUILD_TESTING)
 
   add_executable(event_host_frame_integration_test
     Tests/event_host_frame_integration_test.cpp
+    Tests/Fixtures/d88_fixture.cpp
+    Source/UI/d88probe.cpp
+    Source/UI/diskmgr.cpp
     Source/UI/file.cpp
     Source/UI/fileio.cpp
+    Source/UI/pathresolver.cpp
     Source/ePC-8801MA/common.cpp
     Source/ePC-8801MA/config.cpp
     Source/ePC-8801MA/fifo.cpp
@@ -398,6 +408,7 @@ if(BUILD_TESTING)
     Source/ePC-8801MA/vm/pc8801/pc8801.cpp
   )
   target_include_directories(event_host_frame_integration_test PRIVATE
+    Tests
     Source/UI
     Source/ePC-8801MA
     Source/ePC-8801MA/vm
@@ -407,6 +418,12 @@ if(BUILD_TESTING)
   target_compile_definitions(event_host_frame_integration_test PRIVATE
     SDL _PC8801MA)
   target_link_libraries(event_host_frame_integration_test PRIVATE XM8::SDL)
+  if(APPLE)
+    target_sources(event_host_frame_integration_test PRIVATE
+      Source/UI/pathresolver_mac.mm)
+    target_link_libraries(event_host_frame_integration_test PRIVATE
+      "-framework Foundation")
+  endif()
   add_test(NAME event_host_frame_integration_test
     COMMAND event_host_frame_integration_test)
 
@@ -488,6 +505,35 @@ if(BUILD_TESTING)
     )
     target_include_directories(ra_media_change_policy_test PRIVATE Source/RA)
     add_test(NAME ra_media_change_policy_test COMMAND ra_media_change_policy_test)
+
+    add_executable(ra_library_launch_policy_test
+      Tests/ra_library_launch_policy_test.cpp
+    )
+    target_include_directories(ra_library_launch_policy_test PRIVATE Source/RA)
+    add_test(NAME ra_library_launch_policy_test
+      COMMAND ra_library_launch_policy_test)
+
+    add_executable(ra_auxiliary_mount_commit_policy_test
+      Tests/ra_auxiliary_mount_commit_policy_test.cpp
+    )
+    target_include_directories(ra_auxiliary_mount_commit_policy_test PRIVATE
+      Source/RA)
+    add_test(NAME ra_auxiliary_mount_commit_policy_test
+      COMMAND ra_auxiliary_mount_commit_policy_test)
+
+    add_executable(ra_multi_image_policy_test
+      Tests/ra_multi_image_policy_test.cpp
+    )
+    target_include_directories(ra_multi_image_policy_test PRIVATE Source/RA)
+    add_test(NAME ra_multi_image_policy_test
+      COMMAND ra_multi_image_policy_test)
+
+    add_executable(ra_media_eject_policy_test
+      Tests/ra_media_eject_policy_test.cpp
+    )
+    target_include_directories(ra_media_eject_policy_test PRIVATE Source/RA)
+    add_test(NAME ra_media_eject_policy_test
+      COMMAND ra_media_eject_policy_test)
 
 	add_executable(ra_callback_lifetime_test
 	  Tests/ra_callback_lifetime_test.cpp
@@ -628,6 +674,28 @@ if(BUILD_TESTING)
     add_test(NAME ra_seed_library_fixture_test
       COMMAND ra_seed_library_fixture_test)
 
+    add_executable(ra_working_media_identity_test
+      Tests/ra_working_media_identity_test.cpp
+      Tests/Fixtures/d88_fixture.cpp
+      Tests/Fixtures/ra_library_fixture_seed.cpp
+      Source/UI/m3u.cpp
+      ${RA_PATHRESOLVER_SOURCES}
+      $<TARGET_OBJECTS:xm8_ra_core>
+      $<TARGET_OBJECTS:xm8_ra_platform>
+      $<TARGET_OBJECTS:xm8_ra_media_xm8>
+    )
+    target_link_libraries(ra_working_media_identity_test PRIVATE
+      xm8_ra_dependencies)
+    target_include_directories(ra_working_media_identity_test PRIVATE
+      Tests
+      Source/RA
+      Source/UI
+    )
+    target_compile_definitions(ra_working_media_identity_test PRIVATE
+      XM8_ENABLE_RETROACHIEVEMENTS=1)
+    add_test(NAME ra_working_media_identity_test
+      COMMAND ra_working_media_identity_test)
+
     add_executable(ra_credentials_http_test
       Tests/ra_credentials_http_test.cpp
       Source/RA/ra_http_fake.cpp
@@ -730,6 +798,7 @@ if(BUILD_TESTING)
         ra_library_store_test
         ra_seed_library_fixture
         ra_seed_library_fixture_test
+        ra_working_media_identity_test
         ra_credentials_http_test)
       if(TARGET ${XM8_M3U_TARGET})
         target_link_libraries(${XM8_M3U_TARGET} PRIVATE ${XM8_ICONV_LIBRARY})

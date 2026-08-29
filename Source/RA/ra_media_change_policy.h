@@ -7,12 +7,68 @@
 
 namespace Xm8Ra {
 
-enum class RaMediaChangeAction {
-	NoChange,
-	BeginSameGameChange,
-	RejectPending,
-	RejectDifferentGame,
+enum class RaDiskRole {
+	Anchor,
+	Auxiliary,
 };
+
+enum class RaDiskLoginState {
+	LoggedOut,
+	LoginPending,
+	LoggedIn,
+	LoginFailed,
+};
+
+enum class RaDiskAction {
+	MountNormal,
+	MountAuxiliary,
+	BeginAnchorLaunch,
+	ChangeAnchorMedia,
+	RestartAnchorLaunch,
+	RejectBusy,
+};
+
+struct RaDiskPolicyContext {
+	bool ra_enabled = false;
+	RaDiskLoginState login_state = RaDiskLoginState::LoggedOut;
+	bool hardcore_selected = false;
+	RaDiskRole role = RaDiskRole::Anchor;
+	bool anchor_load_pending = false;
+	bool anchor_change_pending = false;
+	bool active_game_loaded = false;
+	bool same_media_container = false;
+	int64_t active_library_game_id = 0;
+	std::string active_hash;
+	int64_t target_library_game_id = 0;
+	std::string target_hash;
+};
+
+// Login and selected play mode affect how an anchor launch is carried out,
+// never whether an auxiliary disk may be mounted. Only Drive 1 owns the RA
+// active media identity.
+inline RaDiskAction ClassifyRaDiskAction(const RaDiskPolicyContext& context)
+{
+	if (!context.ra_enabled) return RaDiskAction::MountNormal;
+	if (context.role == RaDiskRole::Auxiliary) {
+		return RaDiskAction::MountAuxiliary;
+	}
+	if (context.anchor_load_pending || context.anchor_change_pending) {
+		return RaDiskAction::RejectBusy;
+	}
+	if (!context.active_game_loaded) {
+		return RaDiskAction::BeginAnchorLaunch;
+	}
+	if (context.same_media_container ||
+		(!context.active_hash.empty() &&
+		 context.active_hash == context.target_hash)) {
+		return RaDiskAction::MountNormal;
+	}
+	if (context.active_library_game_id > 0 &&
+		context.target_library_game_id == context.active_library_game_id) {
+		return RaDiskAction::ChangeAnchorMedia;
+	}
+	return RaDiskAction::RestartAnchorLaunch;
+}
 
 enum class RaDrive2MountAction {
 	Unchanged,
@@ -38,25 +94,17 @@ inline RaMediaMountPlan PlanRaMediaMount(bool same_game_change,
 	return plan;
 }
 
-inline bool CanCommitRaMediaMount(const RaMediaMountPlan& plan,
-	bool paired_bank_verified)
+inline bool CanEjectRaMedia(int drive, bool game_load_pending,
+	bool media_change_pending)
 {
-	return plan.drive2_action_after_approval !=
-		RaDrive2MountAction::OpenBank1 || paired_bank_verified;
+	return drive == 1 || (!game_load_pending && !media_change_pending);
 }
 
-// While the Drive 1 game is still being loaded by rcheevos, do not let a
-// later mount silently replace it. Drive 2 may only be populated with media
-// already known to belong to the same local game.
-inline bool CanMountWhileGameLoadPending(int drive,
-	int64_t pending_library_game_id, const std::string& pending_hash,
-	int64_t target_library_game_id, const std::string& target_hash)
+// Launch-profile persistence is metadata for an auxiliary disk. A missing or
+// incomplete anchor profile must never undo a successful Drive 2 VM mount.
+inline bool MustPersistRaLaunchProfileForMount(RaDiskRole role)
 {
-	if (drive == 0) {
-		return !pending_hash.empty() && target_hash == pending_hash;
-	}
-	return drive == 1 && pending_library_game_id > 0 &&
-		target_library_game_id == pending_library_game_id;
+	return role == RaDiskRole::Anchor;
 }
 
 // A raw D88 drop replaces the legacy Drive 1/Drive 2 pair even when the
@@ -74,31 +122,13 @@ inline bool RaMediaRollbackRestoredAllDrives(bool open_pair,
 }
 
 // rcheevos exposes one current media hash. A paired open of banks from the
-// same D88 is handled as one deferred mount elsewhere, but a sequence of
-// independent drive changes cannot be made atomic around asynchronous RA
-// approval. Reject such batches before either the VM or RA state is changed.
+// same D88 is one anchor transaction, but a sequence of independent Drive 1
+// changes cannot be made atomic around asynchronous RA approval. Reject such
+// batches before either the VM or RA state is changed.
 inline bool CanApplySequentialRaMediaBatch(bool online_session,
 	size_t target_count, bool closes_drive2)
 {
 	return !online_session || (target_count <= 1 && !closes_drive2);
-}
-
-inline RaMediaChangeAction ClassifyMediaChange(bool game_loaded,
-	bool change_pending, int64_t active_library_game_id,
-	const std::string& active_hash, int64_t target_library_game_id,
-	const std::string& target_hash)
-{
-	if (!game_loaded || active_hash == target_hash) {
-		return RaMediaChangeAction::NoChange;
-	}
-	if (change_pending) {
-		return RaMediaChangeAction::RejectPending;
-	}
-	if (active_library_game_id <= 0 ||
-		target_library_game_id != active_library_game_id) {
-		return RaMediaChangeAction::RejectDifferentGame;
-	}
-	return RaMediaChangeAction::BeginSameGameChange;
 }
 
 } // namespace Xm8Ra

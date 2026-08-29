@@ -32,6 +32,7 @@
 
 #include "clidisk.h"
 #include "m3u.h"
+#include "menu_file_routing.h"
 
 #include <string>
 
@@ -1837,7 +1838,8 @@ void Menu::EnterJoyTest()
 //
 void Menu::Command(bool down, int id)
 {
-	if (id >= MENU_PLAYLIST_ENTRY_MIN && id <= MENU_PLAYLIST_ENTRY_MAX) {
+	if (IsPlaylistEntryCommand(list->GetID(), id, MENU_PLAYLIST,
+		MENU_PLAYLIST_ENTRY_MIN, MENU_PLAYLIST_ENTRY_MAX)) {
 		if (down == false) CmdPlaylist(id);
 		return;
 	}
@@ -2345,8 +2347,13 @@ void Menu::CmdDrive1(int id)
 	// eject
 	case MENU_DRIVE1_EJECT:
 		if (diskmgr[0]->IsOpen() == true) {
-			diskmgr[0]->Close();
-			app->LeaveMenu();
+			std::string error;
+			if (app->EjectDiskFromMenu(0, &error)) {
+				app->LeaveMenu();
+			}
+			else {
+				platform->MsgBox(NULL, error.c_str());
+			}
 		}
 		break;
 
@@ -2389,8 +2396,13 @@ void Menu::CmdDrive2(int id)
 	// eject
 	case MENU_DRIVE2_EJECT:
 		if (diskmgr[1]->IsOpen() == true) {
-			diskmgr[1]->Close();
-			app->LeaveMenu();
+			std::string error;
+			if (app->EjectDiskFromMenu(1, &error)) {
+				app->LeaveMenu();
+			}
+			else {
+				platform->MsgBox(NULL, error.c_str());
+			}
 		}
 		break;
 
@@ -3815,6 +3827,10 @@ void Menu::CmdFile(int id)
 				EnterDrive1(MENU_DRIVE1_BANK0);
 			}
 		}
+		else {
+			platform->MsgBox(NULL, error.empty() ?
+				"failed to open disk" : error.c_str());
+		}
 		break;
 	}
 
@@ -3823,9 +3839,12 @@ void Menu::CmdFile(int id)
 		std::string error;
 		// drive 2
 		ret = app->OpenDiskFromMenu({file_target, 1, 0}, &error);
-
 		if (ret == true) {
 			EnterDrive2(MENU_DRIVE2_BANK0);
+		}
+		else {
+			platform->MsgBox(NULL, error.empty() ?
+				"failed to open disk in Drive 2" : error.c_str());
 		}
 		break;
 	}

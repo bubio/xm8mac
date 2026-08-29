@@ -743,6 +743,72 @@ bool RaLibrary::FindMedia(const std::string& md5, MediaRecord *record,
 	return true;
 }
 
+bool RaLibrary::FindMediaByWorkingRelpath(const std::string& working_relpath,
+	MediaRecord *record, std::string *error)
+{
+	if (working_relpath.empty() || record == nullptr) {
+		if (error != nullptr) *error = "invalid working media lookup";
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT md5, game_id, working_relpath FROM media"
+		" WHERE working_relpath = ?", &stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_text(stmt, 1, working_relpath.c_str(), -1, SQLITE_TRANSIENT);
+	const int rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		if (error != nullptr) {
+			*error = rc == SQLITE_DONE ? "working media is not registered" :
+				sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		return false;
+	}
+	record->md5 = ColumnText(stmt, 0);
+	record->game_id = sqlite3_column_int64(stmt, 1);
+	record->working_relpath = ColumnText(stmt, 2);
+	record->inserted = false;
+	sqlite3_finalize(stmt);
+	return true;
+}
+
+bool RaLibrary::LoadMediaBankHash(const std::string& media_md5,
+	int bank_index, std::string *ra_hash, std::string *error)
+{
+	if (!IsMd5Hex(media_md5) || bank_index < 0 || ra_hash == nullptr) {
+		if (error != nullptr) *error = "invalid media bank hash lookup";
+		return false;
+	}
+
+	sqlite3_stmt *stmt = nullptr;
+	if (!Prepare(db_,
+		"SELECT ra_hash FROM media_banks WHERE media_md5 = ?"
+		" AND bank_index = ?", &stmt, error)) {
+		return false;
+	}
+	sqlite3_bind_text(stmt, 1, media_md5.c_str(), -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(stmt, 2, bank_index);
+	const int rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW || sqlite3_column_type(stmt, 0) == SQLITE_NULL) {
+		if (error != nullptr) {
+			*error = rc == SQLITE_ROW || rc == SQLITE_DONE ?
+				"RA media bank hash is not available" : sqlite3_errmsg(db_);
+		}
+		sqlite3_finalize(stmt);
+		return false;
+	}
+	*ra_hash = ColumnText(stmt, 0);
+	sqlite3_finalize(stmt);
+	if (!IsMd5Hex(*ra_hash)) {
+		if (error != nullptr) *error = "invalid stored RA media bank hash";
+		return false;
+	}
+	return true;
+}
+
 bool RaLibrary::LoadMediaHealthRecord(const std::string& md5,
 	MediaHealthRecord *record, std::string *error)
 {
