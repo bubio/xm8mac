@@ -26,18 +26,30 @@ int main()
 			context.login_state = login;
 			context.hardcore_selected = hardcore;
 			context.role = Xm8Ra::RaDiskRole::Auxiliary;
-			context.anchor_load_pending = true;
-			context.anchor_change_pending = true;
+			context.anchor_load_pending = false;
+			context.anchor_change_pending = false;
 			context.active_game_loaded = true;
 			context.active_library_game_id = 7;
 			context.target_library_game_id = 99;
 			context.active_hash = std::string(32, 'a');
 			context.target_hash = std::string(32, 'b');
-			check(Xm8Ra::ClassifyRaDiskAction(context) ==
-				Xm8Ra::RaDiskAction::MountAuxiliary,
-				"Drive 2 never enters RA validation");
+			context.network_available = true;
+			const Xm8Ra::RaDiskAction expected = hardcore ?
+				Xm8Ra::RaDiskAction::VerifyAuxiliary :
+				Xm8Ra::RaDiskAction::RejectDifferentGame;
+			check(Xm8Ra::ClassifyRaDiskAction(context) == expected,
+				"Drive 2 follows selected-mode validation policy");
 		}
 	}
+
+	Xm8Ra::RaDiskPolicyContext offline;
+	offline.ra_enabled = true;
+	offline.session_offline = true;
+	offline.hardcore_selected = true;
+	offline.role = Xm8Ra::RaDiskRole::Auxiliary;
+	check(Xm8Ra::ClassifyRaDiskAction(offline) ==
+		Xm8Ra::RaDiskAction::MountAuxiliary,
+		"offline Drive 2 mount never waits for RA validation");
 
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

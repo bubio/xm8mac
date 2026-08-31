@@ -13,6 +13,9 @@ hash、実績・LeaderboardのIDと結果、Hardcore状態、解除時刻／遅�
 session情報、XM8M User-Agentです。ROM・D88の内容、ローカルファイルpath、ログイン後の
 password、state内容は送信しません。RAサービスが受領した情報はRetroAchievementsが
 独立して管理するため、同サービスのprivacy文書とアカウント機能を確認してください。
+XM8Mはサーバーおよびデータウェアハウスを運営していないため、XM8Mについて開示すべき
+サーバー所在地はありません。RetroAchievementsのインフラは同サービスが運営しており、
+XM8M管理者はそのサーバー所在地を把握・管理せず、所在地について表明または保証しません。
 
 ## ローカルデータと保持期間
 

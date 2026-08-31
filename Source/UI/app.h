@@ -41,6 +41,7 @@
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_connectivity.h"
 #include "ra_library.h"
+#include "ra_media_change_policy.h"
 #include "ra_media_store.h"
 #include "ra_menu_status.h"
 #include "ra_overlay.h"
@@ -288,12 +289,12 @@ private:
 	bool ProbeDisk(const DiskSpec& spec, int *banks, std::string *error);
 										// validate disk specification
 	bool OpenDiskFromUser(const DiskSpec& spec, std::string *error,
-		bool open_pair = false);
+		bool open_pair = false, bool reset_after_commit = false);
 										// open one disk
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 	bool ResolveDiskForRaMode(const DiskSpec& spec, DiskSpec *resolved,
 		std::string *ra_hash_to_identify, int64_t *ra_game_to_identify,
-		bool *ra_media_change, std::string *error);
+		Xm8Ra::RaDiskAction *action, std::string *error);
 										// resolve disk to RA working copy
 	bool BeginRaMediaChange(const DiskSpec& target, const std::string& hash,
 		bool open_pair, int target_banks, std::string *error);
@@ -302,6 +303,11 @@ private:
 										// commit or roll back pending media change
 	void ClearRaMediaChangeState();
 										// clear App media change transaction
+	bool BeginRaAuxiliaryValidation(const DiskSpec& target,
+		const std::string& hash, bool persist_pair, std::string *error);
+										// verify Drive 2 without changing active RA media
+	void ProcessRaAuxiliaryValidation();
+	void ClearRaAuxiliaryValidationState();
 	void EnterRaOfflineSession(const std::string& message);
 										// stop RA evaluation for the current game
 	void SetRaMenuStatusAfterSessionStop();
@@ -414,6 +420,8 @@ private:
 										// submit RA overlay login form
 	void DrawRaOverlay();
 										// draw RA notice overlay
+	bool IsRaOverlayDrawingEnabled() const;
+										// keep rich-overlay drawing and input ownership aligned
 	bool GetRaStateContext(int slot, Xm8Ra::RaStateMode requested_mode,
 		Xm8Ra::RaStateExpectation *expected,
 		std::string *path, std::string *error) const;
@@ -654,6 +662,16 @@ private:
 										// rollback Drive 2 bank
 	int ra_media_change_target_banks;
 										// target D88 bank count
+	std::string ra_media_change_pair_hash;
+	bool ra_media_change_pair_verified;
+	bool ra_auxiliary_validation_pending;
+	DiskSpec ra_auxiliary_validation_target;
+	std::string ra_auxiliary_validation_hash;
+	bool ra_auxiliary_validation_old_open;
+	std::string ra_auxiliary_validation_old_path;
+	int ra_auxiliary_validation_old_bank;
+	bool ra_auxiliary_validation_persist_pair;
+	bool ra_reset_after_media_commit;
 #endif
 
 	// flags

@@ -27,4 +27,8 @@ Builder/Android/app/CMakeCache.txt
 Builder/Android/app/release
 
 Documents/Plan/
-Documents/RetroAchievements/
+Documents/RetroAchievements/*
+!Documents/RetroAchievements/README.md
+!Documents/RetroAchievements/05_実装工程とテスト計画.md
+!Documents/RetroAchievements/43_RAディスクマウント状態機械再設計計画.md
+!Documents/RetroAchievements/44_動作確認運用手順.md

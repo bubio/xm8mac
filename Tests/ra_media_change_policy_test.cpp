@@ -25,6 +25,9 @@ int main()
 	using Xm8Ra::RaDiskAction;
 	using Xm8Ra::RaDiskPolicyContext;
 	using Xm8Ra::RaDiskRole;
+	using Xm8Ra::RaDiskState;
+	using Xm8Ra::RaDiskTransitionInput;
+	using Xm8Ra::RaDiskTrigger;
 	using Xm8Ra::RaDrive2MountAction;
 	const std::string old_hash(32, 'a');
 	const std::string new_hash(32, 'b');
@@ -100,6 +103,81 @@ int main()
 		"raw D88 drop is one paired transaction even with one bank");
 	Check(!Xm8Ra::ShouldOpenDroppedD88AsPair(true),
 		"playlist drop retains its explicit drive assignments");
+
+	struct TransitionCase {
+		const char *name;
+		RaDiskState state;
+		RaDiskTrigger trigger;
+		bool same_container;
+		bool same_game;
+		bool same_hash;
+		bool verified;
+		bool network;
+		bool hardcore_selected;
+		RaDiskAction action;
+		RaDiskState next;
+	};
+	const TransitionCase transition_cases[] = {
+		{"normal ignores RA", RaDiskState::Normal,
+			RaDiskTrigger::MountAuxiliary, false, false, false, false, false,
+			false, RaDiskAction::MountNormal, RaDiskState::Normal},
+		{"offline mounts auxiliary", RaDiskState::Offline,
+			RaDiskTrigger::MountAuxiliary, false, false, false, false, false,
+			true, RaDiskAction::MountAuxiliary, RaDiskState::Offline},
+		{"ready starts anchor", RaDiskState::Ready,
+			RaDiskTrigger::MountAnchor, false, false, false, false, false,
+			true, RaDiskAction::BeginAnchorLaunch, RaDiskState::Starting},
+		{"starting queues hardcore auxiliary", RaDiskState::Starting,
+			RaDiskTrigger::MountAuxiliary, false, true, false, false, true,
+			true, RaDiskAction::VerifyAuxiliary, RaDiskState::Pending},
+		{"starting offline does not wait for auxiliary verification",
+			RaDiskState::Starting, RaDiskTrigger::MountAuxiliary, false, true,
+			false, false, false, true,
+			RaDiskAction::EnterOfflineAndMount, RaDiskState::Offline},
+		{"casual mounts same game auxiliary", RaDiskState::CasualActive,
+			RaDiskTrigger::MountAuxiliary, false, true, false, false, true,
+			false, RaDiskAction::MountAuxiliary, RaDiskState::CasualActive},
+		{"casual rejects other game auxiliary", RaDiskState::CasualActive,
+			RaDiskTrigger::MountAuxiliary, false, false, false, false, true,
+			false, RaDiskAction::RejectDifferentGame,
+			RaDiskState::CasualActive},
+		{"hardcore mounts verified auxiliary", RaDiskState::HardcoreActive,
+			RaDiskTrigger::MountAuxiliary, false, true, false, true, false,
+			true, RaDiskAction::MountAuxiliary, RaDiskState::HardcoreActive},
+		{"hardcore verifies unknown auxiliary", RaDiskState::HardcoreActive,
+			RaDiskTrigger::MountAuxiliary, false, true, false, false, true,
+			true, RaDiskAction::VerifyAuxiliary, RaDiskState::Pending},
+		{"hardcore offline fallback mounts", RaDiskState::HardcoreActive,
+			RaDiskTrigger::MountAuxiliary, false, true, false, false, false,
+			true, RaDiskAction::EnterOfflineAndMount, RaDiskState::Offline},
+		{"same container anchor remains active", RaDiskState::HardcoreActive,
+			RaDiskTrigger::ChangeAnchorBank, true, true, false, false, true,
+			true, RaDiskAction::MountNormal, RaDiskState::HardcoreActive},
+		{"same game anchor starts media change", RaDiskState::HardcoreActive,
+			RaDiskTrigger::MountAnchor, false, true, false, false, true,
+			true, RaDiskAction::ChangeAnchorMedia, RaDiskState::Pending},
+		{"different anchor restarts", RaDiskState::HardcoreActive,
+			RaDiskTrigger::MountAnchor, false, false, false, false, true,
+			true, RaDiskAction::RestartAnchorLaunch, RaDiskState::Starting},
+		{"pending rejects mutation", RaDiskState::Pending,
+			RaDiskTrigger::ChangeAuxiliaryBank, false, true, false, false, true,
+			true, RaDiskAction::RejectBusy, RaDiskState::Pending},
+	};
+	for (const TransitionCase& item : transition_cases) {
+		RaDiskTransitionInput input;
+		input.state = item.state;
+		input.trigger = item.trigger;
+		input.same_media_container = item.same_container;
+		input.same_local_game = item.same_game;
+		input.same_hash = item.same_hash;
+		input.auxiliary_hash_verified = item.verified;
+		input.network_available = item.network;
+		input.hardcore_selected = item.hardcore_selected;
+		const Xm8Ra::RaDiskTransition transition =
+			Xm8Ra::TransitionRaDisk(input);
+		Check(transition.action == item.action, item.name);
+		Check(transition.next_state == item.next, item.name);
+	}
 
 	if (failures != 0) {
 		return EXIT_FAILURE;

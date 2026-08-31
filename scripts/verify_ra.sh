@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+
+set -u
+
+usage() {
+    cat <<'USAGE'
+Usage: scripts/verify_ra.sh --scope SCOPE [options]
+
+Scopes:
+  ui       Menu, overlay, text conversion, and input-adjacent tests
+  disk     D88, Drive 1/2, Library launch, and media policy tests
+  state    Session, state, frame callback, and service tests
+  auth     Credentials, HTTP contract, user agent, and service tests
+  full     All RA ON and RA OFF tests
+
+Options:
+  --ra-build-dir DIR      RA ON build directory (default: build-ra)
+  --normal-build-dir DIR  RA OFF build directory (default: build-normal)
+  --jobs N                Parallel build jobs (default: 4)
+  --report FILE           Markdown result report path
+  --dry-run               Print the planned commands without running them
+  -h, --help              Show this help
+USAGE
+}
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+scope=""
+ra_build_dir="build-ra"
+normal_build_dir="build-normal"
+jobs="4"
+report_path=""
+dry_run=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --scope)
+            [ "$#" -ge 2 ] || { echo "Error: --scope requires a value" >&2; exit 2; }
+            scope="$2"
+            shift 2
+            ;;
+        --ra-build-dir)
+            [ "$#" -ge 2 ] || { echo "Error: --ra-build-dir requires a value" >&2; exit 2; }
+            ra_build_dir="$2"
+            shift 2
+            ;;
+        --normal-build-dir)
+            [ "$#" -ge 2 ] || { echo "Error: --normal-build-dir requires a value" >&2; exit 2; }
+            normal_build_dir="$2"
+            shift 2
+            ;;
+        --jobs)
+            [ "$#" -ge 2 ] || { echo "Error: --jobs requires a value" >&2; exit 2; }
+            jobs="$2"
+            shift 2
+            ;;
+        --report)
+            [ "$#" -ge 2 ] || { echo "Error: --report requires a value" >&2; exit 2; }
+            report_path="$2"
+            shift 2
+            ;;
+        --dry-run)
+            dry_run=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+case "$scope" in
+    ui|disk|state|auth|full) ;;
+    "")
+        echo "Error: --scope is required" >&2
+        usage >&2
+        exit 2
+        ;;
+    *)
+        echo "Error: unsupported scope: $scope" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
+
+case "$jobs" in
+    ''|*[!0-9]*)
+        echo "Error: --jobs must be a positive integer" >&2
+        exit 2
+        ;;
+    *)
+        if [ "$jobs" -eq 0 ]; then
+            echo "Error: --jobs must be a positive integer" >&2
+            exit 2
+        fi
+        ;;
+esac
+
+absolute_path() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *) printf '%s/%s\n' "$repo_root" "$1" ;;
+    esac
+}
+
+ra_build_dir="$(absolute_path "$ra_build_dir")"
+normal_build_dir="$(absolute_path "$normal_build_dir")"
+
+if [ -z "$report_path" ]; then
+    report_path="/tmp/xm8-validation-${scope}-$(date +%Y%m%d-%H%M%S).md"
+else
+    report_path="$(absolute_path "$report_path")"
+fi
+
+if [ "$ra_build_dir" = "$normal_build_dir" ]; then
+    echo "Error: RA ON and RA OFF build directories must be different" >&2
+    exit 2
+fi
+
+if [ "$dry_run" -eq 0 ]; then
+    command -v cmake >/dev/null 2>&1 || { echo "Error: cmake is not installed" >&2; exit 2; }
+    command -v ctest >/dev/null 2>&1 || { echo "Error: ctest is not installed" >&2; exit 2; }
+    command -v git >/dev/null 2>&1 || { echo "Error: git is not installed" >&2; exit 2; }
+fi
+
+ra_targets=(xm8)
+normal_targets=(xm8)
+test_regex=""
+normal_test_regex=""
+
+case "$scope" in
+    ui)
+        ra_targets+=(menu_file_routing_test ra_menu_status_test ra_overlay_test ra_text_converter_test)
+        normal_targets+=(menu_file_routing_test)
+        test_regex='^(menu_file_routing_test|ra_menu_status_test|ra_overlay_test|ra_text_converter_test|converter_mac_test)$'
+        normal_test_regex='^(menu_file_routing_test|converter_mac_test)$'
+        if [ "$(uname -s)" = "Darwin" ]; then
+            ra_targets+=(converter_mac_test)
+            normal_targets+=(converter_mac_test)
+        fi
+        ;;
+    disk)
+        ra_targets+=(clidisk_test menu_file_routing_test d88probe_test d88fixture_test d88write_test fileio_error_test
+            ra_media_probe_test ra_media_change_policy_test ra_library_launch_policy_test
+            ra_auxiliary_mount_commit_policy_test ra_multi_image_policy_test ra_media_eject_policy_test
+            ra_library_store_test ra_seed_library_fixture_test ra_working_media_identity_test)
+        normal_targets+=(clidisk_test menu_file_routing_test d88probe_test d88fixture_test d88write_test fileio_error_test)
+        test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test|ra_media_probe_test|ra_media_change_policy_test|ra_library_launch_policy_test|ra_auxiliary_mount_commit_policy_test|ra_multi_image_policy_test|ra_media_eject_policy_test|ra_library_store_test|ra_seed_library_fixture_test|ra_working_media_identity_test)$'
+        normal_test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test)$'
+        ;;
+    state)
+        ra_targets+=(host_frame_callback_test event_host_frame_integration_test fileio_error_test
+            ra_callback_lifetime_test ra_session_state_test ra_session_policy_test ra_state_store_test ra_service_test)
+        normal_targets+=(host_frame_callback_test event_host_frame_integration_test fileio_error_test)
+        test_regex='^(host_frame_callback_test|event_host_frame_integration_test|fileio_error_test|ra_callback_lifetime_test|ra_session_state_test|ra_session_policy_test|ra_state_store_test|ra_service_test)$'
+        normal_test_regex='^(host_frame_callback_test|event_host_frame_integration_test|fileio_error_test)$'
+        ;;
+    auth)
+        ra_targets+=(ra_dependency_test ra_user_agent_test ra_credentials_http_test ra_service_test)
+        test_regex='^(ra_dependency_test|ra_user_agent_test|ra_credentials_http_test|ra_service_test)$'
+        normal_test_regex='^$'
+        ;;
+    full)
+        ;;
+esac
+
+mkdir_report_parent() {
+    report_parent="$(dirname "$report_path")"
+    if [ "$dry_run" -eq 0 ] && [ ! -d "$report_parent" ]; then
+        mkdir -p "$report_parent"
+    fi
+}
+
+mkdir_report_parent
+
+if [ "$dry_run" -eq 0 ]; then
+    commit="$(git -C "$repo_root" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+    {
+        echo "# XM8 validation report"
+        echo
+        echo "- Scope: \`$scope\`"
+        echo "- Commit: \`$commit\`"
+        echo "- RA ON build: \`$ra_build_dir\`"
+        echo "- RA OFF build: \`$normal_build_dir\`"
+        echo "- Started: \`$(date '+%Y-%m-%d %H:%M:%S %Z')\`"
+        echo
+        echo "## Automated checks"
+        echo
+    } > "$report_path"
+fi
+
+failures=0
+
+print_command() {
+    printf '  '
+    printf '%q ' "$@"
+    printf '\n'
+}
+
+record_result() {
+    step_name="$1"
+    step_result="$2"
+    if [ "$dry_run" -eq 0 ]; then
+        printf -- '- %s: **%s**\n' "$step_name" "$step_result" >> "$report_path"
+    fi
+}
+
+run_step() {
+    step_name="$1"
+    shift
+    echo "==> $step_name"
+    print_command "$@"
+    if [ "$dry_run" -eq 1 ]; then
+        return 0
+    fi
+    if "$@"; then
+        record_result "$step_name" "PASS"
+        return 0
+    fi
+    record_result "$step_name" "FAIL"
+    failures=$((failures + 1))
+    return 1
+}
+
+cache_value() {
+    cache_file="$1"
+    cache_key="$2"
+    sed -n "s/^${cache_key}:[^=]*=//p" "$cache_file" | tail -n 1
+}
+
+configure_build() {
+    build_dir="$1"
+    ra_enabled="$2"
+    cache_file="$build_dir/CMakeCache.txt"
+
+    if [ -f "$cache_file" ]; then
+        actual_ra="$(cache_value "$cache_file" XM8_ENABLE_RETROACHIEVEMENTS)"
+        actual_testing="$(cache_value "$cache_file" BUILD_TESTING)"
+        if [ "$actual_ra" != "$ra_enabled" ] || [ "$actual_testing" != "ON" ]; then
+            echo "Error: incompatible existing build directory: $build_dir" >&2
+            echo "  expected RA=$ra_enabled BUILD_TESTING=ON" >&2
+            echo "  actual   RA=${actual_ra:-unknown} BUILD_TESTING=${actual_testing:-unknown}" >&2
+            failures=$((failures + 1))
+            record_result "Configure $(basename "$build_dir")" "FAIL"
+            return 1
+        fi
+        echo "==> Reuse configured $(basename "$build_dir") (RA=$ra_enabled, tests=ON)"
+        record_result "Configure $(basename "$build_dir")" "PASS (reused)"
+        return 0
+    fi
+
+    configure_args=(cmake -S "$repo_root" -B "$build_dir"
+        -DCMAKE_BUILD_TYPE=Release
+        -DXM8_ENABLE_RETROACHIEVEMENTS="$ra_enabled"
+        -DBUILD_TESTING=ON)
+
+    for sdl_source in "$repo_root/build-ra/_deps/sdl2-src" "$repo_root/build/_deps/sdl2-src"; do
+        if [ -f "$sdl_source/CMakeLists.txt" ]; then
+            configure_args+=("-DFETCHCONTENT_SOURCE_DIR_SDL2=$sdl_source")
+            break
+        fi
+    done
+
+    run_step "Configure $(basename "$build_dir")" "${configure_args[@]}"
+}
+
+build_scope() {
+    build_dir="$1"
+    build_name="$2"
+    shift 2
+    if [ "$scope" = "full" ]; then
+        run_step "Build $build_name" cmake --build "$build_dir" --parallel "$jobs"
+    else
+        run_step "Build $build_name" cmake --build "$build_dir" --parallel "$jobs" --target "$@"
+    fi
+}
+
+test_scope() {
+    build_dir="$1"
+    test_name="$2"
+    regex="$3"
+    if [ "$scope" = "full" ]; then
+        run_step "Test $test_name" ctest --test-dir "$build_dir" --output-on-failure
+    elif [ "$regex" = '^$' ]; then
+        echo "==> Test $test_name: no tests selected for scope $scope"
+        record_result "Test $test_name" "PASS (not applicable)"
+    else
+        run_step "Test $test_name" ctest --test-dir "$build_dir" -R "$regex" --output-on-failure
+    fi
+}
+
+cd "$repo_root" || exit 2
+
+ra_configured=0
+normal_configured=0
+if configure_build "$ra_build_dir" ON; then
+    ra_configured=1
+fi
+if configure_build "$normal_build_dir" OFF; then
+    normal_configured=1
+fi
+
+if [ "$ra_configured" -eq 1 ]; then
+    build_scope "$ra_build_dir" "RA ON" "${ra_targets[@]}"
+    test_scope "$ra_build_dir" "RA ON" "$test_regex"
+fi
+
+if [ "$normal_configured" -eq 1 ]; then
+    build_scope "$normal_build_dir" "RA OFF" "${normal_targets[@]}"
+    test_scope "$normal_build_dir" "RA OFF" "$normal_test_regex"
+fi
+
+run_step "Whitespace check" git -C "$repo_root" diff --check
+
+if [ "$dry_run" -eq 1 ]; then
+    echo
+    echo "Dry run complete. No build, test, or report was written."
+    exit 0
+fi
+
+{
+    echo
+    echo "## Result"
+    echo
+    if [ "$failures" -eq 0 ]; then
+        echo "**PASS**"
+    else
+        echo "**FAIL** ($failures failed step(s))"
+    fi
+    echo
+    echo "Completed: \`$(date '+%Y-%m-%d %H:%M:%S %Z')\`"
+    echo
+    echo "GUI and user-manual checks are not included. Continue with the cases selected from"
+    echo "\`Documents/RetroAchievements/44_動作確認運用手順.md\`."
+} >> "$report_path"
+
+echo
+echo "Report: $report_path"
+if [ "$failures" -ne 0 ]; then
+    exit 1
+fi

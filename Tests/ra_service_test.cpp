@@ -1099,6 +1099,63 @@ int main()
 			Xm8Ra::RaMediaChangeState::None,
 			"media change result can be consumed");
 
+		const std::string auxiliary_hash =
+			"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+		const size_t requests_before_verification =
+			fake_http_raw->SentRequests().size();
+		Check(service.BeginVerifyMediaHashForCurrentGame(auxiliary_hash, &error),
+			"begin auxiliary media verification");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":1234}"));
+		service.DrainHttp();
+		Check(service.MediaVerificationSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Succeeded,
+			"same-game auxiliary media is verified");
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_before_verification + 1,
+			"verification does not invoke media change");
+		Check(service.GameSessionSnapshot().hash == alternate_media_hash,
+			"verification preserves active media hash");
+		service.ClearMediaVerificationResult();
+		const size_t requests_after_verification =
+			fake_http_raw->SentRequests().size();
+		Check(service.BeginVerifyMediaHashForCurrentGame(auxiliary_hash, &error),
+			"repeat auxiliary verification uses cache");
+		Check(service.IsMediaHashVerifiedForCurrentGame(auxiliary_hash),
+			"verified media cache is exposed to the policy adapter");
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_after_verification,
+			"cached verification sends no request");
+		service.ClearMediaVerificationResult();
+
+		const std::string auxiliary_other_game_hash =
+			"ffffffffffffffffffffffffffffffff";
+		Check(service.BeginVerifyMediaHashForCurrentGame(
+			auxiliary_other_game_hash, &error),
+			"begin different-game auxiliary verification");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":9999}"));
+		service.DrainHttp();
+		Check(service.MediaVerificationSnapshot().failure ==
+			Xm8Ra::RaMediaVerificationFailure::DifferentGame,
+			"different-game failure is distinguished from connectivity");
+		Check(service.GameSessionSnapshot().hash == alternate_media_hash,
+			"rejected auxiliary media preserves active hash");
+		service.ClearMediaVerificationResult();
+
+		const std::string unavailable_auxiliary_hash =
+			"cccccccccccccccccccccccccccccccc";
+		Check(service.BeginVerifyMediaHashForCurrentGame(
+			unavailable_auxiliary_hash, &error),
+			"begin unavailable auxiliary verification");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":false,\"Error\":\"offline\"}"));
+		service.DrainHttp();
+		Check(service.MediaVerificationSnapshot().failure ==
+			Xm8Ra::RaMediaVerificationFailure::Unavailable,
+			"transport/API failure is classified as unavailable");
+		service.ClearMediaVerificationResult();
+
 		const std::string failed_media_hash =
 			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 		Check(service.BeginChangeMediaByHash(failed_media_hash, &error),

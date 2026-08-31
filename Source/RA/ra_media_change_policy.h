@@ -25,8 +25,130 @@ enum class RaDiskAction {
 	BeginAnchorLaunch,
 	ChangeAnchorMedia,
 	RestartAnchorLaunch,
+	VerifyAuxiliary,
+	EnterOfflineAndMount,
 	RejectBusy,
+	RejectDifferentGame,
 };
+
+// The complete disk-operation state seen by the pure transition policy.
+// App owns the side effects, but it must not invent a result outside this
+// table. Pending covers both anchor media change and auxiliary verification.
+enum class RaDiskState {
+	Normal,
+	Offline,
+	Ready,
+	Starting,
+	CasualActive,
+	HardcoreActive,
+	Pending,
+};
+
+enum class RaDiskTrigger {
+	MountAnchor,
+	MountAuxiliary,
+	ChangeAnchorBank,
+	ChangeAuxiliaryBank,
+	EjectAnchor,
+	EjectAuxiliary,
+};
+
+struct RaDiskTransitionInput {
+	RaDiskState state = RaDiskState::Normal;
+	RaDiskTrigger trigger = RaDiskTrigger::MountAnchor;
+	bool same_media_container = false;
+	bool same_local_game = false;
+	bool same_hash = false;
+	bool auxiliary_hash_verified = false;
+	bool network_available = false;
+	bool hardcore_selected = false;
+};
+
+struct RaDiskTransition {
+	RaDiskAction action = RaDiskAction::MountNormal;
+	RaDiskState next_state = RaDiskState::Normal;
+};
+
+inline bool IsAuxiliaryTrigger(RaDiskTrigger trigger)
+{
+	return trigger == RaDiskTrigger::MountAuxiliary ||
+		trigger == RaDiskTrigger::ChangeAuxiliaryBank ||
+		trigger == RaDiskTrigger::EjectAuxiliary;
+}
+
+inline bool IsEjectTrigger(RaDiskTrigger trigger)
+{
+	return trigger == RaDiskTrigger::EjectAnchor ||
+		trigger == RaDiskTrigger::EjectAuxiliary;
+}
+
+// Normative state/trigger transition table. Local D88 probing and RA-library
+// registration occur before this decision whenever RA is enabled. Normal is
+// deliberately independent of every RA field.
+inline RaDiskTransition TransitionRaDisk(const RaDiskTransitionInput& input)
+{
+	if (input.state == RaDiskState::Normal) {
+		return {RaDiskAction::MountNormal, RaDiskState::Normal};
+	}
+	if (input.state == RaDiskState::Offline) {
+		return {IsAuxiliaryTrigger(input.trigger) ?
+			RaDiskAction::MountAuxiliary : RaDiskAction::MountNormal,
+			RaDiskState::Offline};
+	}
+	if (input.state == RaDiskState::Pending) {
+		return {RaDiskAction::RejectBusy, RaDiskState::Pending};
+	}
+	if (input.state == RaDiskState::Starting) {
+		if (IsEjectTrigger(input.trigger)) {
+			return {RaDiskAction::RejectBusy, RaDiskState::Starting};
+		}
+		if (IsAuxiliaryTrigger(input.trigger) && input.same_local_game) {
+			if (!input.hardcore_selected || input.auxiliary_hash_verified) {
+				return {RaDiskAction::MountAuxiliary, RaDiskState::Starting};
+			}
+			return input.network_available ?
+				RaDiskTransition{RaDiskAction::VerifyAuxiliary,
+					RaDiskState::Pending} :
+				RaDiskTransition{RaDiskAction::EnterOfflineAndMount,
+					RaDiskState::Offline};
+		}
+		return {RaDiskAction::RejectBusy, RaDiskState::Starting};
+	}
+
+	if (IsEjectTrigger(input.trigger)) {
+		return {IsAuxiliaryTrigger(input.trigger) ?
+			RaDiskAction::MountAuxiliary : RaDiskAction::MountNormal,
+			input.state};
+	}
+
+	if (IsAuxiliaryTrigger(input.trigger)) {
+		if (input.state == RaDiskState::Ready) {
+			return {RaDiskAction::MountAuxiliary, RaDiskState::Ready};
+		}
+		if (input.state == RaDiskState::CasualActive) {
+			return {input.same_local_game ? RaDiskAction::MountAuxiliary :
+				RaDiskAction::RejectDifferentGame, input.state};
+		}
+		if (input.auxiliary_hash_verified) {
+			return {RaDiskAction::MountAuxiliary, input.state};
+		}
+		if (input.network_available) {
+			return {RaDiskAction::VerifyAuxiliary, RaDiskState::Pending};
+		}
+		return {RaDiskAction::EnterOfflineAndMount, RaDiskState::Offline};
+	}
+
+	if (input.state == RaDiskState::Ready) {
+		return {RaDiskAction::BeginAnchorLaunch, RaDiskState::Starting};
+	}
+	if (input.same_media_container || input.same_hash) {
+		return {RaDiskAction::MountNormal, input.state};
+	}
+	if (input.same_local_game) {
+		return {RaDiskAction::ChangeAnchorMedia, RaDiskState::Pending};
+	}
+	return {RaDiskAction::RestartAnchorLaunch, RaDiskState::Starting};
+}
 
 struct RaDiskPolicyContext {
 	bool ra_enabled = false;
@@ -36,6 +158,10 @@ struct RaDiskPolicyContext {
 	bool anchor_load_pending = false;
 	bool anchor_change_pending = false;
 	bool active_game_loaded = false;
+	bool session_offline = false;
+	bool auxiliary_validation_pending = false;
+	bool auxiliary_hash_verified = false;
+	bool network_available = false;
 	bool same_media_container = false;
 	int64_t active_library_game_id = 0;
 	std::string active_hash;
@@ -43,31 +169,34 @@ struct RaDiskPolicyContext {
 	std::string target_hash;
 };
 
-// Login and selected play mode affect how an anchor launch is carried out,
-// never whether an auxiliary disk may be mounted. Only Drive 1 owns the RA
-// active media identity.
+// Only Drive 1 owns the RA active-media identity. Drive 2 may require a
+// same-game hash verification in Hardcore, but that verification never calls
+// the active-media change operation.
 inline RaDiskAction ClassifyRaDiskAction(const RaDiskPolicyContext& context)
 {
-	if (!context.ra_enabled) return RaDiskAction::MountNormal;
-	if (context.role == RaDiskRole::Auxiliary) {
-		return RaDiskAction::MountAuxiliary;
+	RaDiskState state = RaDiskState::Normal;
+	if (context.ra_enabled) {
+		if (context.session_offline) state = RaDiskState::Offline;
+		else if (context.anchor_change_pending ||
+			context.auxiliary_validation_pending) state = RaDiskState::Pending;
+		else if (context.anchor_load_pending) state = RaDiskState::Starting;
+		else if (!context.active_game_loaded) state = RaDiskState::Ready;
+		else state = context.hardcore_selected ? RaDiskState::HardcoreActive :
+			RaDiskState::CasualActive;
 	}
-	if (context.anchor_load_pending || context.anchor_change_pending) {
-		return RaDiskAction::RejectBusy;
-	}
-	if (!context.active_game_loaded) {
-		return RaDiskAction::BeginAnchorLaunch;
-	}
-	if (context.same_media_container ||
-		(!context.active_hash.empty() &&
-		 context.active_hash == context.target_hash)) {
-		return RaDiskAction::MountNormal;
-	}
-	if (context.active_library_game_id > 0 &&
-		context.target_library_game_id == context.active_library_game_id) {
-		return RaDiskAction::ChangeAnchorMedia;
-	}
-	return RaDiskAction::RestartAnchorLaunch;
+	RaDiskTransitionInput input;
+	input.state = state;
+	input.trigger = context.role == RaDiskRole::Auxiliary ?
+		RaDiskTrigger::MountAuxiliary : RaDiskTrigger::MountAnchor;
+	input.same_media_container = context.same_media_container;
+	input.same_local_game = context.active_library_game_id > 0 &&
+		context.target_library_game_id == context.active_library_game_id;
+	input.same_hash = !context.active_hash.empty() &&
+		context.active_hash == context.target_hash;
+	input.auxiliary_hash_verified = context.auxiliary_hash_verified;
+	input.network_available = context.network_available;
+	input.hardcore_selected = context.hardcore_selected;
+	return TransitionRaDisk(input).action;
 }
 
 enum class RaDrive2MountAction {
