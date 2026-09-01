@@ -11,11 +11,10 @@ Scopes:
   disk     D88, Drive 1/2, Library launch, and media policy tests
   state    Session, state, frame callback, and service tests
   auth     Credentials, HTTP contract, user agent, and service tests
-  full     All RA ON and RA OFF tests
+  full     All tests in the RA-enabled build
 
 Options:
-  --ra-build-dir DIR      RA ON build directory (default: build-ra)
-  --normal-build-dir DIR  RA OFF build directory (default: build-normal)
+  --ra-build-dir DIR      RA-enabled build directory (default: build-ra)
   --jobs N                Parallel build jobs (default: 4)
   --report FILE           Markdown result report path
   --dry-run               Print the planned commands without running them
@@ -27,7 +26,6 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 scope=""
 ra_build_dir="build-ra"
-normal_build_dir="build-normal"
 jobs="4"
 report_path=""
 dry_run=0
@@ -42,11 +40,6 @@ while [ "$#" -gt 0 ]; do
         --ra-build-dir)
             [ "$#" -ge 2 ] || { echo "Error: --ra-build-dir requires a value" >&2; exit 2; }
             ra_build_dir="$2"
-            shift 2
-            ;;
-        --normal-build-dir)
-            [ "$#" -ge 2 ] || { echo "Error: --normal-build-dir requires a value" >&2; exit 2; }
-            normal_build_dir="$2"
             shift 2
             ;;
         --jobs)
@@ -110,17 +103,11 @@ absolute_path() {
 }
 
 ra_build_dir="$(absolute_path "$ra_build_dir")"
-normal_build_dir="$(absolute_path "$normal_build_dir")"
 
 if [ -z "$report_path" ]; then
     report_path="/tmp/xm8-validation-${scope}-$(date +%Y%m%d-%H%M%S).md"
 else
     report_path="$(absolute_path "$report_path")"
-fi
-
-if [ "$ra_build_dir" = "$normal_build_dir" ]; then
-    echo "Error: RA ON and RA OFF build directories must be different" >&2
-    exit 2
 fi
 
 if [ "$dry_run" -eq 0 ]; then
@@ -130,19 +117,14 @@ if [ "$dry_run" -eq 0 ]; then
 fi
 
 ra_targets=(xm8)
-normal_targets=(xm8)
 test_regex=""
-normal_test_regex=""
 
 case "$scope" in
     ui)
         ra_targets+=(menu_file_routing_test ra_menu_status_test ra_overlay_test ra_text_converter_test)
-        normal_targets+=(menu_file_routing_test)
         test_regex='^(menu_file_routing_test|ra_menu_status_test|ra_overlay_test|ra_text_converter_test|converter_mac_test)$'
-        normal_test_regex='^(menu_file_routing_test|converter_mac_test)$'
         if [ "$(uname -s)" = "Darwin" ]; then
             ra_targets+=(converter_mac_test)
-            normal_targets+=(converter_mac_test)
         fi
         ;;
     disk)
@@ -150,21 +132,16 @@ case "$scope" in
             ra_media_probe_test ra_media_change_policy_test ra_library_launch_policy_test
             ra_auxiliary_mount_commit_policy_test ra_multi_image_policy_test ra_media_eject_policy_test
             ra_library_store_test ra_seed_library_fixture_test ra_working_media_identity_test)
-        normal_targets+=(clidisk_test menu_file_routing_test d88probe_test d88fixture_test d88write_test fileio_error_test)
         test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test|ra_media_probe_test|ra_media_change_policy_test|ra_library_launch_policy_test|ra_auxiliary_mount_commit_policy_test|ra_multi_image_policy_test|ra_media_eject_policy_test|ra_library_store_test|ra_seed_library_fixture_test|ra_working_media_identity_test)$'
-        normal_test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test)$'
         ;;
     state)
         ra_targets+=(host_frame_callback_test event_host_frame_integration_test fileio_error_test
             ra_callback_lifetime_test ra_session_state_test ra_session_policy_test ra_state_store_test ra_service_test)
-        normal_targets+=(host_frame_callback_test event_host_frame_integration_test fileio_error_test)
         test_regex='^(host_frame_callback_test|event_host_frame_integration_test|fileio_error_test|ra_callback_lifetime_test|ra_session_state_test|ra_session_policy_test|ra_state_store_test|ra_service_test)$'
-        normal_test_regex='^(host_frame_callback_test|event_host_frame_integration_test|fileio_error_test)$'
         ;;
     auth)
         ra_targets+=(ra_dependency_test ra_user_agent_test ra_credentials_http_test ra_service_test)
         test_regex='^(ra_dependency_test|ra_user_agent_test|ra_credentials_http_test|ra_service_test)$'
-        normal_test_regex='^$'
         ;;
     full)
         ;;
@@ -186,8 +163,7 @@ if [ "$dry_run" -eq 0 ]; then
         echo
         echo "- Scope: \`$scope\`"
         echo "- Commit: \`$commit\`"
-        echo "- RA ON build: \`$ra_build_dir\`"
-        echo "- RA OFF build: \`$normal_build_dir\`"
+        echo "- RA-enabled build: \`$ra_build_dir\`"
         echo "- Started: \`$(date '+%Y-%m-%d %H:%M:%S %Z')\`"
         echo
         echo "## Automated checks"
@@ -236,28 +212,27 @@ cache_value() {
 
 configure_build() {
     build_dir="$1"
-    ra_enabled="$2"
     cache_file="$build_dir/CMakeCache.txt"
 
     if [ -f "$cache_file" ]; then
         actual_ra="$(cache_value "$cache_file" XM8_ENABLE_RETROACHIEVEMENTS)"
         actual_testing="$(cache_value "$cache_file" BUILD_TESTING)"
-        if [ "$actual_ra" != "$ra_enabled" ] || [ "$actual_testing" != "ON" ]; then
+        if [ "$actual_ra" != "ON" ] || [ "$actual_testing" != "ON" ]; then
             echo "Error: incompatible existing build directory: $build_dir" >&2
-            echo "  expected RA=$ra_enabled BUILD_TESTING=ON" >&2
+            echo "  expected RA=ON BUILD_TESTING=ON" >&2
             echo "  actual   RA=${actual_ra:-unknown} BUILD_TESTING=${actual_testing:-unknown}" >&2
             failures=$((failures + 1))
             record_result "Configure $(basename "$build_dir")" "FAIL"
             return 1
         fi
-        echo "==> Reuse configured $(basename "$build_dir") (RA=$ra_enabled, tests=ON)"
+        echo "==> Reuse configured $(basename "$build_dir") (RA=ON, tests=ON)"
         record_result "Configure $(basename "$build_dir")" "PASS (reused)"
         return 0
     fi
 
     configure_args=(cmake -S "$repo_root" -B "$build_dir"
         -DCMAKE_BUILD_TYPE=Release
-        -DXM8_ENABLE_RETROACHIEVEMENTS="$ra_enabled"
+        -DXM8_ENABLE_RETROACHIEVEMENTS=ON
         -DBUILD_TESTING=ON)
 
     for sdl_source in "$repo_root/build-ra/_deps/sdl2-src" "$repo_root/build/_deps/sdl2-src"; do
@@ -298,22 +273,13 @@ test_scope() {
 cd "$repo_root" || exit 2
 
 ra_configured=0
-normal_configured=0
-if configure_build "$ra_build_dir" ON; then
+if configure_build "$ra_build_dir"; then
     ra_configured=1
-fi
-if configure_build "$normal_build_dir" OFF; then
-    normal_configured=1
 fi
 
 if [ "$ra_configured" -eq 1 ]; then
-    build_scope "$ra_build_dir" "RA ON" "${ra_targets[@]}"
-    test_scope "$ra_build_dir" "RA ON" "$test_regex"
-fi
-
-if [ "$normal_configured" -eq 1 ]; then
-    build_scope "$normal_build_dir" "RA OFF" "${normal_targets[@]}"
-    test_scope "$normal_build_dir" "RA OFF" "$normal_test_regex"
+    build_scope "$ra_build_dir" "RA-enabled" "${ra_targets[@]}"
+    test_scope "$ra_build_dir" "RA-enabled" "$test_regex"
 fi
 
 run_step "Whitespace check" git -C "$repo_root" diff --check

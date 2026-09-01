@@ -1735,7 +1735,6 @@ void App::ProcessRaMediaChange()
 		return;
 	}
 	ProcessRaMediaChange();
-	ProcessRaAuxiliaryValidation();
 }
 
 void App::ClearRaMediaChangeState()
@@ -2510,6 +2509,10 @@ void App::ProcessRaService(bool emulation_idle)
 		return;
 	}
 	ProcessRaMediaChange();
+	// Drive 2 is intentionally left unmounted while Hardcore verifies its
+	// hash. Advance that transaction on every service tick so a successful
+	// verification can commit the deferred mount.
+	ProcessRaAuxiliaryValidation();
 	const Xm8Ra::RaLoginSnapshot login_after_drain =
 		ra_service->LoginSnapshot();
 	const Xm8Ra::RaGameSessionSnapshot game_after_drain =
