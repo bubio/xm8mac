@@ -511,6 +511,13 @@ if(BUILD_TESTING)
     )
     target_include_directories(ra_disk_transaction_test PRIVATE Source/RA)
     add_test(NAME ra_disk_transaction_test COMMAND ra_disk_transaction_test)
+
+    add_executable(ra_media_request_integration_test
+      Tests/ra_media_request_integration_test.cpp
+    )
+    target_include_directories(ra_media_request_integration_test PRIVATE Source/RA)
+    add_test(NAME ra_media_request_integration_test
+      COMMAND ra_media_request_integration_test)
     add_test(NAME verify_ra_script_test
       COMMAND bash ${CMAKE_SOURCE_DIR}/Tests/verify_ra_script_test.sh
         ${CMAKE_SOURCE_DIR}/scripts/verify_ra.sh)

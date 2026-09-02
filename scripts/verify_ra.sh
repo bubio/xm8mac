@@ -156,10 +156,11 @@ case "$scope" in
     disk)
         ra_targets+=(clidisk_test menu_file_routing_test d88probe_test d88fixture_test d88write_test fileio_error_test
             ra_media_probe_test ra_media_change_policy_test ra_disk_transaction_test
+	    ra_media_request_integration_test
             ra_library_launch_policy_test
             ra_auxiliary_mount_commit_policy_test ra_multi_image_policy_test ra_media_eject_policy_test
             ra_library_store_test ra_seed_library_fixture_test ra_working_media_identity_test)
-        test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test|ra_media_probe_test|ra_media_change_policy_test|ra_disk_transaction_test|verify_ra_script_test|ra_library_launch_policy_test|ra_auxiliary_mount_commit_policy_test|ra_multi_image_policy_test|ra_media_eject_policy_test|ra_library_store_test|ra_seed_library_fixture_test|ra_working_media_identity_test)$'
+        test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test|ra_media_probe_test|ra_media_change_policy_test|ra_disk_transaction_test|ra_media_request_integration_test|verify_ra_script_test|ra_library_launch_policy_test|ra_auxiliary_mount_commit_policy_test|ra_multi_image_policy_test|ra_media_eject_policy_test|ra_library_store_test|ra_seed_library_fixture_test|ra_working_media_identity_test)$'
         ;;
     state)
         ra_targets+=(host_frame_callback_test event_host_frame_integration_test fileio_error_test
@@ -333,7 +334,7 @@ fi
     echo "Completed: \`$(date '+%Y-%m-%d %H:%M:%S %Z')\`"
     echo
     echo "GUI and user-manual checks are not included. Continue with the cases selected from"
-    echo "\`Documents/RetroAchievements/44_動作確認運用手順.md\`."
+    echo "\`Documents/RetroAchievements/46_RA統一媒体動作確認運用手順.md\`."
 } >> "$report_path"
 
 echo

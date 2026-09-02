@@ -1,31 +1,20 @@
 #ifndef XM8_RA_DISK_TRANSACTION_H
 #define XM8_RA_DISK_TRANSACTION_H
 
+#include <cstddef>
+
 namespace Xm8Ra {
 
-enum class RaDiskTransactionKind {
-	None,
-	Anchor,
-	Auxiliary,
-};
-
+enum class RaDiskTransactionKind { None, Anchor, Auxiliary };
 enum class RaDiskTransactionOperation {
-	None,
-	AnchorMediaChange,
-	AuxiliaryMount,
-	PairedOpen,
-	LibraryLaunch,
+	None, AnchorMediaChange, AuxiliaryMount, PairedOpen, LibraryLaunch,
 };
-
-enum class RaDiskProfileUpdate {
-	None,
-	Auxiliary,
-	Pair,
-};
+enum class RaDiskProfileUpdate { None, Auxiliary, Pair };
 
 enum class RaDiskTransactionPhase {
 	Idle,
-	VerifyingAuxiliary,
+	VerifyingDrive2,
+	VerifyingAuxiliary = VerifyingDrive2,
 	ChangingActiveMedia,
 	CommittingVm,
 	RollingBack,
@@ -33,9 +22,8 @@ enum class RaDiskTransactionPhase {
 	Failed,
 };
 
-// Pure transaction lifecycle shared by the UI coordinator and its tests.
-// Reset ownership is deliberately part of the transaction so a terminal path
-// cannot leave a reset request behind for a later drag-and-drop operation.
+// One request owns every asynchronous RA operation and the eventual two-drive
+// VM commit. No caller is permitted to start a second request while Active().
 struct RaDiskTransactionState {
 	RaDiskTransactionKind kind = RaDiskTransactionKind::None;
 	RaDiskTransactionOperation operation = RaDiskTransactionOperation::None;
@@ -43,78 +31,46 @@ struct RaDiskTransactionState {
 	bool reset_requested = false;
 	bool launch_completion_required = false;
 
-	bool Active() const
-	{
-		return kind != RaDiskTransactionKind::None;
-	}
-
-	bool IsAnchor() const
-	{
-		return kind == RaDiskTransactionKind::Anchor;
-	}
-
-	bool IsAuxiliary() const
-	{
-		return kind == RaDiskTransactionKind::Auxiliary;
-	}
-
-	bool Pending() const
-	{
-		return Active() && phase != RaDiskTransactionPhase::Committed &&
-			phase != RaDiskTransactionPhase::Failed;
-	}
-
-	bool OwnsReset() const
-	{
-		return Pending() && reset_requested;
-	}
-
+	bool Active() const { return phase != RaDiskTransactionPhase::Idle; }
+	bool IsAnchor() const { return kind == RaDiskTransactionKind::Anchor; }
+	bool IsAuxiliary() const { return kind == RaDiskTransactionKind::Auxiliary; }
+	bool Pending() const { return Active(); }
+	bool OwnsReset() const { return Active() && reset_requested; }
 	bool CanCompleteLaunch() const
 	{
-		return launch_completion_required &&
-			phase == RaDiskTransactionPhase::Committed;
+		return launch_completion_required && phase == RaDiskTransactionPhase::Committed;
 	}
-
-	void Begin(RaDiskTransactionKind new_kind,
-		RaDiskTransactionPhase new_phase, bool request_reset,
-		bool completes_launch,
-		RaDiskTransactionOperation new_operation =
-			RaDiskTransactionOperation::None)
+	void Begin(RaDiskTransactionPhase next, bool reset, bool completes_launch)
+	{
+		phase = next;
+		reset_requested = reset;
+		launch_completion_required = completes_launch;
+	}
+	void Begin(RaDiskTransactionKind new_kind, RaDiskTransactionPhase next,
+		bool reset, bool completes_launch,
+		RaDiskTransactionOperation new_operation = RaDiskTransactionOperation::None)
 	{
 		kind = new_kind;
 		operation = new_operation;
-		phase = new_phase;
-		reset_requested = request_reset;
-		launch_completion_required = completes_launch;
+		Begin(next, reset, completes_launch);
 	}
-
-	void Commit()
-	{
-		phase = RaDiskTransactionPhase::Committed;
-		reset_requested = false;
-	}
-
-	void Fail()
-	{
-		phase = RaDiskTransactionPhase::Failed;
-		reset_requested = false;
-	}
-
-	void Clear()
-	{
-		*this = RaDiskTransactionState();
-	}
+	void Clear() { *this = RaDiskTransactionState(); }
+	void Commit() { phase = RaDiskTransactionPhase::Committed; reset_requested = false; }
+	void Fail() { phase = RaDiskTransactionPhase::Failed; reset_requested = false; }
 };
 
-// Library launches must only defer a paired Drive 2 for an active RA session.
-// Hardcore is a persisted preference, so it can remain selected while RA mode
-// itself is OFF. In that case no RA service tick will advance a transaction.
+inline bool CanBeginAuxiliaryVerification(bool completes_library_launch,
+	bool anchor_game_loaded)
+{
+	return !completes_library_launch || anchor_game_loaded;
+}
+
 inline bool ShouldDeferLibraryDrive2ForRa(bool ra_mode_enabled,
-	bool drive2_assigned, bool hardcore_selected, bool service_available,
+	bool drive2_assigned, bool /*hardcore_selected*/, bool service_available,
 	bool logged_in, bool reachable)
 {
-	return ra_mode_enabled && drive2_assigned && hardcore_selected &&
-		service_available && logged_in && reachable;
+	return ra_mode_enabled && drive2_assigned && service_available &&
+		logged_in && reachable;
 }
 
 inline bool ShouldForceLibraryOfflineForRa(bool ra_mode_enabled,
@@ -123,13 +79,29 @@ inline bool ShouldForceLibraryOfflineForRa(bool ra_mode_enabled,
 	return ra_mode_enabled && service_available && logged_in && !reachable;
 }
 
-// A library launch first loads its Drive 1 anchor through rc_client. That
-// load advances the HTTP bridge generation, so its deferred Drive 2 hash
-// request must not start until the anchor game is loaded.
-inline bool CanBeginAuxiliaryVerification(bool completes_library_launch,
-	bool anchor_game_loaded)
+inline bool CanApplySequentialRaMediaBatch(bool /*online_session*/,
+	size_t /*target_count*/, bool /*closes_drive2*/)
 {
-	return !completes_library_launch || anchor_game_loaded;
+	// A normalized two-drive request is transactional; reject no valid input
+	// merely because it changes both drives.
+	return true;
+}
+
+inline bool ShouldResetDroppedVmWithoutRestartingRaSession(
+	bool session_offline, bool anchor_launch_pending)
+{
+	return session_offline || anchor_launch_pending;
+}
+
+struct RaSynchronousAnchorCommitPlan {
+	bool reset_vm_now = false;
+	bool begin_session = false;
+};
+
+inline RaSynchronousAnchorCommitPlan PlanSynchronousAnchorCommit(
+	bool starts_new_anchor, bool caller_will_reset)
+{
+	return {starts_new_anchor && !caller_will_reset, starts_new_anchor};
 }
 
 } // namespace Xm8Ra
