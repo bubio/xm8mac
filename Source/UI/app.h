@@ -310,6 +310,9 @@ private:
 		bool persist_pair, bool reset_after_commit, bool completes_launch,
 		std::string *error);
 										// verify Drive 2 without changing active RA media
+	bool AttachDrive2ToRaAnchorLaunch(const DiskSpec& anchor,
+		const DiskSpec& auxiliary, bool reset_after_commit, std::string *error);
+										// complete one normalized two-drive request
 	void ProcessRaAuxiliaryValidation();
 	void ClearRaAuxiliaryValidationState();
 	void EnterRaOfflineSession(const std::string& message);

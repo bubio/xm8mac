@@ -65,6 +65,14 @@ inline bool CanBeginAuxiliaryVerification(bool completes_library_launch,
 	return !completes_library_launch || anchor_game_loaded;
 }
 
+// A two-drive request owns its Drive 2 validation while its new Drive 1
+// anchor is loading. This is not a competing user operation.
+inline bool CanAttachDrive2ToAnchorLaunch(bool drive2_assigned,
+	bool anchor_launch_pending, bool transaction_active)
+{
+	return drive2_assigned && anchor_launch_pending && !transaction_active;
+}
+
 inline bool ShouldDeferLibraryDrive2ForRa(bool ra_mode_enabled,
 	bool drive2_assigned, bool /*hardcore_selected*/, bool service_available,
 	bool logged_in, bool reachable)
