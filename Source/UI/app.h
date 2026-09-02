@@ -42,6 +42,7 @@
 #include "ra_connectivity.h"
 #include "ra_library.h"
 #include "ra_media_change_policy.h"
+#include "ra_disk_transaction.h"
 #include "ra_media_store.h"
 #include "ra_menu_status.h"
 #include "ra_overlay.h"
@@ -297,14 +298,17 @@ private:
 		Xm8Ra::RaDiskAction *action, std::string *error);
 										// resolve disk to RA working copy
 	bool BeginRaMediaChange(const DiskSpec& target, const std::string& hash,
-		bool open_pair, int target_banks, std::string *error);
+		bool open_pair, int target_banks, bool reset_after_commit,
+		std::string *error);
 										// begin same-game media change
 	void ProcessRaMediaChange();
 										// commit or roll back pending media change
 	void ClearRaMediaChangeState();
 										// clear App media change transaction
 	bool BeginRaAuxiliaryValidation(const DiskSpec& target,
-		const std::string& hash, bool persist_pair, std::string *error);
+		const std::string& hash, int64_t expected_ra_game_id,
+		bool persist_pair, bool reset_after_commit, bool completes_launch,
+		std::string *error);
 										// verify Drive 2 without changing active RA media
 	void ProcessRaAuxiliaryValidation();
 	void ClearRaAuxiliaryValidationState();
@@ -634,44 +638,33 @@ private:
 										// library game owning active RA media
 	std::string ra_loaded_game_hash;
 										// media hash passed to RA load
-	bool ra_media_change_pending;
-										// App is coordinating RA and VM media change
-	bool ra_media_change_rollback;
-										// pending RA call restores previous hash
-	bool ra_media_change_restore_failed;
-										// previous VM disk could not be restored
-	DiskSpec ra_media_change_target;
-										// validated target working copy
-	std::string ra_media_change_new_hash;
-										// requested target RA hash
-	std::string ra_media_change_old_hash;
-										// rollback RA hash
-	bool ra_media_change_old_target_open;
-										// rollback target drive open state
-	std::string ra_media_change_old_path;
-										// rollback target drive path
-	int ra_media_change_old_bank;
-										// rollback target drive bank
-	bool ra_media_change_open_pair;
-										// change Drive 1 and Drive 2 atomically
-	bool ra_media_change_old_drive2_open;
-										// rollback Drive 2 open state
-	std::string ra_media_change_old_drive2_path;
-										// rollback Drive 2 path
-	int ra_media_change_old_drive2_bank;
-										// rollback Drive 2 bank
-	int ra_media_change_target_banks;
-										// target D88 bank count
-	std::string ra_media_change_pair_hash;
-	bool ra_media_change_pair_verified;
-	bool ra_auxiliary_validation_pending;
-	DiskSpec ra_auxiliary_validation_target;
-	std::string ra_auxiliary_validation_hash;
-	bool ra_auxiliary_validation_old_open;
-	std::string ra_auxiliary_validation_old_path;
-	int ra_auxiliary_validation_old_bank;
-	bool ra_auxiliary_validation_persist_pair;
-	bool ra_reset_after_media_commit;
+	struct RaDiskTransaction {
+		Xm8Ra::RaDiskTransactionState state;
+		DiskSpec target = {"", 0, 0};
+		DiskSpec anchor_target = {"", 0, 0};
+		bool has_anchor_target = false;
+		std::string new_hash;
+		std::string old_hash;
+		std::string auxiliary_hash;
+		int64_t expected_ra_game_id = 0;
+		bool old_target_open = false;
+		std::string old_target_path;
+		int old_target_bank = 0;
+		bool open_pair = false;
+		bool old_drive2_open = false;
+		std::string old_drive2_path;
+		int old_drive2_bank = 0;
+		bool old_anchor_open = false;
+		std::string old_anchor_path;
+		int old_anchor_bank = 0;
+		int target_banks = 0;
+		bool auxiliary_verified = false;
+		Xm8Ra::RaDiskProfileUpdate profile_update =
+			Xm8Ra::RaDiskProfileUpdate::None;
+		bool restore_failed = false;
+	};
+	RaDiskTransaction ra_disk_transaction;
+										// single RA disk operation and reset owner
 #endif
 
 	// flags

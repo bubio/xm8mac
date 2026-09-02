@@ -17,6 +17,7 @@ Options:
   --ra-build-dir DIR      RA-enabled build directory (default: build-ra)
   --jobs N                Parallel build jobs (default: 4)
   --report FILE           Markdown result report path
+  --base-ref REF          Diff base (default: origin/main, main, then HEAD)
   --dry-run               Print the planned commands without running them
   -h, --help              Show this help
 USAGE
@@ -28,6 +29,7 @@ scope=""
 ra_build_dir="build-ra"
 jobs="4"
 report_path=""
+base_ref=""
 dry_run=0
 
 while [ "$#" -gt 0 ]; do
@@ -50,6 +52,11 @@ while [ "$#" -gt 0 ]; do
         --report)
             [ "$#" -ge 2 ] || { echo "Error: --report requires a value" >&2; exit 2; }
             report_path="$2"
+            shift 2
+            ;;
+        --base-ref)
+            [ "$#" -ge 2 ] || { echo "Error: --base-ref requires a value" >&2; exit 2; }
+            base_ref="$2"
             shift 2
             ;;
         --dry-run)
@@ -104,6 +111,25 @@ absolute_path() {
 
 ra_build_dir="$(absolute_path "$ra_build_dir")"
 
+if [ -z "$base_ref" ]; then
+    if git -C "$repo_root" rev-parse --verify --quiet refs/remotes/origin/main >/dev/null; then
+        base_ref="origin/main"
+    elif git -C "$repo_root" rev-parse --verify --quiet refs/heads/main >/dev/null; then
+        base_ref="main"
+    else
+        base_ref="HEAD"
+    fi
+fi
+if ! git -C "$repo_root" rev-parse --verify --quiet "${base_ref}^{commit}" >/dev/null; then
+    echo "Error: base ref does not resolve to a commit: $base_ref" >&2
+    exit 2
+fi
+merge_base="$(git -C "$repo_root" merge-base HEAD "$base_ref" 2>/dev/null || true)"
+if [ -z "$merge_base" ]; then
+    echo "Error: cannot determine merge-base for $base_ref" >&2
+    exit 2
+fi
+
 if [ -z "$report_path" ]; then
     report_path="/tmp/xm8-validation-${scope}-$(date +%Y%m%d-%H%M%S).md"
 else
@@ -129,10 +155,11 @@ case "$scope" in
         ;;
     disk)
         ra_targets+=(clidisk_test menu_file_routing_test d88probe_test d88fixture_test d88write_test fileio_error_test
-            ra_media_probe_test ra_media_change_policy_test ra_library_launch_policy_test
+            ra_media_probe_test ra_media_change_policy_test ra_disk_transaction_test
+            ra_library_launch_policy_test
             ra_auxiliary_mount_commit_policy_test ra_multi_image_policy_test ra_media_eject_policy_test
             ra_library_store_test ra_seed_library_fixture_test ra_working_media_identity_test)
-        test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test|ra_media_probe_test|ra_media_change_policy_test|ra_library_launch_policy_test|ra_auxiliary_mount_commit_policy_test|ra_multi_image_policy_test|ra_media_eject_policy_test|ra_library_store_test|ra_seed_library_fixture_test|ra_working_media_identity_test)$'
+        test_regex='^(clidisk_test|menu_file_routing_test|d88probe_test|d88fixture_test|d88write_test|fileio_error_test|ra_media_probe_test|ra_media_change_policy_test|ra_disk_transaction_test|verify_ra_script_test|ra_library_launch_policy_test|ra_auxiliary_mount_commit_policy_test|ra_multi_image_policy_test|ra_media_eject_policy_test|ra_library_store_test|ra_seed_library_fixture_test|ra_working_media_identity_test)$'
         ;;
     state)
         ra_targets+=(host_frame_callback_test event_host_frame_integration_test fileio_error_test
@@ -163,6 +190,8 @@ if [ "$dry_run" -eq 0 ]; then
         echo
         echo "- Scope: \`$scope\`"
         echo "- Commit: \`$commit\`"
+        echo "- Base ref: \`$base_ref\`"
+        echo "- Merge-base: \`$merge_base\`"
         echo "- RA-enabled build: \`$ra_build_dir\`"
         echo "- Started: \`$(date '+%Y-%m-%d %H:%M:%S %Z')\`"
         echo
@@ -282,7 +311,8 @@ if [ "$ra_configured" -eq 1 ]; then
     test_scope "$ra_build_dir" "RA-enabled" "$test_regex"
 fi
 
-run_step "Whitespace check" git -C "$repo_root" diff --check
+run_step "Branch whitespace check" git -C "$repo_root" \
+    -c core.whitespace=cr-at-eol diff --check "$merge_base" --
 
 if [ "$dry_run" -eq 1 ]; then
     echo

@@ -847,9 +847,20 @@ void RaService::ClearMediaChangeResult()
 bool RaService::BeginVerifyMediaHashForCurrentGame(const std::string& hash,
 	std::string *error)
 {
-	if (!IsReady() || login_.state != RaLoginState::LoggedIn ||
-		game_session_.state != RaGameSessionState::Loaded) {
+	if (game_session_.state != RaGameSessionState::Loaded) {
 		if (error != nullptr) *error = "RA game is required before verifying media";
+		return false;
+	}
+	return BeginVerifyMediaHashForGame(hash, game_session_.game_id, error);
+}
+
+bool RaService::BeginVerifyMediaHashForGame(const std::string& hash,
+	uint32_t expected_game_id, std::string *error)
+{
+	if (!IsReady() || login_.state != RaLoginState::LoggedIn ||
+		expected_game_id == 0) {
+		if (error != nullptr) *error =
+			"RA game ID is required before verifying media";
 		return false;
 	}
 	if (!IsMd5Hex(hash)) {
@@ -864,11 +875,13 @@ bool RaService::BeginVerifyMediaHashForCurrentGame(const std::string& hash,
 	}
 
 	media_verification_ = RaMediaVerificationSnapshot();
+	media_verification_expected_game_id_ = 0;
 	media_verification_.state = RaMediaChangeState::Pending;
 	media_verification_.hash = hash;
+	media_verification_expected_game_id_ = expected_game_id;
 	const auto verified = verified_media_game_ids_.find(hash);
 	if (verified != verified_media_game_ids_.end()) {
-		if (verified->second == game_session_.game_id) {
+		if (verified->second == expected_game_id) {
 			media_verification_.state = RaMediaChangeState::Succeeded;
 			if (error != nullptr) error->clear();
 			return true;
@@ -915,16 +928,24 @@ void RaService::ClearMediaVerificationResult()
 {
 	if (media_verification_.state != RaMediaChangeState::Pending) {
 		media_verification_ = RaMediaVerificationSnapshot();
+		media_verification_expected_game_id_ = 0;
 	}
 }
 
 bool RaService::IsMediaHashVerifiedForCurrentGame(
 	const std::string& hash) const
 {
-	const auto verified = verified_media_game_ids_.find(hash);
 	return game_session_.state == RaGameSessionState::Loaded &&
+		IsMediaHashVerifiedForGame(hash, game_session_.game_id);
+}
+
+bool RaService::IsMediaHashVerifiedForGame(const std::string& hash,
+	uint32_t expected_game_id) const
+{
+	const auto verified = verified_media_game_ids_.find(hash);
+	return expected_game_id > 0 &&
 		verified != verified_media_game_ids_.end() &&
-		verified->second == game_session_.game_id;
+		verified->second == expected_game_id;
 }
 
 bool RaService::BeginLibrarySync(const std::vector<std::string>& local_hashes,
@@ -1177,6 +1198,7 @@ void RaService::UnloadGame()
 	leaderboard_entries_ = RaLeaderboardEntriesSnapshot();
 	media_change_ = RaMediaChangeSnapshot();
 	media_verification_ = RaMediaVerificationSnapshot();
+	media_verification_expected_game_id_ = 0;
 	verified_media_game_ids_.clear();
 	rich_presence_.clear();
 }
@@ -2070,7 +2092,7 @@ void RaService::HandleVerifyMediaHashCallback(
 		rc_api_destroy_resolve_hash_response(&response);
 		return;
 	}
-	if (response.game_id != game_session_.game_id) {
+	if (response.game_id != media_verification_expected_game_id_) {
 		media_verification_.state = RaMediaChangeState::Failed;
 		media_verification_.failure = RaMediaVerificationFailure::DifferentGame;
 		media_verification_.result = RC_INVALID_STATE;
@@ -2434,6 +2456,7 @@ void RaService::AbortMediaChangeInProgress()
 		media_change_ = RaMediaChangeSnapshot();
 	}
 	media_verification_ = RaMediaVerificationSnapshot();
+	media_verification_expected_game_id_ = 0;
 }
 
 void RaService::AbortLibrarySyncInProgress()

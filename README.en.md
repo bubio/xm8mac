@@ -127,6 +127,12 @@ Options:
 
 In builds with RetroAchievements support, use `RetroAchievements` in the main menu to sign in and switch RA modes. Supported games can use achievements, leaderboards, Rich Presence, and Hardcore mode.
 
+For Hardcore operation restrictions, the current normative sources are the
+[official Hardcore compliance requirements](https://docs.retroachievements.org/general/hardcore-compliance-requirements.html)
+and `Documents/RetroAchievements/41_Hardcore完全準拠開発計画.md`. They take precedence over older
+plans and historical implementation records. Debug save-state creation remains available in Hardcore;
+loading states, normal/automatic state creation, and Full Speed remain prohibited.
+
 XM8M is completely free and non-commercial. It has no advertising, in-app purchases, paid edition, or feature-bearing donation rewards.
 
 In RA mode, the selected D88 is registered in the library and an app-managed working copy is used, leaving the original unchanged. A game can still start if authentication or network access fails, but achievements are not evaluated or submitted for that session.

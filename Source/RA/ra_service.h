@@ -316,8 +316,12 @@ public:
 	void ClearMediaChangeResult();
 	bool BeginVerifyMediaHashForCurrentGame(const std::string& hash,
 		std::string *error);
+	bool BeginVerifyMediaHashForGame(const std::string& hash,
+		uint32_t expected_game_id, std::string *error);
 	void ClearMediaVerificationResult();
 	bool IsMediaHashVerifiedForCurrentGame(const std::string& hash) const;
+	bool IsMediaHashVerifiedForGame(const std::string& hash,
+		uint32_t expected_game_id) const;
 	bool BeginLibrarySync(const std::vector<std::string>& local_hashes,
 		std::string *error);
 	void ClearLibrarySyncResult();
@@ -475,6 +479,7 @@ private:
 	RaLeaderboardEntriesSnapshot leaderboard_entries_;
 	RaMediaChangeSnapshot media_change_;
 	RaMediaVerificationSnapshot media_verification_;
+	uint32_t media_verification_expected_game_id_ = 0;
 	RaLibrarySyncSnapshot library_sync_;
 	RaUnlockSyncSnapshot unlock_sync_;
 	std::vector<RaPendingUnlockRecord> pending_unlock_sync_records_;

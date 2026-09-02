@@ -1127,6 +1127,18 @@ int main()
 			requests_after_verification,
 			"cached verification sends no request");
 		service.ClearMediaVerificationResult();
+		Check(service.BeginVerifyMediaHashForGame(auxiliary_hash, 1234, &error),
+			"expected Game ID verification uses the same cache");
+		Check(fake_http_raw->SentRequests().size() ==
+			requests_after_verification,
+			"expected Game ID cache sends no request");
+		service.ClearMediaVerificationResult();
+		Check(!service.BeginVerifyMediaHashForGame(auxiliary_hash, 9999, &error),
+			"cached hash is rejected for a different expected Game ID");
+		Check(service.MediaVerificationSnapshot().failure ==
+			Xm8Ra::RaMediaVerificationFailure::DifferentGame,
+			"expected Game ID mismatch is semantic, not unavailable");
+		service.ClearMediaVerificationResult();
 
 		const std::string auxiliary_other_game_hash =
 			"ffffffffffffffffffffffffffffffff";
