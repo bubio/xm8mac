@@ -1,4 +1,5 @@
 #include "ra_credentials.h"
+#include "ra_disk_transaction.h"
 #include "ra_file_util.h"
 #include "ra_http_fake.h"
 #include "ra_service.h"
@@ -311,6 +312,96 @@ int main()
 	Check(MakeDirectory(base), "create service test root");
 	Xm8Ra::RaPlatformCredentialsStore credential_store(base);
 	MemoryPendingUnlockStore default_pending_unlocks;
+
+	{
+		// A Library launch must not start its Drive 2 verification before the
+		// anchor game load. BeginLoadGameByHash advances the HTTP generation;
+		// this recreates the former ordering bug where the verification reply
+		// was discarded and the UI transaction stayed Pending forever.
+		MemoryPendingUnlockStore pending_unlocks;
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
+		options.http_client = std::move(fake_http);
+		options.pending_unlock_store = &pending_unlocks;
+		Xm8Ra::RaService service(std::move(options));
+		std::string error;
+		const std::string auxiliary_hash =
+			"11111111111111111111111111111111";
+
+		Check(service.BeginLoginWithPassword("ordering-player", "secret", &error),
+			"begin login for Library Drive 2 ordering regression");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"User\":\"ordering-player\","
+			"\"Token\":\"ordering-token\",\"Score\":1,"
+			"\"SoftcoreScore\":2,\"Messages\":0}"));
+		service.DrainHttp();
+
+		Check(!Xm8Ra::CanBeginAuxiliaryVerification(true, false),
+			"Library Drive 2 verification is blocked before the anchor is loaded");
+		Check(service.BeginVerifyMediaHashForGame(auxiliary_hash, 1234, &error),
+			"unsafe pre-load Drive 2 verification starts for regression setup");
+		const uint64_t pre_load_verification_request =
+			service.LastIssuedRequestId();
+		Check(service.BeginLoadGameByHash(kKnownSupportedPc8800Hash, &error),
+			"anchor load advances the HTTP generation in regression setup");
+		fake_http_raw->Complete(MakeJsonResponse(pre_load_verification_request,
+			"{\"Success\":true,\"GameID\":1234}"));
+		service.DrainHttp();
+		Check(service.MediaVerificationSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Pending,
+			"pre-load verification reply is discarded after anchor load generation change");
+		service.Shutdown();
+	}
+
+	{
+		MemoryPendingUnlockStore pending_unlocks;
+		auto fake_http = MakeFakeHttp();
+		Xm8Ra::FakeRaHttpClient *fake_http_raw = fake_http.get();
+		Xm8Ra::RaServiceOptions options;
+		options.ra_root = base;
+		options.credentials_store =
+			Xm8Ra::CreatePlatformRaCredentialsStore(base);
+		options.http_client = std::move(fake_http);
+		options.pending_unlock_store = &pending_unlocks;
+		Xm8Ra::RaService service(std::move(options));
+		std::string error;
+		const std::string auxiliary_hash =
+			"22222222222222222222222222222222";
+
+		Check(service.BeginLoginWithPassword("ordered-player", "secret", &error),
+			"begin login for ordered Library Drive 2 verification");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"User\":\"ordered-player\","
+			"\"Token\":\"ordered-token\",\"Score\":1,"
+			"\"SoftcoreScore\":2,\"Messages\":0}"));
+		service.DrainHttp();
+		Check(service.BeginLoadGameByHash(kKnownSupportedPc8800Hash, &error),
+			"begin anchor load before Drive 2 verification");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			MinimalAchievementSetsJson()));
+		service.DrainHttp();
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			StartSessionJson()));
+		service.DrainHttp();
+		service.Idle();
+		Check(service.GameSessionSnapshot().state ==
+			Xm8Ra::RaGameSessionState::Loaded,
+			"anchor game loads before Drive 2 verification");
+		Check(Xm8Ra::CanBeginAuxiliaryVerification(true, true),
+			"Library Drive 2 verification is enabled after anchor load");
+		Check(service.BeginVerifyMediaHashForGame(auxiliary_hash, 1234, &error),
+			"begin Drive 2 verification after anchor load");
+		fake_http_raw->Complete(MakeJsonResponse(service.LastIssuedRequestId(),
+			"{\"Success\":true,\"GameID\":1234}"));
+		service.DrainHttp();
+		Check(service.MediaVerificationSnapshot().state ==
+			Xm8Ra::RaMediaChangeState::Succeeded,
+			"post-load Drive 2 verification completes instead of remaining pending");
+	}
 
 	{
 		auto fake_http = MakeFakeHttp();

@@ -1843,11 +1843,22 @@ void App::ProcessRaAuxiliaryValidation()
 	}
 	const Xm8Ra::RaGameSessionSnapshot game =
 		ra_service->GameSessionSnapshot();
+	const bool completes_launch =
+		ra_disk_transaction.state.launch_completion_required;
+	if (!Xm8Ra::CanBeginAuxiliaryVerification(completes_launch,
+		game.state == Xm8Ra::RaGameSessionState::Loaded)) {
+		return;
+	}
 	const int64_t expected_ra_game_id =
 		ra_disk_transaction.expected_ra_game_id > 0 ?
-		ra_disk_transaction.expected_ra_game_id :
+			ra_disk_transaction.expected_ra_game_id :
 		(game.state == Xm8Ra::RaGameSessionState::Loaded ? game.game_id : 0);
 	if (expected_ra_game_id <= 0) return;
+	if (completes_launch && game.game_id != expected_ra_game_id) {
+		ClearRaAuxiliaryValidationState();
+		EnterRaOfflineSession("Drive 1 game identity changed during launch");
+		return;
+	}
 
 	Xm8Ra::RaMediaVerificationSnapshot verification =
 		ra_service->MediaVerificationSnapshot();
@@ -1862,8 +1873,6 @@ void App::ProcessRaAuxiliaryValidation()
 	const DiskSpec target = ra_disk_transaction.target;
 	const bool persist_pair = ra_disk_transaction.profile_update ==
 		Xm8Ra::RaDiskProfileUpdate::Pair;
-	const bool completes_launch =
-		ra_disk_transaction.state.launch_completion_required;
 	const bool reset_after_commit =
 		ra_disk_transaction.state.reset_requested;
 	const bool has_anchor_target = ra_disk_transaction.has_anchor_target;
@@ -8313,15 +8322,16 @@ bool App::LaunchRaLibraryGame(int64_t game_id, std::string *error)
 		}
 		return false;
 	}
-	const bool defer_drive2 = profile.drives[1].assigned &&
-		ra_play_mode == Xm8Ra::RaPlayMode::Hardcore && ra_service != NULL &&
-		ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn &&
-			ra_connectivity_tracker.State() ==
-			Xm8Ra::RaReachabilityState::Reachable;
-	const bool force_offline_launch = ra_service != NULL &&
-		ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn &&
-			ra_connectivity_tracker.State() !=
-			Xm8Ra::RaReachabilityState::Reachable;
+	const bool service_logged_in = ra_service != NULL &&
+		ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn;
+	const bool reachable = ra_connectivity_tracker.State() ==
+		Xm8Ra::RaReachabilityState::Reachable;
+	const bool defer_drive2 = Xm8Ra::ShouldDeferLibraryDrive2ForRa(
+		ra_mode_enabled, profile.drives[1].assigned,
+		ra_play_mode == Xm8Ra::RaPlayMode::Hardcore, ra_service != NULL,
+		service_logged_in, reachable);
+	const bool force_offline_launch = Xm8Ra::ShouldForceLibraryOfflineForRa(
+		ra_mode_enabled, ra_service != NULL, service_logged_in, reachable);
 	struct Snapshot {
 		bool open;
 		std::string path;

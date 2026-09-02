@@ -81,5 +81,22 @@ int main()
 	Check(!rollback_succeeded.Active(),
 		"successful rollback clears transaction and reset");
 
+	Check(!ShouldDeferLibraryDrive2ForRa(false, true, true, true, true, true),
+		"RA OFF mounts a paired Library profile immediately even when Hardcore is selected");
+	Check(!ShouldForceLibraryOfflineForRa(false, true, true, false),
+		"RA OFF never enters an RA Offline session for a Library launch");
+	Check(ShouldDeferLibraryDrive2ForRa(true, true, true, true, true, true),
+		"reachable Hardcore RA launch defers Drive 2 verification");
+	Check(ShouldForceLibraryOfflineForRa(true, true, true, false),
+		"unreachable logged-in RA launch enters Offline before mounting");
+	Check(!ShouldDeferLibraryDrive2ForRa(true, true, false, true, true, true),
+		"Casual RA launch mounts a paired Library profile immediately");
+	Check(!CanBeginAuxiliaryVerification(true, false),
+		"Library Drive 2 verification waits for the anchor game load");
+	Check(CanBeginAuxiliaryVerification(true, true),
+		"Library Drive 2 verification begins after the anchor game load");
+	Check(CanBeginAuxiliaryVerification(false, false),
+		"active-session Drive 2 verification does not wait for a new game load");
+
 	return 0;
 }

@@ -106,6 +106,32 @@ struct RaDiskTransactionState {
 	}
 };
 
+// Library launches must only defer a paired Drive 2 for an active RA session.
+// Hardcore is a persisted preference, so it can remain selected while RA mode
+// itself is OFF. In that case no RA service tick will advance a transaction.
+inline bool ShouldDeferLibraryDrive2ForRa(bool ra_mode_enabled,
+	bool drive2_assigned, bool hardcore_selected, bool service_available,
+	bool logged_in, bool reachable)
+{
+	return ra_mode_enabled && drive2_assigned && hardcore_selected &&
+		service_available && logged_in && reachable;
+}
+
+inline bool ShouldForceLibraryOfflineForRa(bool ra_mode_enabled,
+	bool service_available, bool logged_in, bool reachable)
+{
+	return ra_mode_enabled && service_available && logged_in && !reachable;
+}
+
+// A library launch first loads its Drive 1 anchor through rc_client. That
+// load advances the HTTP bridge generation, so its deferred Drive 2 hash
+// request must not start until the anchor game is loaded.
+inline bool CanBeginAuxiliaryVerification(bool completes_library_launch,
+	bool anchor_game_loaded)
+{
+	return !completes_library_launch || anchor_game_loaded;
+}
+
 } // namespace Xm8Ra
 
 #endif
