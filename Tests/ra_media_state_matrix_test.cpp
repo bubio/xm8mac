@@ -172,6 +172,11 @@ void VerifyEntryAndTransactionTriggers()
 		Check(!transaction.Active() && !transaction.OwnsReset(),
 			"transaction clear from every phase");
 	}
+	// A new registered Drive 1 after an Offline fallback must pass through the
+	// normal reset path, regardless of whether it arrived by menu or D&D.
+	Check(PlanDroppedReset(false, true, false) ==
+		RaDroppedResetAction::NormalResetAndIdentifyDrive1,
+		"Offline replacement re-identifies its new Drive 1 anchor");
 }
 
 void VerifyHardcoreAcrossEverySessionState()

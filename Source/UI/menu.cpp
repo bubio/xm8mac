@@ -88,6 +88,7 @@ Menu::Menu(App *a)
 	ra_state_menu = false;
 	ra_hardcore_debug_state_menu = false;
 	ra_reset_confirmation_enables_mode = false;
+	drive_menu_refresh_pending = false;
 }
 
 //
@@ -191,7 +192,6 @@ void Menu::UpdateMenu()
 	if (list == NULL) {
 		return;
 	}
-
 	// main menu ?
 	if (list->GetID() != MENU_MAIN) {
 		return;
@@ -216,12 +216,26 @@ void Menu::UpdateMenu()
 	}
 }
 
+void Menu::RequestDriveMenuRefresh()
+{
+	drive_menu_refresh_pending = true;
+}
+
 //
 // ProcessMenu()
 // process menu
 //
 void Menu::ProcessMenu()
 {
+	if (drive_menu_refresh_pending) {
+		drive_menu_refresh_pending = false;
+		if (list->GetID() == MENU_DRIVE1) {
+			EnterDrive1(MENU_BACK);
+		}
+		else if (list->GetID() == MENU_DRIVE2) {
+			EnterDrive2(MENU_BACK);
+		}
+	}
 	if (list->GetID() == MENU_JOYTEST) {
 		// joystick is now testing, do not affect menu operation
 		list->ProcessMenu(false);

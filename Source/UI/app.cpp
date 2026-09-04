@@ -985,7 +985,11 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
 	if (mount_plan.wait_for_ra_approval) {
 		const bool started = BeginRaMediaChange(open_spec,
 			ra_hash_to_identify, open_pair, banks, reset_after_commit, error);
-		return started;
+		if (started) return true;
+		// The local image has already passed validation. A failure to start
+		// the RA request is an Offline fallback, never a D&D/Open rejection.
+		EnterRaOfflineSession(error != NULL && !error->empty() ? *error :
+			"RA media change unavailable");
 	}
 	if (ra_action == Xm8Ra::RaDiskAction::VerifyAuxiliary) {
 		const Xm8Ra::RaGameSessionSnapshot game =
@@ -994,14 +998,17 @@ bool App::OpenDiskFromUser(const DiskSpec& spec, std::string *error,
 			ra_hash_to_identify, game.state ==
 				Xm8Ra::RaGameSessionState::Loaded ? game.game_id : 0,
 			false, reset_after_commit, false, error);
-		return started;
+		if (started) return true;
+		EnterRaOfflineSession(error != NULL && !error->empty() ? *error :
+			"Drive 2 verification unavailable");
 	}
 	if (ra_action == Xm8Ra::RaDiskAction::EnterOfflineAndMount) {
 		EnterRaOfflineSession("Drive 2 verification unavailable");
 	}
 	std::string ra_pair_hash;
 	bool defer_drive2 = false;
-	if (!force_offline_launch && ra_mode_enabled && open_pair && banks > 1 &&
+	if (!force_offline_launch && !Xm8Ra::IsRaSessionOffline(ra_session_state) &&
+		ra_mode_enabled && open_pair && banks > 1 &&
 		ra_service != NULL &&
 		ra_service->LoginSnapshot().state == Xm8Ra::RaLoginState::LoggedIn &&
 		ra_connectivity_tracker.State() ==
@@ -1542,6 +1549,13 @@ bool App::BeginRaMediaChange(const DiskSpec& target,
 		return true;
 	}
 	if (!ra_service->BeginChangeMediaByHash(hash, error)) {
+		const Xm8Ra::RaMediaChangeSnapshot change =
+			ra_service->MediaChangeSnapshot();
+		// A completed server rejection is handled asynchronously as the same
+		// Offline local-media fallback as a delayed rejection.
+		if (change.state == Xm8Ra::RaMediaChangeState::Failed) {
+			return true;
+		}
 		ra_service->ClearMediaChangeResult();
 		ClearRaMediaChangeState();
 		return false;
@@ -1622,9 +1636,13 @@ void App::ProcessRaMediaChange()
 			Xm8Ra::RaDiskTransactionPhase::ChangingActiveMedia;
 		if (!ra_service->BeginChangeMediaByHash(
 			ra_disk_transaction.new_hash, &error)) {
-			ClearRaMediaChangeState();
-			AddRaNotice("RA: " + (error.empty() ?
-				"media change failed" : error));
+			const Xm8Ra::RaMediaChangeSnapshot change =
+				ra_service->MediaChangeSnapshot();
+			if (change.state != Xm8Ra::RaMediaChangeState::Failed) {
+				ClearRaMediaChangeState();
+				AddRaNotice("RA: " + (error.empty() ?
+					"media change failed" : error));
+			}
 		}
 		return;
 	}
@@ -1644,8 +1662,56 @@ void App::ProcessRaMediaChange()
 			EnterRaOfflineSession("RA rollback failed: " + message);
 		}
 		else {
-			ClearRaMediaChangeState();
-			AddRaNotice("RA: " + message);
+			// A failure to establish the target active media ends RA evaluation,
+			// but never rejects a locally valid user mount (including D&D).
+			const DiskSpec target = ra_disk_transaction.target;
+			const bool open_pair = ra_disk_transaction.open_pair;
+			const int target_banks = ra_disk_transaction.target_banks;
+			const bool reset_after_commit =
+				ra_disk_transaction.state.reset_requested;
+			const bool old_target_open =
+				ra_disk_transaction.old_target_open;
+			const std::string old_target_path =
+				ra_disk_transaction.old_target_path;
+			const int old_target_bank =
+				ra_disk_transaction.old_target_bank;
+			const bool old_drive2_open =
+				ra_disk_transaction.old_drive2_open;
+			const std::string old_drive2_path =
+				ra_disk_transaction.old_drive2_path;
+			const int old_drive2_bank =
+				ra_disk_transaction.old_drive2_bank;
+			const int target_drive = target.drive;
+			EnterRaOfflineSession(message);
+			bool mounted = diskmgr[target_drive]->Open(
+				target.path.c_str(), target.bank);
+			if (mounted && open_pair && target_banks > 1) {
+				mounted = diskmgr[1]->Open(target.path.c_str(), 1);
+			}
+			else if (mounted && open_pair) {
+				diskmgr[1]->Close();
+			}
+			if (!mounted) {
+				if (old_target_open) diskmgr[target_drive]->Open(
+					old_target_path.c_str(), old_target_bank);
+				else diskmgr[target_drive]->Close();
+				if (open_pair) {
+					if (old_drive2_open) diskmgr[1]->Open(
+						old_drive2_path.c_str(), old_drive2_bank);
+					else diskmgr[1]->Close();
+				}
+				AddRaNotice("RA: VM rejected offline media");
+			}
+			else {
+				if (open_pair) RememberRaLaunchPairForMountedDisks(NULL);
+				else RememberRaLaunchDriveForMountedDisk(target_drive, NULL);
+				if (reset_after_commit) {
+					LockVM();
+					vm->reset();
+					upd1990a->resync();
+					UnlockVM();
+				}
+			}
 		}
 		return;
 	}
@@ -1830,6 +1896,50 @@ void App::ProcessRaAuxiliaryValidation()
 		ra_service->GameSessionSnapshot();
 	const bool completes_launch =
 		ra_disk_transaction.state.launch_completion_required;
+	if (completes_launch && game.state ==
+		Xm8Ra::RaGameSessionState::DisabledForSession) {
+		// Drive 1 was locally mounted but is not an RA game. Do not discard
+		// the Drive 2 half of the same Open Both/M3U/CLI request while ending
+		// the pending anchor session.
+		const DiskSpec target = ra_disk_transaction.target;
+		const bool has_anchor_target = ra_disk_transaction.has_anchor_target;
+		const DiskSpec anchor_target = ra_disk_transaction.anchor_target;
+		const bool old_anchor_open = ra_disk_transaction.old_anchor_open;
+		const std::string old_anchor_path =
+			ra_disk_transaction.old_anchor_path;
+		const int old_anchor_bank = ra_disk_transaction.old_anchor_bank;
+		const bool old_drive2_open = ra_disk_transaction.old_drive2_open;
+		const std::string old_drive2_path =
+			ra_disk_transaction.old_drive2_path;
+		const int old_drive2_bank = ra_disk_transaction.old_drive2_bank;
+		ClearRaAuxiliaryValidationState();
+		EnterRaOfflineSession(RaGameLoadFailureNotice(game).substr(4));
+		bool mounted = !has_anchor_target || diskmgr[0]->Open(
+			anchor_target.path.c_str(), anchor_target.bank);
+		if (mounted) mounted = diskmgr[1]->Open(target.path.c_str(), target.bank);
+		if (!mounted) {
+			if (has_anchor_target) {
+				if (old_anchor_open) {
+					diskmgr[0]->Open(old_anchor_path.c_str(), old_anchor_bank);
+				}
+				else diskmgr[0]->Close();
+			}
+			if (old_drive2_open) {
+				diskmgr[1]->Open(old_drive2_path.c_str(), old_drive2_bank);
+			}
+			else diskmgr[1]->Close();
+			AddRaNotice("RA: VM rejected offline Drive 2 media");
+			if (app_menu) menu->RequestDriveMenuRefresh();
+			return;
+		}
+		std::string profile_error;
+		if (!RememberRaLaunchPairForMountedDisks(&profile_error)) {
+			AddRaNotice("RA: Drive 2 mounted; launch profile update failed");
+		}
+		// Defer rebuilding the visible Drive menu until its next safe menu tick.
+		if (app_menu) menu->RequestDriveMenuRefresh();
+		return;
+	}
 	if (!Xm8Ra::CanBeginAuxiliaryVerification(completes_launch,
 		game.state == Xm8Ra::RaGameSessionState::Loaded)) {
 		return;
@@ -2629,9 +2739,10 @@ void App::ProcessRaService(bool emulation_idle)
 		return;
 	}
 	ProcessRaMediaChange();
-	// Drive 2 is intentionally left unmounted while Hardcore verifies its
-	// hash. Advance that transaction on every service tick so a successful
-	// verification can commit the deferred mount.
+	// DrainHttp above must run first: an unregistered Drive 1 can complete the
+	// same tick as a deferred Drive 2 request. Process the resulting
+	// DisabledForSession state before the generic Starting failure path clears
+	// the paired transaction.
 	ProcessRaAuxiliaryValidation();
 	const Xm8Ra::RaLoginSnapshot login_after_drain =
 		ra_service->LoginSnapshot();
@@ -6451,19 +6562,25 @@ void App::OnDropFile(SDL_Event *e)
 		// leave menu
 		LeaveMenu();
 
-		// Asynchronous RA approval owns the reset and executes it only after
-		// the new VM media has committed.
+		// All completed D&D mounts use normal reset/re-anchor behavior. Only
+		// a launch already started by this same request keeps its pending
+		// identification while resetting the VM.
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
-		if (!ra_disk_transaction.state.OwnsReset() &&
-			Xm8Ra::ShouldResetDroppedVmWithoutRestartingRaSession(
+		const Xm8Ra::RaDroppedResetAction reset_action =
+			Xm8Ra::PlanDroppedReset(ra_disk_transaction.state.OwnsReset(),
 				Xm8Ra::IsRaSessionOffline(ra_session_state),
-				!ra_pending_game_hash.empty())) {
+				!ra_pending_game_hash.empty());
+		if (reset_action == Xm8Ra::RaDroppedResetAction::DeferredToTransaction) {
+			return;
+		}
+		if (reset_action ==
+			Xm8Ra::RaDroppedResetAction::ResetVmPreservingPendingLaunch) {
 			LockVM();
 			vm->reset();
 			upd1990a->resync();
 			UnlockVM();
 		}
-		else if (!ra_disk_transaction.state.OwnsReset())
+		else
 #endif
 			Reset();
 	} else {

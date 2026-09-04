@@ -36,6 +36,8 @@ public:
 										// enter menu
 	void UpdateMenu();
 										// update main menu
+	void RequestDriveMenuRefresh();
+										// refresh visible Drive menu on the next menu tick
 	void ProcessMenu();
 										// process menu
 	void EnterMain(int id);
@@ -214,6 +216,7 @@ private:
 										// state menu targets Hardcore debugging states
 	bool ra_reset_confirmation_enables_mode;
 										// pending reset confirmation enables RA mode, not Hardcore
+	bool drive_menu_refresh_pending;
 	std::vector<DiskSpec> playlist_entries;
 	int playlist_drive;
 	int playlist_first;

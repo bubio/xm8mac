@@ -29,5 +29,14 @@ int main()
 		"two-drive request is accepted as one transaction");
 	Check(!CanBeginAuxiliaryVerification(true, false),
 		"new anchor is identified before Drive 2 verification");
+	Check(PlanDroppedReset(true, false, false) ==
+		RaDroppedResetAction::DeferredToTransaction,
+		"transaction owns the D&D reset");
+	Check(PlanDroppedReset(false, true, false) ==
+		RaDroppedResetAction::NormalResetAndIdentifyDrive1,
+		"Offline D&D uses normal reset and re-identifies Drive 1");
+	Check(PlanDroppedReset(false, false, true) ==
+		RaDroppedResetAction::ResetVmPreservingPendingLaunch,
+		"a D&D launch preserves its own pending identification");
 	return EXIT_SUCCESS;
 }

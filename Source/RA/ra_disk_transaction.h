@@ -101,6 +101,25 @@ inline bool ShouldResetDroppedVmWithoutRestartingRaSession(
 	return session_offline || anchor_launch_pending;
 }
 
+// A D&D mount must use the same reset/re-anchor semantics as menu media
+// operations. The sole exception is an identification already started by the
+// same request: preserve that Starting request instead of beginning it twice.
+enum class RaDroppedResetAction {
+	DeferredToTransaction,
+	NormalResetAndIdentifyDrive1,
+	ResetVmPreservingPendingLaunch,
+};
+
+inline RaDroppedResetAction PlanDroppedReset(bool transaction_owns_reset,
+	bool session_offline, bool anchor_launch_pending)
+{
+	if (transaction_owns_reset) return RaDroppedResetAction::DeferredToTransaction;
+	if (anchor_launch_pending && !session_offline) {
+		return RaDroppedResetAction::ResetVmPreservingPendingLaunch;
+	}
+	return RaDroppedResetAction::NormalResetAndIdentifyDrive1;
+}
+
 struct RaSynchronousAnchorCommitPlan {
 	bool reset_vm_now = false;
 	bool begin_session = false;
