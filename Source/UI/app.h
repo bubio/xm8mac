@@ -37,6 +37,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include "screenshot.h"
 
 #ifdef XM8_ENABLE_RETROACHIEVEMENTS
 #include "ra_connectivity.h"
@@ -75,6 +76,9 @@ public:
 										// initialize
 	void Deinit();
 										// deinitialize
+
+	void SaveScreenshot();
+	void OpenScreenshotFolder();
 
 	// get component
 	Setting* GetSetting();
@@ -240,6 +244,9 @@ public:
 										// check blocking RA overlay
 
 private:
+	Screenshot::Writer screenshot_writer;
+	std::vector<uint32_t> screenshot_frame;
+	void PollScreenshots();
 	// drawing
 	void Draw();
 										// rendering
