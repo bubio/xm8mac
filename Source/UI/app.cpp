@@ -1621,10 +1621,10 @@ void App::ProcessRaMediaChange()
 			else {
 				RememberRaLaunchPairForMountedDisks(NULL);
 				if (reset_after_commit) {
-					LockVM();
-					vm->reset();
-					upd1990a->resync();
-					UnlockVM();
+					// This is an Offline fallback, not an active-session media
+					// change. Use the normal reset path so its mounted Drive 1
+					// is considered as the next anchor.
+					Reset();
 				}
 			}
 			return;
@@ -1706,10 +1706,9 @@ void App::ProcessRaMediaChange()
 				if (open_pair) RememberRaLaunchPairForMountedDisks(NULL);
 				else RememberRaLaunchDriveForMountedDisk(target_drive, NULL);
 				if (reset_after_commit) {
-					LockVM();
-					vm->reset();
-					upd1990a->resync();
-					UnlockVM();
+					// An Offline fallback must take the same normal reset/re-anchor
+					// path regardless of the media request entry point.
+					Reset();
 				}
 			}
 		}
@@ -1912,6 +1911,8 @@ void App::ProcessRaAuxiliaryValidation()
 		const std::string old_drive2_path =
 			ra_disk_transaction.old_drive2_path;
 		const int old_drive2_bank = ra_disk_transaction.old_drive2_bank;
+		const bool reset_after_commit =
+			ra_disk_transaction.state.reset_requested;
 		ClearRaAuxiliaryValidationState();
 		EnterRaOfflineSession(RaGameLoadFailureNotice(game).substr(4));
 		bool mounted = !has_anchor_target || diskmgr[0]->Open(
@@ -1935,6 +1936,12 @@ void App::ProcessRaAuxiliaryValidation()
 		std::string profile_error;
 		if (!RememberRaLaunchPairForMountedDisks(&profile_error)) {
 			AddRaNotice("RA: Drive 2 mounted; launch profile update failed");
+		}
+		if (reset_after_commit) {
+			// The D&D/Open Both transaction deferred its reset until Drive 1
+			// identification completed. A disabled Drive 1 falls back locally,
+			// but it must still receive that one normal reset.
+			Reset();
 		}
 		// Defer rebuilding the visible Drive menu until its next safe menu tick.
 		if (app_menu) menu->RequestDriveMenuRefresh();
@@ -2082,11 +2089,19 @@ void App::ProcessRaAuxiliaryValidation()
 		AddRaNotice("RA: Drive 2 media verified");
 	}
 	if (reset_after_commit) {
-		LockVM();
-		vm->reset();
-		upd1990a->resync();
-		UnlockVM();
-		if (Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
+		if (Xm8Ra::IsRaSessionOffline(ra_session_state)) {
+			// Verification failure is an Offline local commit. Re-enter through
+			// Reset() so Drive 1 is eligible for the next RA identification.
+			Reset();
+		}
+		else {
+			LockVM();
+			vm->reset();
+			upd1990a->resync();
+			UnlockVM();
+		}
+		if (!Xm8Ra::IsRaSessionOffline(ra_session_state) &&
+			Xm8Ra::IsRaSessionEvaluating(ra_session_state) &&
 			!completes_launch &&
 			ra_service != NULL && ra_service->GameSessionSnapshot().state ==
 				Xm8Ra::RaGameSessionState::Loaded) {

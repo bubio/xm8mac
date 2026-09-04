@@ -27,6 +27,21 @@ int main()
 	Check(!CanAttachDrive2ToAnchorLaunch(true, true, true),
 		"a second transaction is still rejected");
 
+	// The two-drive D&D path defers reset until Drive 1 identification
+	// completes. If that identification reports an unregistered game, it is an
+	// Offline local commit, but the original D&D reset must still run once.
+	RaDiskTransactionState deferred_drop;
+	deferred_drop.Begin(RaDiskTransactionKind::Auxiliary,
+		RaDiskTransactionPhase::VerifyingAuxiliary, true, true,
+		RaDiskTransactionOperation::PairedOpen);
+	const bool reset_after_offline_commit = deferred_drop.reset_requested;
+	deferred_drop.Clear(); // equivalent to ending the failed RA transaction
+	Check(reset_after_offline_commit,
+		"unregistered D&D retains its deferred reset before transaction clear");
+	Check(PlanDroppedReset(false, true, false) ==
+		RaDroppedResetAction::NormalResetAndIdentifyDrive1,
+		"unregistered D&D Offline commit uses normal reset/re-anchor");
+
 	// RA ON -> mount -> RA OFF -> replacement must become an ordinary local
 	// mount, independent of the previous RA session.
 	RaDiskPolicyContext after_mode_off;
